@@ -6,7 +6,7 @@ config({ path: ".env.local" });
 config();
 
 export default {
-  schema: "./lib/db/schema.ts",
+  schema: ["./lib/db/schema.ts", "./lib/db/chat-schema.ts"],
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

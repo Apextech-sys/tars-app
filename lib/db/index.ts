@@ -13,6 +13,12 @@ import {
   workflowExecutionsRelations,
   workflows,
 } from "./schema";
+import {
+  chatSessions,
+  chatMessages,
+  chatSessionsRelations,
+  chatMessagesRelations,
+} from "./chat-schema";
 
 // Construct schema object for drizzle
 const schema = {
@@ -26,6 +32,10 @@ const schema = {
   workflowExecutionsRelations,
   apiKeys,
   integrations,
+  chatSessions,
+  chatMessages,
+  chatSessionsRelations,
+  chatMessagesRelations,
 };
 
 const connectionString =
