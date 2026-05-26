@@ -36,7 +36,7 @@ The subagent outputs are high-quality design references. They'll save 4-6 hours 
 | Codex auth (ChatGPT subscription) | ✅ | `~/.codex/auth.json` populated, `stored auth mode: chatgpt` |
 | Claude Agent SDK installed | ✅ | `@anthropic-ai/claude-agent-sdk@0.3.150` in package.json |
 | AI SDK React hooks installed | ✅ | `@ai-sdk/react@3.0.193` |
-| AI Elements components | ⚠️ 5/8 | conversation, message, prompt-input, reasoning, tool installed. `actions`, `suggestion`, `response` failed (not in registry) |
+| AI Elements components | ⚠️ deps only | npm deps pulled (streamdown, shiki, cmdk, use-stick-to-bottom) but **component .tsx files DID NOT land** in `components/ai-elements/` — only the original template's canvas components are there. `npx ai-elements add` likely failed silently mid-install. Workaround: use `npx shadcn add https://elements.ai-sdk.dev/api/registry/<name>.json` per the error suggestion |
 | SOUL.md ported | ✅ | `/home/shaun/tars-app/lib/tars/SOUL.md` (186 lines, identical to Hermes default profile) |
 
 ## What's NOT working / not built
