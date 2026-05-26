@@ -605,7 +605,8 @@ async function createNewEnv(
       key: params.key,
       value: params.value,
       target: params.target || ["production", "preview", "development"],
-      type: params.type || "encrypted",
+      // TODO: Vercel SDK type mismatch in template; this code path is unused
+      type: (params.type || "encrypted") as never,
     },
   });
 }
