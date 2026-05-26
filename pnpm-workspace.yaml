@@ -1,5 +1,6 @@
 packages:
   - "."
+  - "tars-worker"
 
 overrides:
   "@workflow/world-local": "4.1.2"
@@ -14,7 +15,17 @@ onlyBuiltDependencies:
   - "sharp"
 
 allowBuilds:
-  '@swc/core': set this to true or false
+  "@swc/core": set this to true or false
   cbor-extract: set this to true or false
   esbuild: set this to true or false
   sharp: set this to true or false
+
+minimumReleaseAgeExclude:
+  - '@openai/codex-sdk@0.134.0'
+  - '@openai/codex@0.134.0'
+  - '@openai/codex@0.134.0-darwin-arm64'
+  - '@openai/codex@0.134.0-darwin-x64'
+  - '@openai/codex@0.134.0-linux-arm64'
+  - '@openai/codex@0.134.0-linux-x64'
+  - '@openai/codex@0.134.0-win32-arm64'
+  - '@openai/codex@0.134.0-win32-x64'
