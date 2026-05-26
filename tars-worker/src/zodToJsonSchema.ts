@@ -46,8 +46,14 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): any {
     case "boolean":
       return { type: "boolean" };
     case "ZodEnum":
-    case "enum":
-      return { type: "string", enum: def.values ?? def.entries ?? [] };
+    case "enum": {
+      const raw = def.values ?? def.entries ?? [];
+      // Zod v4 returns enum values as an object { Key: "Key", ... }; v3 as array. Normalize.
+      const values = Array.isArray(raw)
+        ? raw
+        : (raw && typeof raw === "object" ? Object.values(raw) : []);
+      return { type: "string", enum: values };
+    }
     case "ZodOptional":
     case "optional":
       return zodToJsonSchema(def.innerType ?? def.type);

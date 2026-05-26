@@ -1,6 +1,7 @@
 import { Codex } from "@openai/codex-sdk";
 import { z } from "zod";
-import { zodToJsonSchema } from "../zodToJsonSchema.js";
+import { makeOpenAIStrict } from "../openaiStrictSchema.js";
+// Zod v4 has built-in toJSONSchema
 import type { JobHandler } from "../types.js";
 
 const ReviewInputSchema = z.object({
@@ -44,7 +45,7 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
 
   const codex = new Codex({ env: filteredEnv });
   const thread = codex.startThread({
-    model: "gpt-5-codex",
+    model: "gpt-5.5",
     sandboxMode: "read-only",
     approvalPolicy: "never",
     skipGitRepoCheck: true,
@@ -63,7 +64,7 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
 
   ctx.log("codex-review: starting run");
   const turn = await thread.run(prompt, {
-    outputSchema: zodToJsonSchema(ReviewOutputSchema),
+    outputSchema: makeOpenAIStrict(z.toJSONSchema(ReviewOutputSchema)),
     signal: ctx.signal,
   });
 
