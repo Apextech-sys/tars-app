@@ -86,7 +86,7 @@ export function useNotifications(): UseNotificationsReturn {
   settingsRef.current = settings;
   useEffect(() => {
     const t = setTimeout(() => {
-      void fetch("/api/settings/notifications", {
+      fetch("/api/settings/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settingsRef.current),

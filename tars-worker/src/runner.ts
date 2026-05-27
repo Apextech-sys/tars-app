@@ -24,7 +24,12 @@ export class JobRunner {
 
   async start(): Promise<void> {
     await reclaimStuckJobs(this.cfg);
-    void this.loop();
+    // loop() is intentionally fire-and-forget; it's a long-running background
+    // task whose lifetime is bound to the worker process. The .catch() exists
+    // so an unexpected throw is visible in logs rather than swallowed.
+    this.loop().catch((err) => {
+      logger().error({ err }, "runner loop threw");
+    });
   }
 
   poke(): void {
@@ -62,7 +67,7 @@ export class JobRunner {
           break;
         }
         this.inFlight++;
-        void this.processJob(job)
+        this.processJob(job)
           .catch((err) => {
             logger().error({ err, jobId: job.id }, "processJob threw");
           })

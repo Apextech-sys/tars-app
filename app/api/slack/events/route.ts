@@ -199,7 +199,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 
   // Background the heavy work so Slack gets a 200 within 3 seconds.
-  void (async () => {
+  // The IIFE catches its own errors internally; the outer .catch() exists
+  // only to satisfy lint (every promise must be observed).
+  (async () => {
     try {
       const tarsUserId = await mapSlackUserToTars(ev.user as string);
       const cleanText = stripBotMention(ev.text as string, cachedBotUserId);
@@ -274,7 +276,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         message: (err as Error).message,
       });
     }
-  })();
+  })().catch(() => {
+    // IIFE handles all errors internally; nothing to do here.
+  });
 
   return NextResponse.json({ ok: true });
 }

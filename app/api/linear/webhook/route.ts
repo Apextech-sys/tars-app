@@ -154,7 +154,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 
   // Background the heavy work — Linear retries on non-2xx; we ack fast.
-  void (async () => {
+  // The IIFE catches its own errors internally; the outer .catch() exists
+  // only to satisfy lint (every promise must be observed).
+  (async () => {
     try {
       const issueCtx = await fetchLinearIssueContext({
         apiKey,
@@ -264,7 +266,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         message: (err as Error).message,
       });
     }
-  })();
+  })().catch(() => {
+    // IIFE handles all errors internally; nothing to do here.
+  });
 
   return NextResponse.json({ ok: true });
 }

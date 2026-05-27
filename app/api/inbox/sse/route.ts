@@ -46,9 +46,12 @@ export async function GET(request: Request) {
         }
       };
 
-      // Wire abort signal
+      // Wire abort signal — cleanup() self-handles its two error paths,
+      // but we still .catch() to satisfy noFloatingPromises here.
       abort.addEventListener("abort", () => {
-        void cleanup();
+        cleanup().catch(() => {
+          // already-handled inside cleanup()
+        });
       });
 
       send({ type: "connected" });
