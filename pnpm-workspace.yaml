@@ -14,18 +14,26 @@ onlyBuiltDependencies:
   - "esbuild"
   - "sharp"
 
+# pnpm 11 allowBuilds replaces onlyBuiltDependencies. Set true for the
+# packages whose lifecycle scripts we genuinely need (native binaries +
+# bundler installers). The previous placeholder strings caused pnpm to
+# treat these as un-approved, surfacing as ERR_PNPM_IGNORED_BUILDS on
+# every `pnpm install` and blocking all script-running commands.
 allowBuilds:
-  "@swc/core": set this to true or false
-  cbor-extract: set this to true or false
-  esbuild: set this to true or false
-  sharp: set this to true or false
+  "@swc/core": true
+  cbor-extract: true
+  esbuild: true
+  sharp: true
 
+# Exclude the freshly-published @openai/codex 0.134.0 family from the
+# minimumReleaseAge supply-chain policy. The base release 0.134.0 ships
+# 6 platform-specific native binaries as prerelease-formatted siblings
+# (0.134.0-darwin-arm64 etc.); pnpm requires all of them to appear in
+# the SAME disjunction as the base version, otherwise semver matching
+# treats prereleases as unrelated and the policy check rejects them.
+# The lockfile (pinned at commit 7b680ca) is the only @openai/codex-sdk
+# version proven to work against the live Codex review pipeline
+# (Apextech-sys/polymarket-v2#114 — produced 3 findings end-to-end).
 minimumReleaseAgeExclude:
   - '@openai/codex-sdk@0.134.0'
-  - '@openai/codex@0.134.0'
-  - '@openai/codex@0.134.0-darwin-arm64'
-  - '@openai/codex@0.134.0-darwin-x64'
-  - '@openai/codex@0.134.0-linux-arm64'
-  - '@openai/codex@0.134.0-linux-x64'
-  - '@openai/codex@0.134.0-win32-arm64'
-  - '@openai/codex@0.134.0-win32-x64'
+  - '@openai/codex@0.134.0 || 0.134.0-darwin-arm64 || 0.134.0-darwin-x64 || 0.134.0-linux-arm64 || 0.134.0-linux-x64 || 0.134.0-win32-arm64 || 0.134.0-win32-x64'

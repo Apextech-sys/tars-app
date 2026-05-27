@@ -80,6 +80,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.15",
     "@inquirer/prompts": "^8.0.1",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",

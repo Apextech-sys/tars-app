@@ -55,6 +55,7 @@ describe("BriefOutputSchema", () => {
           title: "Fill projects.yaml gaps for area42",
           detail:
             "Either populate the missing fields or mark them excluded.",
+          link: undefined,
         },
       ],
       questions: [
@@ -175,10 +176,10 @@ describe("renderBriefMarkdown", () => {
         },
       ],
       next_actions: [
-        { owner: "shaun", title: "Do thing", detail: "details" },
+        { owner: "shaun", title: "Do thing", detail: "details", link: undefined },
       ],
       questions: [
-        { question: "Q?", why: "because" },
+        { question: "Q?", why: "because", reply_hint: undefined },
       ],
     };
     const md = renderBriefMarkdown(out, {
