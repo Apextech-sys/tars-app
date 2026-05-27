@@ -58,6 +58,7 @@ async function pollStatus(): Promise<StatusRow> {
         "skipped-no-findings",
         "skipped-policy",
         "blocked-konverge",
+        "disagreed",
         "error",
       ].includes(row.status);
       if (terminal) {
@@ -108,6 +109,7 @@ describe.skipIf(!RUN)(
           "completed",
           "skipped-disagreement",
           "skipped-no-findings",
+          "disagreed",
         ]).toContain(final.status);
 
         if (final.status === "completed" && !DRY_RUN) {

@@ -56,6 +56,7 @@ export interface PRReviewResult {
     | "skipped-no-findings"
     | "skipped-policy"
     | "blocked-konverge"
+    | "disagreed"
     | "error";
   findingsCount: number;
   reviewCommentUrl?: string;
@@ -139,6 +140,22 @@ function findingsOverlap(a: Finding, b: Finding): boolean {
   return norm(a.message) === norm(b.message);
 }
 
+function computeOverlapRatio(
+  codexFindings: Finding[],
+  claudeFindings: Finding[]
+): number {
+  if (codexFindings.length === 0 || claudeFindings.length === 0) {
+    return 0;
+  }
+  let overlapping = 0;
+  for (const a of codexFindings) {
+    if (claudeFindings.some((b) => findingsOverlap(a, b))) {
+      overlapping++;
+    }
+  }
+  return overlapping / Math.max(codexFindings.length, 1);
+}
+
 function computeAgreement(
   codexFindings: Finding[],
   claudeFindings: Finding[]
@@ -149,13 +166,7 @@ function computeAgreement(
   if (codexFindings.length === 0 || claudeFindings.length === 0) {
     return "disagree";
   }
-  let overlapping = 0;
-  for (const a of codexFindings) {
-    if (claudeFindings.some((b) => findingsOverlap(a, b))) {
-      overlapping++;
-    }
-  }
-  const overlapRatio = overlapping / Math.max(codexFindings.length, 1);
+  const overlapRatio = computeOverlapRatio(codexFindings, claudeFindings);
   if (overlapRatio >= 0.5) {
     return "agree";
   }
@@ -448,17 +459,81 @@ export async function prReviewWorkflow(
 
   // ---------- Step 4: agreement + triage ----------
   const agreement = computeAgreement(codexFindings, claudeFindings);
+  const overlapRatio = computeOverlapRatio(codexFindings, claudeFindings);
   await audit("agreement", "ok", {
     agreement,
     codex: codexFindings.length,
     claude: claudeFindings.length,
+    overlapRatio,
   });
 
-  if (agreement === "disagree" && codexFindings.length + claudeFindings.length > 0) {
-    // Don't suppress reviews. Note disagreement but still surface findings.
-    await audit("agreement", "info", {
-      note: "agreement=disagree but proceeding with merged findings",
+  // ---------- Step 4a: disagree gate ----------
+  // When Codex and Claude disagree AND at least one of them flagged something,
+  // we do NOT post a public PR comment. The two raw outputs are preserved on
+  // the pr_review_runs row for Shaun to adjudicate from /inbox.
+  //
+  // The Konverge protect-mode short-circuit runs in Step 1, so this branch
+  // is never reached for protected repos — they're already terminated as
+  // `blocked-konverge`.
+  if (
+    agreement === "disagree" &&
+    codexFindings.length + claudeFindings.length > 0
+  ) {
+    const disagreedPayload = {
+      codex: {
+        summary: codexResult.summary ?? "",
+        findings: codexResult.findings ?? [],
+        rawResult: codexResult,
+        jobId: codexDispatch.jobId,
+        errorText: codexJob.errorText ?? null,
+      },
+      claude: {
+        summary: claudeResult.summary ?? "",
+        findings: claudeResult.findings ?? [],
+        rawResult: claudeResult,
+        jobId: claudeDispatch.jobId,
+        errorText: claudeJob.errorText ?? null,
+      },
+      overlapRatio,
+      capturedAt: new Date().toISOString(),
+    };
+
+    await audit("disagree-route", "info", {
+      reason:
+        "codex/claude disagreement — routing to disagreed terminal without posting",
+      codexCount: codexFindings.length,
+      claudeCount: claudeFindings.length,
+      overlapRatio,
     });
+
+    await upsertPrReviewRun({
+      runId,
+      owner: input.owner,
+      repo: input.repo,
+      prNumber: input.prNumber,
+      prSha: pr.headSha,
+      policy: policy as unknown as Record<string, unknown>,
+      status: "disagreed",
+      findingsCount: codexFindings.length + claudeFindings.length,
+      disagreedPayload,
+    });
+
+    await audit("complete", "ok", {
+      status: "disagreed",
+      codexCount: codexFindings.length,
+      claudeCount: claudeFindings.length,
+      overlapRatio,
+      commentPosted: false,
+    });
+
+    return {
+      runId,
+      status: "disagreed",
+      findingsCount: codexFindings.length + claudeFindings.length,
+      policy,
+      agreement,
+      prSha: pr.headSha,
+    };
   }
 
   const merged = dedupeFindings([...codexFindings, ...claudeFindings]);

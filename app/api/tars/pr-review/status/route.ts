@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     const sql = getSql();
     const rows = await sql/* sql */`
       select run_id, owner, repo, pr_number, pr_sha, status, findings_count,
-             review_comment_url, error, created_at, updated_at
+             review_comment_url, error, disagreed_payload, created_at, updated_at
       from pr_review_runs
       where owner=${owner} and repo=${repo} and pr_number=${prNumber}
       order by created_at desc

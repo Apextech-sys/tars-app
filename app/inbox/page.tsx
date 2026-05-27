@@ -8,6 +8,7 @@ import {
   Clock,
   Info,
   RefreshCw,
+  Scale,
   Timer,
   X,
   Zap,
@@ -39,6 +40,7 @@ import {
   type InboxItem,
   deferEscalation,
   fetchInboxItems,
+  fetchPrDisagreement,
   resolveEscalation,
   snoozeEscalation,
 } from "./actions";
@@ -67,6 +69,8 @@ function itemKindIcon(kind: InboxItem["kind"]) {
   if (kind === "workflow_stall")
     return <Timer className="size-4 text-yellow-500" />;
   if (kind === "worker_failure") return <Zap className="size-4 text-red-500" />;
+  if (kind === "pr_disagreement")
+    return <Scale className="size-4 text-purple-500" />;
   return <AlertTriangle className="size-4 text-red-500" />;
 }
 
@@ -117,6 +121,30 @@ function InboxCard({
   };
 
   const isEscalation = item.kind === "escalation";
+  const isDisagreement = item.kind === "pr_disagreement";
+
+  // Inspector modal state for the pr_disagreement card.
+  const [inspectOpen, setInspectOpen] = useState(false);
+  const [disagreement, setDisagreement] = useState<{
+    runId: string;
+    owner: string;
+    repo: string;
+    prNumber: number;
+    prSha: string | null;
+    createdAt: string;
+    payload: unknown;
+  } | null>(null);
+
+  const handleInspect = () => {
+    if (item.kind !== "pr_disagreement") return;
+    startTransition(async () => {
+      const data = await fetchPrDisagreement(item.runId);
+      if (data) {
+        setDisagreement(data);
+        setInspectOpen(true);
+      }
+    });
+  };
 
   let title = "";
   if (item.kind === "escalation") title = item.title;
@@ -124,6 +152,8 @@ function InboxCard({
     title = `Stalled workflow: ${item.repo} #${item.prNumber}`;
   else if (item.kind === "worker_failure")
     title = `Worker failure: ${item.jobKind}`;
+  else if (item.kind === "pr_disagreement")
+    title = `Reviewer disagreement: ${item.repo} #${item.prNumber}`;
   else title = `PR review failed: ${item.repo} #${item.prNumber}`;
 
   return (
@@ -162,6 +192,70 @@ function InboxCard({
         <p className="text-xs text-red-500 font-mono bg-muted rounded px-2 py-1 truncate">
           {item.error}
         </p>
+      )}
+
+      {item.kind === "pr_disagreement" && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Codex and Claude produced divergent findings on this PR. No public
+            comment was posted. Compare both raw outputs to decide.
+          </p>
+          <div className="flex flex-wrap gap-3 text-xs">
+            <span className="rounded bg-muted px-2 py-1">
+              Codex: <strong>{item.codexFindingsCount}</strong>
+            </span>
+            <span className="rounded bg-muted px-2 py-1">
+              Claude: <strong>{item.claudeFindingsCount}</strong>
+            </span>
+            {item.overlapRatio !== null && (
+              <span className="rounded bg-muted px-2 py-1">
+                Overlap: <strong>{(item.overlapRatio * 100).toFixed(0)}%</strong>
+              </span>
+            )}
+            {item.prSha && (
+              <span className="rounded bg-muted px-2 py-1 font-mono">
+                {item.prSha.slice(0, 7)}
+              </span>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            className="min-h-[44px]"
+            onClick={handleInspect}
+          >
+            <Scale className="size-3.5" />
+            Compare reviewers
+          </Button>
+        </div>
+      )}
+
+      {isDisagreement && (
+        <Dialog open={inspectOpen} onOpenChange={setInspectOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                Reviewer disagreement — {item.kind === "pr_disagreement" ? `${item.repo} #${item.prNumber}` : ""}
+              </DialogTitle>
+              <DialogDescription>
+                Raw per-reviewer payloads. No public PR comment was posted.
+              </DialogDescription>
+            </DialogHeader>
+            {disagreement ? (
+              <pre className="text-xs bg-muted rounded-md p-3 overflow-auto whitespace-pre-wrap break-all">
+                {JSON.stringify(disagreement.payload, null, 2)}
+              </pre>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading...</p>
+            )}
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInspectOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
 
       {isEscalation && (
@@ -293,12 +387,14 @@ export default function InboxPage() {
   const escalationItems = items.filter((i) => i.kind === "escalation");
   const stalls = items.filter((i) => i.kind === "workflow_stall");
   const workerFails = items.filter((i) => i.kind === "worker_failure");
+  const disagreements = items.filter((i) => i.kind === "pr_disagreement");
 
   const tabItems: Record<string, InboxItem[]> = {
     all: items,
     stalls,
     workers: workerFails,
     escalations: escalationItems,
+    disagreements,
   };
   const filtered = tabItems[tab] ?? items;
 
@@ -372,9 +468,20 @@ export default function InboxPage() {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="disagreements">
+              Disagreements
+              {disagreements.length > 0 && (
+                <Badge
+                  variant="secondary"
+                  className="ml-1.5 h-5 px-1.5 text-xs"
+                >
+                  {disagreements.length}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
-          {["all", "stalls", "workers", "escalations"].map((t) => (
+          {["all", "stalls", "workers", "escalations", "disagreements"].map((t) => (
             <TabsContent key={t} value={t} className="space-y-3 mt-4">
               {loading ? (
                 <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">

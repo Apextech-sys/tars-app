@@ -41,6 +41,14 @@ export const auditLog = pgTable(
 
 /**
  * pr_review_runs — written by the PR review workflow.
+ *
+ * `status` values used in code (status is stored as text, not an enum):
+ *   started | completed | skipped-no-findings | skipped-policy
+ *   blocked-konverge | disagreed | error
+ *
+ * `disagreed_payload` is populated only when Codex and Claude disagree on
+ * findings. It carries both raw reviewer outputs so Shaun can adjudicate
+ * the disagreement from /inbox. Migration: drizzle/0008_pr_review_disagreed.sql.
  */
 export const prReviewRuns = pgTable("pr_review_runs", {
   runId: text("run_id").primaryKey(),
@@ -53,6 +61,7 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   findingsCount: integer("findings_count").notNull().default(0),
   reviewCommentUrl: text("review_comment_url"),
   error: text("error"),
+  disagreedPayload: jsonb("disagreed_payload"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

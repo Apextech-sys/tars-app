@@ -65,6 +65,17 @@ async function ensureSchema(sql: any) {
       updated_at        timestamptz not null default now()
     );
   `;
+  // Idempotent migration of older deployments that pre-date the
+  // `disagreed_payload` column (see drizzle/0008_pr_review_disagreed.sql).
+  await sql/* sql */`
+    alter table pr_review_runs
+      add column if not exists disagreed_payload jsonb;
+  `;
+  await sql/* sql */`
+    create index if not exists pr_review_runs_disagreed_idx
+      on pr_review_runs (created_at desc)
+      where status = 'disagreed';
+  `;
   await sql/* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
@@ -121,6 +132,30 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
   }
 }
 
+/**
+ * Raw per-reviewer payloads preserved when Codex and Claude disagree.
+ * Persisted into pr_review_runs.disagreed_payload so Shaun can adjudicate
+ * the disagreement himself from /inbox.
+ */
+export interface DisagreedPayload {
+  codex: {
+    summary: string;
+    findings: unknown[];
+    rawResult?: unknown;
+    jobId?: string;
+    errorText?: string | null;
+  };
+  claude: {
+    summary: string;
+    findings: unknown[];
+    rawResult?: unknown;
+    jobId?: string;
+    errorText?: string | null;
+  };
+  overlapRatio?: number;
+  capturedAt: string;
+}
+
 export interface PrReviewRunRecord {
   runId: string;
   owner: string;
@@ -135,10 +170,12 @@ export interface PrReviewRunRecord {
     | "skipped-no-findings"
     | "skipped-policy"
     | "blocked-konverge"
+    | "disagreed"
     | "error";
   findingsCount?: number;
   reviewCommentUrl?: string;
   error?: string;
+  disagreedPayload?: DisagreedPayload;
 }
 
 export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
@@ -146,10 +183,12 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
   const sql = await makeSql();
   try {
     await ensureSchema(sql);
+    // `disagreed_payload` is passed as NULL when not provided so the COALESCE
+    // in the ON CONFLICT clause preserves any earlier-written payload.
     await sql/* sql */`
       insert into pr_review_runs (
         run_id, owner, repo, pr_number, pr_sha, policy, status,
-        findings_count, review_comment_url, error, updated_at
+        findings_count, review_comment_url, error, disagreed_payload, updated_at
       ) values (
         ${rec.runId}, ${rec.owner}, ${rec.repo}, ${rec.prNumber},
         ${rec.prSha ?? null},
@@ -158,6 +197,7 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
         ${rec.findingsCount ?? 0},
         ${rec.reviewCommentUrl ?? null},
         ${rec.error ?? null},
+        ${rec.disagreedPayload ? sql.json(rec.disagreedPayload as any) : null},
         now()
       )
       on conflict (run_id) do update set
@@ -167,6 +207,7 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
         error = excluded.error,
         pr_sha = coalesce(pr_review_runs.pr_sha, excluded.pr_sha),
         policy = coalesce(pr_review_runs.policy, excluded.policy),
+        disagreed_payload = coalesce(excluded.disagreed_payload, pr_review_runs.disagreed_payload),
         updated_at = now()
     `;
   } catch (err) {

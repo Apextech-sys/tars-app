@@ -50,6 +50,18 @@ export type InboxItem =
       prNumber: number;
       error: string;
       createdAt: string;
+    }
+  | {
+      kind: "pr_disagreement";
+      id: string;
+      runId: string;
+      repo: string;
+      prNumber: number;
+      prSha: string | null;
+      codexFindingsCount: number;
+      claudeFindingsCount: number;
+      overlapRatio: number | null;
+      createdAt: string;
     };
 
 export async function fetchInboxItems(): Promise<InboxItem[]> {
@@ -148,12 +160,80 @@ export async function fetchInboxItems(): Promise<InboxItem[]> {
     });
   }
 
+  // 5. Disagreed PR review runs — Codex/Claude disagreed; no public comment
+  //    was posted. Shaun needs to adjudicate from /inbox.
+  const disagreedPRs = await db
+    .select()
+    .from(prReviewRuns)
+    .where(eq(prReviewRuns.status, "disagreed"))
+    .orderBy(sql`${prReviewRuns.createdAt} DESC`)
+    .limit(50);
+
+  for (const r of disagreedPRs) {
+    const payload = r.disagreedPayload as {
+      codex?: { findings?: unknown[] };
+      claude?: { findings?: unknown[] };
+      overlapRatio?: number;
+    } | null;
+    items.push({
+      kind: "pr_disagreement",
+      id: `prdis-${r.runId}`,
+      runId: r.runId,
+      repo: `${r.owner}/${r.repo}`,
+      prNumber: r.prNumber,
+      prSha: r.prSha,
+      codexFindingsCount: payload?.codex?.findings?.length ?? 0,
+      claudeFindingsCount: payload?.claude?.findings?.length ?? 0,
+      overlapRatio:
+        typeof payload?.overlapRatio === "number" ? payload.overlapRatio : null,
+      createdAt: r.createdAt.toISOString(),
+    });
+  }
+
   return items;
 }
 
 export async function fetchInboxBadgeCount(): Promise<number> {
   const items = await fetchInboxItems();
   return items.filter((i) => i.kind !== "escalation" || i.status === "open").length;
+}
+
+/**
+ * Returns the full disagreed_payload for a single PR review run so Shaun
+ * can inspect the raw Codex and Claude outputs side-by-side from the inbox.
+ */
+export async function fetchPrDisagreement(runId: string): Promise<{
+  runId: string;
+  owner: string;
+  repo: string;
+  prNumber: number;
+  prSha: string | null;
+  createdAt: string;
+  payload: unknown;
+} | null> {
+  const rows = await db
+    .select()
+    .from(prReviewRuns)
+    .where(
+      and(
+        eq(prReviewRuns.runId, runId),
+        eq(prReviewRuns.status, "disagreed"),
+      ),
+    )
+    .limit(1);
+  if (rows.length === 0) {
+    return null;
+  }
+  const r = rows[0];
+  return {
+    runId: r.runId,
+    owner: r.owner,
+    repo: r.repo,
+    prNumber: r.prNumber,
+    prSha: r.prSha,
+    createdAt: r.createdAt.toISOString(),
+    payload: r.disagreedPayload,
+  };
 }
 
 // ---------- mutations ----------
