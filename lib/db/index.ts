@@ -19,6 +19,17 @@ import {
   chatSessionsRelations,
   chatMessagesRelations,
 } from "./chat-schema";
+import { tarsJobs, workerHeartbeats } from "./worker-schema";
+import {
+  auditLog,
+  prReviewRuns,
+  escalations,
+  appSettings,
+  repoSettings,
+  webhookEvents,
+  briefs,
+  briefReplies,
+} from "./tars-schema";
 
 // Construct schema object for drizzle
 const schema = {
@@ -36,6 +47,16 @@ const schema = {
   chatMessages,
   chatSessionsRelations,
   chatMessagesRelations,
+  tarsJobs,
+  workerHeartbeats,
+  auditLog,
+  prReviewRuns,
+  escalations,
+  appSettings,
+  repoSettings,
+  webhookEvents,
+  briefs,
+  briefReplies,
 };
 
 const connectionString =
