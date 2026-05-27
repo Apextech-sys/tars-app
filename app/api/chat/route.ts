@@ -34,8 +34,12 @@ async function ensureAnonUser(userId: string) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = (await req.json()) as { sessionId?: string; message: string };
-  const { sessionId, message } = body;
+  const body = (await req.json()) as {
+    sessionId?: string;
+    message: string;
+    metadata?: { kind?: string; briefId?: string; briefReplyId?: string };
+  };
+  const { sessionId, message, metadata } = body;
 
   if (!message?.trim()) {
     return NextResponse.json({ error: "message required" }, { status: 400 });
@@ -80,13 +84,41 @@ export async function POST(req: NextRequest) {
     dbSessionId = inserted[0].id;
   }
 
-  // Persist user message
+  // Build user-message parts. When a brief_reply metadata marker is
+  // attached we record it alongside the text so the conversation history
+  // shows what brief was being responded to. We also link the chat
+  // session back into brief_replies so /briefs/[id] can find the thread.
+  const userParts: unknown[] =
+    metadata && metadata.kind === "brief_reply" && metadata.briefId
+      ? [
+          { type: "text", text: message },
+          {
+            type: "brief-reply",
+            briefId: metadata.briefId,
+            briefReplyId: metadata.briefReplyId ?? null,
+          },
+        ]
+      : [{ type: "text", text: message }];
+
   await db.insert(chatMessages).values({
     sessionId: dbSessionId,
     role: "user",
-    parts: [{ type: "text", text: message }],
+    parts: userParts,
     content: message,
   });
+
+  // Link the chat session into brief_replies so the brief view can show
+  // "this brief threaded into chat session X". Failure is non-fatal.
+  if (metadata && metadata.kind === "brief_reply" && metadata.briefReplyId) {
+    try {
+      await migrationClient.unsafe(
+        "UPDATE brief_replies SET chat_session_id = $1::uuid WHERE id = $2::uuid",
+        [dbSessionId!, metadata.briefReplyId]
+      );
+    } catch (err) {
+      console.warn("[chat] brief_replies link failed", err);
+    }
+  }
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({

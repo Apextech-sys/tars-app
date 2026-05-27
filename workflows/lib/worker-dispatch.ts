@@ -128,3 +128,50 @@ export async function waitForJob(
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
+
+/**
+ * pollJobOnce — fetch the current state of a tars_jobs row in a single
+ * short step. Unlike `waitForJob`, this never sleeps; the caller is
+ * expected to wrap it in a WDK-level retry loop (sleep + RetryableError)
+ * so the workflow stays durable across worker restarts.
+ *
+ * Returns `null` while the job is still queued/running. Returns the row
+ * once it reaches done/failed/cancelled.
+ */
+export async function pollJobOnce(jobId: string): Promise<JobResultRow | null> {
+  "use step";
+  const sql = await makeSql();
+  try {
+    const rows = await sql/* sql */`
+      select id, kind, status, result, error_text, attempts, completed_at
+      from tars_jobs where id=${jobId} limit 1
+    `;
+    if (rows.length === 0) return null;
+    const row = rows[0] as {
+      id: string;
+      kind: string;
+      status: JobResultRow["status"];
+      result: unknown;
+      error_text: string | null;
+      attempts: number;
+      completed_at: Date | string | null;
+    };
+    if (row.status !== "done" && row.status !== "failed" && row.status !== "cancelled") {
+      return null;
+    }
+    return {
+      id: row.id,
+      kind: row.kind,
+      status: row.status,
+      result: row.result,
+      errorText: row.error_text,
+      attempts: row.attempts,
+      completedAt:
+        row.completed_at instanceof Date
+          ? row.completed_at.toISOString()
+          : (row.completed_at ?? null),
+    };
+  } finally {
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
