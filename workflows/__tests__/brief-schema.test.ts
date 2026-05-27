@@ -15,6 +15,12 @@ import {
   renderBriefMarkdown,
 } from "../../lib/tars/brief/schema";
 
+const MORNING_HEADER_RE = /# TARS Morning Brief — 2026-05-26/;
+const ACT_LABEL_RE = /\*\*\[ACT\]\*\*/;
+const ASSIGNEE_RE = /\(shaun\) \*\*Do thing\*\*/;
+const QUESTION_RE = /Q\?/;
+const EVENING_HEADER_RE = /# TARS Evening Brief/;
+
 describe("BriefOutputSchema", () => {
   it("accepts a minimal valid brief", () => {
     const ok: BriefOutput = {
@@ -188,10 +194,10 @@ describe("renderBriefMarkdown", () => {
       kind: "morning",
       date: "2026-05-26",
     });
-    expect(md).toMatch(/# TARS Morning Brief — 2026-05-26/);
-    expect(md).toMatch(/\*\*\[ACT\]\*\*/);
-    expect(md).toMatch(/\(shaun\) \*\*Do thing\*\*/);
-    expect(md).toMatch(/Q\?/);
+    expect(md).toMatch(MORNING_HEADER_RE);
+    expect(md).toMatch(ACT_LABEL_RE);
+    expect(md).toMatch(ASSIGNEE_RE);
+    expect(md).toMatch(QUESTION_RE);
   });
 
   it("labels evening briefs correctly", () => {
@@ -205,6 +211,6 @@ describe("renderBriefMarkdown", () => {
       },
       { kind: "evening", date: "2026-05-26" }
     );
-    expect(md).toMatch(/# TARS Evening Brief/);
+    expect(md).toMatch(EVENING_HEADER_RE);
   });
 });

@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const MOBILE_VIEWPORT = { width: 384, height: 854 };
 
+const REFRESH_BTN_RE = /refresh/i;
+
 test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
   test.use({ viewport: MOBILE_VIEWPORT });
 
@@ -230,7 +232,7 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
     await loadPage(page, "/inbox");
     const refreshBtn = page
       .locator("button")
-      .filter({ hasText: /refresh/i })
+      .filter({ hasText: REFRESH_BTN_RE })
       .first();
     const box = await refreshBtn.boundingBox();
     if (box) {

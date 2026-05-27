@@ -31,6 +31,9 @@ const PG_URL =
 const NO_LLM = process.env.NO_LLM === "1";
 const VERBOSE = process.env.SIM_VERBOSE === "1";
 
+const JSON_FENCE_RE = /```json\s*([\s\S]+?)```/;
+const JSON_OBJ_TAIL_RE = /\{[\s\S]+\}$/;
+
 function log(...args: unknown[]) {
   // eslint-disable-next-line no-console
   console.log("[tars-worker-sim]", ...args);
@@ -144,8 +147,7 @@ async function callAnthropic(
       .filter((c) => c.type === "text")
       .map((c) => c.text)
       .join("\n");
-    const jsonMatch =
-      text.match(/```json\s*([\s\S]+?)```/) ?? text.match(/\{[\s\S]+\}$/);
+    const jsonMatch = text.match(JSON_FENCE_RE) ?? text.match(JSON_OBJ_TAIL_RE);
     const rawJson = jsonMatch
       ? Array.isArray(jsonMatch)
         ? (jsonMatch[1] ?? jsonMatch[0])

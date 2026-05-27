@@ -4,6 +4,8 @@ import { makeOpenAIStrict } from "../openaiStrictSchema.js";
 // Zod v4 has built-in toJSONSchema
 import type { JobHandler } from "../types.js";
 
+const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]+?)```/;
+
 const ReviewInputSchema = z.object({
   diff: z.string().min(1),
   context: z.string().optional(),
@@ -99,7 +101,7 @@ function parseReviewJson(text: string): CodexReviewOutput {
   if (direct) {
     return direct;
   }
-  const fenced = text.match(/```(?:json)?\s*([\s\S]+?)```/);
+  const fenced = text.match(FENCED_JSON_RE);
   if (fenced) {
     const inner = tryParse(fenced[1].trim());
     if (inner) {

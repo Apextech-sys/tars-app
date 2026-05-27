@@ -2,6 +2,8 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { JobHandler } from "../types.js";
 
+const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]+?)```/;
+
 const ReviewInputSchema = z.object({
   diff: z.string().min(1, "diff is required"),
   context: z.string().optional(),
@@ -136,7 +138,7 @@ function parseReviewJson(text: string): ClaudeReviewOutput {
     return direct;
   }
 
-  const fenced = text.match(/```(?:json)?\s*([\s\S]+?)```/);
+  const fenced = text.match(FENCED_JSON_RE);
   if (fenced) {
     const inner = tryParse(fenced[1].trim());
     if (inner) {

@@ -7,6 +7,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+const TARS_IDENTITY_RE = /tars|assistant|tool/;
+const TOOL_HIERARCHY_RE = /TOOL|Read|Bash/i;
+
 // ──────────────────────────────────────────────────────────────
 // Unit: SOUL.md loading
 // ──────────────────────────────────────────────────────────────
@@ -26,7 +29,7 @@ describe("SOUL.md system prompt", () => {
     // The prompt should be non-trivial
     expect(soulPrompt.length).toBeGreaterThan(100);
     // Should reference TARS identity
-    expect(soulPrompt.toLowerCase()).toMatch(/tars|assistant|tool/);
+    expect(soulPrompt.toLowerCase()).toMatch(TARS_IDENTITY_RE);
   });
 
   it("SOUL.md contains the tool hierarchy section", () => {
@@ -40,7 +43,7 @@ describe("SOUL.md system prompt", () => {
 
     if (content) {
       // Should mention tools or hierarchy
-      expect(content).toMatch(/TOOL|Read|Bash/i);
+      expect(content).toMatch(TOOL_HIERARCHY_RE);
     }
   });
 

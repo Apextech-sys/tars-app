@@ -8,6 +8,8 @@ import postgres from "postgres";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
   if (sqlClient) {
@@ -26,7 +28,7 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+  if (!UUID_RE.test(id)) {
     return NextResponse.json({ error: "invalid id" }, { status: 400 });
   }
   try {

@@ -24,6 +24,8 @@ import {
 
 const TMP_DIR = join(tmpdir(), `tars-policy-test-${process.pid}`);
 const TMP_YAML = join(TMP_DIR, "projects.yaml");
+const YAML_ERR_RE = /yaml/i;
+const PROTECT_MODE_RE = /protect_mode/i;
 
 beforeEach(async () => {
   mkdirSync(TMP_DIR, { recursive: true });
@@ -79,7 +81,7 @@ describe("saveProjectsYaml", () => {
     const result = await saveProjectsYaml("{ bad yaml: [unclosed");
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toMatch(/yaml/i);
+      expect(result.error).toMatch(YAML_ERR_RE);
     }
   });
 
@@ -102,7 +104,7 @@ describe("saveProjectsYaml", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.error).toMatch(/protect_mode/i);
+      expect(result.error).toMatch(PROTECT_MODE_RE);
     }
   });
 

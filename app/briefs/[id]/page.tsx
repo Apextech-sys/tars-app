@@ -17,6 +17,8 @@ import { Markdown } from "@/components/tars/markdown";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
   if (sqlClient) {
@@ -46,7 +48,7 @@ interface BriefRow {
 }
 
 async function loadBrief(id: string): Promise<BriefRow | null> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+  if (!UUID_RE.test(id)) {
     return null;
   }
   try {

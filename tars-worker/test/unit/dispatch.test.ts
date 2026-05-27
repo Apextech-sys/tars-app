@@ -5,6 +5,8 @@ import { cleanJobs, getTestPool } from "../setup.js";
 
 const { Client } = pg;
 
+const DUPLICATE_ERR_RE = /duplicate|unique/i;
+
 describe("dispatch / queue plumbing", () => {
   afterEach(async () => {
     await cleanJobs();
@@ -63,7 +65,7 @@ describe("dispatch / queue plumbing", () => {
       dupeErr = e;
     }
     expect(dupeErr).toBeDefined();
-    expect(String(dupeErr)).toMatch(/duplicate|unique/i);
+    expect(String(dupeErr)).toMatch(DUPLICATE_ERR_RE);
 
     const res = await pool.query<{ id: string }>(
       "SELECT id FROM tars_jobs WHERE idempotency_key = $1",

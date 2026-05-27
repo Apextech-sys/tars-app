@@ -30,13 +30,38 @@ interface MdProps {
   className?: string;
 }
 
+// Hoisted regex literals (Biome lint/performance/useTopLevelRegex).
+const AMP_RE = /&/g;
+const LT_RE = /</g;
+const GT_RE = />/g;
+const DQUOTE_RE = /"/g;
+const SQUOTE_RE = /'/g;
+const INLINE_CODE_RE = /`([^`]+)`/g;
+const LINK_RE = /\[([^\]]+)\]\(((?:https?|mailto):[^\s)]+)\)/g;
+const BOLD_RE = /\*\*([^*]+)\*\*/g;
+const ITALIC_STAR_RE = /(?<![*\w])\*([^*\n]+)\*(?!\*)/g;
+const ITALIC_UNDERSCORE_RE = /(?<!\w)_([^_\n]+)_(?!\w)/g;
+const CRLF_RE = /\r\n/g;
+const FENCE_OPEN_RE = /^```(\w*)\s*$/;
+const FENCE_CLOSE_RE = /^```\s*$/;
+const BLANK_LINE_RE = /^\s*$/;
+const HR_RE = /^\s*---+\s*$/;
+const HEADING_RE = /^(#{1,5})\s+(.*)$/;
+const BLOCKQUOTE_RE = /^\s*>\s?/;
+const BLOCKQUOTE_STRIP_RE = /^\s*>\s?/;
+const LIST_ITEM_RE = /^\s*([-*]|\d+\.)\s+/;
+const ORDERED_LIST_RE = /^\s*\d+\.\s+/;
+const LIST_ITEM_CAPTURE_RE = /^(\s*)([-*]|\d+\.)\s+(.*)$/;
+const HEADING_PROBE_RE = /^(#{1,5})\s+/;
+const FENCE_PROBE_RE = /^```/;
+
 function escapeHtml(s: string): string {
   return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(AMP_RE, "&amp;")
+    .replace(LT_RE, "&lt;")
+    .replace(GT_RE, "&gt;")
+    .replace(DQUOTE_RE, "&quot;")
+    .replace(SQUOTE_RE, "&#39;");
 }
 
 /**
@@ -48,29 +73,20 @@ function renderInline(escaped: string): string {
   let out = escaped;
   // Inline code first so its contents are not further transformed.
   out = out.replace(
-    /`([^`]+)`/g,
+    INLINE_CODE_RE,
     (_m, code) => `<code class="brief-code-inline">${code}</code>`
   );
   // Links [text](url). Only allow http(s) and mailto schemes.
   out = out.replace(
-    /\[([^\]]+)\]\(((?:https?|mailto):[^\s)]+)\)/g,
+    LINK_RE,
     (_m, text, url) =>
       `<a href="${url}" target="_blank" rel="noreferrer noopener" class="brief-link">${text}</a>`
   );
   // Bold (**...**)
-  out = out.replace(
-    /\*\*([^*]+)\*\*/g,
-    (_m, inner) => `<strong>${inner}</strong>`
-  );
+  out = out.replace(BOLD_RE, (_m, inner) => `<strong>${inner}</strong>`);
   // Italic (*...* and _..._)
-  out = out.replace(
-    /(?<![*\w])\*([^*\n]+)\*(?!\*)/g,
-    (_m, inner) => `<em>${inner}</em>`
-  );
-  out = out.replace(
-    /(?<!\w)_([^_\n]+)_(?!\w)/g,
-    (_m, inner) => `<em>${inner}</em>`
-  );
+  out = out.replace(ITALIC_STAR_RE, (_m, inner) => `<em>${inner}</em>`);
+  out = out.replace(ITALIC_UNDERSCORE_RE, (_m, inner) => `<em>${inner}</em>`);
   return out;
 }
 
@@ -83,19 +99,19 @@ interface Block {
 }
 
 function parseBlocks(raw: string): Block[] {
-  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  const lines = raw.replace(CRLF_RE, "\n").split("\n");
   const blocks: Block[] = [];
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
 
     // Fenced code block
-    const fence = line.match(/^```(\w*)\s*$/);
+    const fence = line.match(FENCE_OPEN_RE);
     if (fence) {
       const lang = fence[1] || undefined;
       const buf: string[] = [];
       i++;
-      while (i < lines.length && !/^```\s*$/.test(lines[i])) {
+      while (i < lines.length && !FENCE_CLOSE_RE.test(lines[i])) {
         buf.push(lines[i]);
         i++;
       }
@@ -108,20 +124,20 @@ function parseBlocks(raw: string): Block[] {
     }
 
     // Blank line — skip
-    if (/^\s*$/.test(line)) {
+    if (BLANK_LINE_RE.test(line)) {
       i++;
       continue;
     }
 
     // Horizontal rule
-    if (/^\s*---+\s*$/.test(line)) {
+    if (HR_RE.test(line)) {
       blocks.push({ type: "rule" });
       i++;
       continue;
     }
 
     // Heading
-    const h = line.match(/^(#{1,5})\s+(.*)$/);
+    const h = line.match(HEADING_RE);
     if (h) {
       blocks.push({ type: "heading", level: h[1].length, text: h[2] });
       i++;
@@ -129,10 +145,10 @@ function parseBlocks(raw: string): Block[] {
     }
 
     // Blockquote — collect consecutive `> ` lines
-    if (/^\s*>\s?/.test(line)) {
+    if (BLOCKQUOTE_RE.test(line)) {
       const buf: string[] = [];
-      while (i < lines.length && /^\s*>\s?/.test(lines[i])) {
-        buf.push(lines[i].replace(/^\s*>\s?/, ""));
+      while (i < lines.length && BLOCKQUOTE_RE.test(lines[i])) {
+        buf.push(lines[i].replace(BLOCKQUOTE_STRIP_RE, ""));
         i++;
       }
       blocks.push({ type: "blockquote", text: buf.join("\n") });
@@ -140,11 +156,11 @@ function parseBlocks(raw: string): Block[] {
     }
 
     // List (unordered or ordered) — collect contiguous list items.
-    if (/^\s*([-*]|\d+\.)\s+/.test(line)) {
-      const isOrdered = /^\s*\d+\.\s+/.test(line);
+    if (LIST_ITEM_RE.test(line)) {
+      const isOrdered = ORDERED_LIST_RE.test(line);
       const items: Array<{ depth: number; text: string }> = [];
-      while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) {
-        const m = lines[i].match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
+      while (i < lines.length && LIST_ITEM_RE.test(lines[i])) {
+        const m = lines[i].match(LIST_ITEM_CAPTURE_RE);
         if (!m) {
           break;
         }
@@ -164,11 +180,11 @@ function parseBlocks(raw: string): Block[] {
     i++;
     while (
       i < lines.length &&
-      !/^\s*$/.test(lines[i]) &&
-      !/^(#{1,5})\s+/.test(lines[i]) &&
-      !/^\s*([-*]|\d+\.)\s+/.test(lines[i]) &&
-      !/^```/.test(lines[i]) &&
-      !/^\s*>\s?/.test(lines[i])
+      !BLANK_LINE_RE.test(lines[i]) &&
+      !HEADING_PROBE_RE.test(lines[i]) &&
+      !LIST_ITEM_RE.test(lines[i]) &&
+      !FENCE_PROBE_RE.test(lines[i]) &&
+      !BLOCKQUOTE_RE.test(lines[i])
     ) {
       buf.push(lines[i]);
       i++;

@@ -32,6 +32,8 @@ import type { JobHandler } from "../types.js";
 
 // Cache SOUL.md at module load. If absent (e.g. handler running outside
 // the tars-app workspace), fall back to a minimal persona stub.
+const JSON_LANG_TAG_RE = /^[ \t]*json[ \t]*\r?\n/;
+
 let SOUL_PROMPT = "You are TARS — honest, blunt, evidence-first.";
 const SOUL_CANDIDATES = [
   process.env.TARS_SOUL_PATH,
@@ -312,7 +314,7 @@ async function parseBriefOutput(text: string): Promise<BriefOutput> {
   if (firstFence >= 0 && lastFence > firstFence) {
     let inner = text.slice(firstFence + 3, lastFence);
     // Drop a leading "json\n" language tag if present.
-    inner = inner.replace(/^[ \t]*json[ \t]*\r?\n/, "");
+    inner = inner.replace(JSON_LANG_TAG_RE, "");
     inner = inner.trim();
     const innerDirect = tryParse(inner);
     if (innerDirect) {
