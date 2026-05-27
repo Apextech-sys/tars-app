@@ -1,17 +1,19 @@
 export const runtime = "nodejs";
 
+import { and, desc, eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { chatSessions, chatMessages } from "@/lib/db/chat-schema";
-import { eq, and, desc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { headers } from "next/headers";
+import { db } from "@/lib/db";
+import { chatSessions } from "@/lib/db/chat-schema";
 
 async function getUserId(req: NextRequest): Promise<string> {
   try {
     const session = await auth.api.getSession({ headers: await headers() });
-    if (session?.user?.id) return session.user.id;
+    if (session?.user?.id) {
+      return session.user.id;
+    }
   } catch {
     // fall through
   }

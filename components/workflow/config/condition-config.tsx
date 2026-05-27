@@ -1,11 +1,11 @@
 import { Label } from "@/components/ui/label";
 import { TemplateBadgeInput } from "@/components/ui/template-badge-input";
 
-type ConditionConfigProps = {
+interface ConditionConfigProps {
   config: Record<string, unknown>;
   onUpdateConfig: (key: string, value: string) => void;
   disabled: boolean;
-};
+}
 
 export function ConditionConfig({
   config,

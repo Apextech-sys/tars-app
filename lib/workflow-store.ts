@@ -5,6 +5,7 @@ import { api } from "./api-client";
 
 export type WorkflowNodeType = "trigger" | "action" | "add";
 
+// biome-ignore lint/style/useConsistentTypeDefinitions: must be a type alias so @xyflow/react Node<T extends Record<string, unknown>> accepts it
 export type WorkflowNodeData = {
   label: string;
   description?: string;
@@ -58,13 +59,13 @@ export const newlyCreatedNodeIdAtom = atom<string | null>(null);
 export const triggerExecuteAtom = atom(false);
 
 // Execution log entry type for storing run outputs per node
-export type ExecutionLogEntry = {
+export interface ExecutionLogEntry {
   nodeId: string;
   nodeName: string;
   nodeType: string;
   status: "pending" | "running" | "success" | "error";
   output?: unknown;
-};
+}
 
 // Map of nodeId -> execution log entry for the currently selected execution
 export const executionLogsAtom = atom<Record<string, ExecutionLogEntry>>({});
@@ -501,10 +502,10 @@ export const hasUnsavedChangesAtom = atom(false);
 export const workflowNotFoundAtom = atom(false);
 
 // Undo/Redo state
-type HistoryState = {
+interface HistoryState {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
-};
+}
 
 const historyAtom = atom<HistoryState[]>([]);
 const futureAtom = atom<HistoryState[]>([]);

@@ -1,21 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Menu, X as CloseIcon } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 import {
+  AlertCircle,
+  ChevronRight,
+  X as CloseIcon,
+  Cpu,
+  FileText,
+  Globe,
+  Loader2,
+  Menu,
   MessageSquare,
   Plus,
   Send,
-  Trash2,
-  ChevronRight,
   Terminal,
-  FileText,
-  Globe,
-  Cpu,
-  Loader2,
-  AlertCircle,
+  Trash2,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -60,12 +61,15 @@ interface StreamingMessage {
 
 function ToolIcon({ name }: { name: string }) {
   const n = name.toLowerCase();
-  if (n === "bash" || n === "computer")
+  if (n === "bash" || n === "computer") {
     return <Terminal className="h-3.5 w-3.5" />;
-  if (n === "read" || n === "write" || n === "edit" || n === "glob")
+  }
+  if (n === "read" || n === "write" || n === "edit" || n === "glob") {
     return <FileText className="h-3.5 w-3.5" />;
-  if (n === "webfetch" || n === "websearch")
+  }
+  if (n === "webfetch" || n === "websearch") {
     return <Globe className="h-3.5 w-3.5" />;
+  }
   return <Cpu className="h-3.5 w-3.5" />;
 }
 
@@ -85,16 +89,16 @@ function ToolCallBlock({
   const resultStr = result?.result ?? "";
 
   return (
-    <div className="my-2 rounded-lg border border-white/10 bg-black/20 text-xs overflow-hidden">
+    <div className="my-2 overflow-hidden rounded-lg border border-white/10 bg-black/20 text-xs">
       <button
-        type="button"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-white/5"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-white/5 transition-colors"
+        type="button"
       >
         <span className="text-[#00d4a0]">
           <ToolIcon name={part.toolName ?? ""} />
         </span>
-        <span className="font-mono text-[#00d4a0] font-medium">
+        <span className="font-medium font-mono text-[#00d4a0]">
           {part.toolName}
         </span>
         <span className="ml-auto text-white/30">
@@ -110,29 +114,29 @@ function ToolCallBlock({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
             className="overflow-hidden"
+            exit={{ height: 0, opacity: 0 }}
+            initial={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.15 }}
           >
-            <div className="border-t border-white/10 px-3 py-2 space-y-2">
+            <div className="space-y-2 border-white/10 border-t px-3 py-2">
               {argsStr !== "{}" && (
                 <div>
-                  <div className="text-white/40 mb-1 text-[10px] uppercase tracking-wider">
+                  <div className="mb-1 text-[10px] text-white/40 uppercase tracking-wider">
                     Input
                   </div>
-                  <pre className="text-white/70 whitespace-pre-wrap break-all font-mono text-[11px] max-h-40 overflow-y-auto">
+                  <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] text-white/70">
                     {argsStr}
                   </pre>
                 </div>
               )}
               {resultStr && (
                 <div>
-                  <div className="text-white/40 mb-1 text-[10px] uppercase tracking-wider">
+                  <div className="mb-1 text-[10px] text-white/40 uppercase tracking-wider">
                     Output
                   </div>
-                  <pre className="text-white/70 whitespace-pre-wrap break-all font-mono text-[11px] max-h-60 overflow-y-auto">
+                  <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap break-all font-mono text-[11px] text-white/70">
                     {resultStr}
                   </pre>
                 </div>
@@ -170,17 +174,17 @@ function MessageBubble({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
       className={cn(
-        "flex gap-3 max-w-full",
+        "flex max-w-full gap-3",
         isUser ? "justify-end" : "justify-start"
       )}
+      initial={{ opacity: 0, y: 8 }}
+      transition={{ duration: 0.2 }}
     >
       {!isUser && (
-        <div className="flex-shrink-0 w-7 h-7 rounded-full bg-[#00d4a0]/20 border border-[#00d4a0]/40 flex items-center justify-center mt-0.5">
-          <span className="text-[10px] font-bold text-[#00d4a0]">T</span>
+        <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-[#00d4a0]/40 bg-[#00d4a0]/20">
+          <span className="font-bold text-[#00d4a0] text-[10px]">T</span>
         </div>
       )}
 
@@ -188,16 +192,16 @@ function MessageBubble({
         className={cn(
           "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed",
           isUser
-            ? "bg-[#00d4a0]/20 border border-[#00d4a0]/30 text-white ml-auto"
-            : "bg-white/5 border border-white/10 text-white/90"
+            ? "ml-auto border border-[#00d4a0]/30 bg-[#00d4a0]/20 text-white"
+            : "border border-white/10 bg-white/5 text-white/90"
         )}
       >
         {parts.map((part, i) => {
           if (part.type === "text" && part.text) {
             return (
               <div
-                key={`text-${part.toolCallId ?? ""}-${i}`}
                 className="whitespace-pre-wrap"
+                key={`text-${part.toolCallId ?? ""}-${i}`}
               >
                 {part.text}
               </div>
@@ -209,9 +213,7 @@ function MessageBubble({
                 key={`tool-${part.toolCallId ?? i}`}
                 part={part}
                 result={
-                  part.toolCallId
-                    ? toolResults.get(part.toolCallId)
-                    : undefined
+                  part.toolCallId ? toolResults.get(part.toolCallId) : undefined
                 }
               />
             );
@@ -219,8 +221,8 @@ function MessageBubble({
           return null;
         })}
         {isStreaming && (
-          <span className="inline-flex items-center gap-1 ml-1">
-            <span className="w-1 h-3 bg-[#00d4a0] animate-pulse rounded-sm" />
+          <span className="ml-1 inline-flex items-center gap-1">
+            <span className="h-3 w-1 animate-pulse rounded-sm bg-[#00d4a0]" />
           </span>
         )}
       </div>
@@ -248,56 +250,56 @@ function SessionSidebar({
   loading: boolean;
 }) {
   return (
-    <div className="flex flex-col h-full border-r border-white/10 bg-black/30 backdrop-blur-sm w-64 flex-shrink-0">
-      <div className="p-4 border-b border-white/10 flex items-center justify-between">
+    <div className="flex h-full w-64 flex-shrink-0 flex-col border-white/10 border-r bg-black/30 backdrop-blur-sm">
+      <div className="flex items-center justify-between border-white/10 border-b p-4">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-[#00d4a0]" />
-          <span className="text-sm font-semibold text-white">TARS Chat</span>
+          <span className="font-semibold text-sm text-white">TARS Chat</span>
         </div>
         <Button
-          size="sm"
-          variant="ghost"
-          onClick={onNew}
           className="h-7 w-7 p-0 hover:bg-[#00d4a0]/20 hover:text-[#00d4a0]"
+          onClick={onNew}
+          size="sm"
           title="New conversation"
+          variant="ghost"
         >
           <Plus className="h-4 w-4" />
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      <div className="flex-1 space-y-1 overflow-y-auto p-2">
         {loading ? (
           <div className="flex items-center justify-center p-4">
             <Loader2 className="h-4 w-4 animate-spin text-white/40" />
           </div>
         ) : sessions.length === 0 ? (
-          <div className="text-center text-white/30 text-xs p-4">
+          <div className="p-4 text-center text-white/30 text-xs">
             No conversations yet
           </div>
         ) : (
           sessions.map((s) => (
             <button
-              key={s.id}
-              type="button"
-              onClick={() => onSelect(s.id)}
               className={cn(
-                "group w-full text-left rounded-lg px-3 py-2.5 text-xs transition-all flex items-start justify-between gap-2",
+                "group flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-xs transition-all",
                 activeId === s.id
-                  ? "bg-[#00d4a0]/15 border border-[#00d4a0]/30 text-white"
-                  : "text-white/60 hover:bg-white/5 hover:text-white/90 border border-transparent"
+                  ? "border border-[#00d4a0]/30 bg-[#00d4a0]/15 text-white"
+                  : "border border-transparent text-white/60 hover:bg-white/5 hover:text-white/90"
               )}
+              key={s.id}
+              onClick={() => onSelect(s.id)}
+              type="button"
             >
               <span className="flex-1 truncate">
                 {s.title ?? "New conversation"}
               </span>
               <button
-                type="button"
+                className="mt-0.5 flex-shrink-0 text-white/30 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(s.id);
                 }}
-                className="opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-all flex-shrink-0 mt-0.5"
                 title="Archive"
+                type="button"
               >
                 <Trash2 className="h-3 w-3" />
               </button>
@@ -324,7 +326,9 @@ function PromptInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = () => {
-    if (!value.trim() || disabled) return;
+    if (!value.trim() || disabled) {
+      return;
+    }
     onSend(value.trim());
     setValue("");
     if (textareaRef.current) {
@@ -347,22 +351,23 @@ function PromptInput({
   };
 
   return (
-    <div className="relative border border-white/10 rounded-2xl bg-white/5 backdrop-blur-sm focus-within:border-[#00d4a0]/50 transition-colors">
+    <div className="relative rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm transition-colors focus-within:border-[#00d4a0]/50">
       <textarea
-        ref={textareaRef}
-        value={value}
+        className="max-h-[200px] w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/30 focus:outline-none disabled:opacity-50"
+        disabled={disabled}
         onChange={handleInput}
         onKeyDown={handleKeyDown}
-        disabled={disabled}
         placeholder="Message TARS... (Enter to send, Shift+Enter for newline)"
+        ref={textareaRef}
         rows={1}
-        className="w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/30 focus:outline-none disabled:opacity-50 max-h-[200px]" style={{ fontSize: "16px" }}
+        style={{ fontSize: "16px" }}
+        value={value}
       />
       <button
-        type="button"
-        onClick={handleSend}
+        className="absolute right-3 bottom-3 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-[#00d4a0]/20 p-2 text-[#00d4a0] transition-all hover:bg-[#00d4a0]/40 disabled:cursor-not-allowed disabled:opacity-30"
         disabled={disabled || !value.trim()}
-        className="absolute right-3 bottom-3 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-[#00d4a0]/20 hover:bg-[#00d4a0]/40 text-[#00d4a0] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        onClick={handleSend}
+        type="button"
       >
         {disabled ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -454,7 +459,9 @@ export default function ChatPage() {
   };
 
   const sendMessage = async (text: string) => {
-    if (isLoading) return;
+    if (isLoading) {
+      return;
+    }
     setIsLoading(true);
     setError(null);
 
@@ -502,23 +509,31 @@ export default function ChatPage() {
       }
 
       const reader = res.body?.getReader();
-      if (!reader) throw new Error("No stream body");
+      if (!reader) {
+        throw new Error("No stream body");
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          break;
+        }
         buffer += decoder.decode(value, { stream: true });
 
         const lines = buffer.split("\n");
         buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (!line.trim()) continue;
+          if (!line.trim()) {
+            continue;
+          }
           const colonIdx = line.indexOf(":");
-          if (colonIdx === -1) continue;
+          if (colonIdx === -1) {
+            continue;
+          }
 
           const code = line.substring(0, colonIdx);
           const jsonStr = line.substring(colonIdx + 1);
@@ -534,14 +549,13 @@ export default function ChatPage() {
             // text delta
             fullText += parsed as string;
             setStreaming((prev) => {
-              if (!prev) return prev;
+              if (!prev) {
+                return prev;
+              }
               const textParts = prev.parts.filter((p) => p.type !== "text");
               return {
                 ...prev,
-                parts: [
-                  ...textParts,
-                  { type: "text", text: fullText },
-                ],
+                parts: [...textParts, { type: "text", text: fullText }],
               };
             });
           } else if (code === "9") {
@@ -559,7 +573,9 @@ export default function ChatPage() {
             };
             toolCallsMap.set(tc.toolCallId, toolPart);
             setStreaming((prev) => {
-              if (!prev) return prev;
+              if (!prev) {
+                return prev;
+              }
               const filtered = prev.parts.filter(
                 (p) => p.type !== "tool-call" || p.toolCallId !== tc.toolCallId
               );
@@ -575,11 +591,12 @@ export default function ChatPage() {
             };
             toolResultsMap.set(tr.toolCallId, resultPart);
             setStreaming((prev) => {
-              if (!prev) return prev;
+              if (!prev) {
+                return prev;
+              }
               const filtered = prev.parts.filter(
                 (p) =>
-                  p.type !== "tool-result" ||
-                  p.toolCallId !== tr.toolCallId
+                  p.type !== "tool-result" || p.toolCallId !== tr.toolCallId
               );
               return { ...prev, parts: [...filtered, resultPart] };
             });
@@ -605,7 +622,9 @@ export default function ChatPage() {
     } finally {
       // Commit streaming message to messages
       setStreaming((prev) => {
-        if (!prev) return null;
+        if (!prev) {
+          return null;
+        }
         const finalParts = prev.parts.map((p) => {
           if (p.type === "text" && !p.text && fullText) {
             return { ...p, text: fullText };
@@ -615,7 +634,10 @@ export default function ChatPage() {
         const finalMsg: ChatMessage = {
           id: crypto.randomUUID(),
           role: "assistant",
-          parts: finalParts.length > 0 ? finalParts : [{ type: "text", text: fullText }],
+          parts:
+            finalParts.length > 0
+              ? finalParts
+              : [{ type: "text", text: fullText }],
           content: fullText,
           createdAt: new Date().toISOString(),
         };
@@ -636,7 +658,7 @@ export default function ChatPage() {
   const allMessages = messages;
 
   return (
-    <div className="flex h-screen bg-[#0a0f0d] text-white overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-[#0a0f0d] text-white">
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
@@ -648,62 +670,72 @@ export default function ChatPage() {
       {/* Sidebar — drawer on mobile, static on desktop */}
       <div
         className={[
-          "fixed md:static z-50 inset-y-0 left-0 transition-transform duration-200 md:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200 md:static md:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
         <SessionSidebar
-          sessions={sessions}
           activeId={activeSessionId}
-          onSelect={(id) => { loadSession(id); setSidebarOpen(false); }}
-          onNew={() => { startNewChat(); setSidebarOpen(false); }}
-          onDelete={deleteSession}
           loading={sessionsLoading}
+          onDelete={deleteSession}
+          onNew={() => {
+            startNewChat();
+            setSidebarOpen(false);
+          }}
+          onSelect={(id) => {
+            loadSession(id);
+            setSidebarOpen(false);
+          }}
+          sessions={sessions}
         />
       </div>
 
       {/* Main chat area */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Header */}
-        <div className="flex items-center px-4 md:px-6 py-3 border-b border-white/10 bg-black/20 backdrop-blur-sm flex-shrink-0 gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2 border-white/10 border-b bg-black/20 px-4 py-3 backdrop-blur-sm md:px-6">
           {/* Hamburger — mobile only */}
           <button
-            type="button"
             aria-label="Open chat sessions"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-white/60 transition-colors hover:bg-white/10 hover:text-white md:hidden"
             onClick={() => setSidebarOpen((v) => !v)}
-            className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+            type="button"
           >
-            {sidebarOpen ? <CloseIcon className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {sidebarOpen ? (
+              <CloseIcon className="h-5 w-5" />
+            ) : (
+              <Menu className="h-5 w-5" />
+            )}
           </button>
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="w-2 h-2 rounded-full bg-[#00d4a0] animate-pulse shrink-0" />
-            <span className="text-sm font-medium text-white/80 truncate">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#00d4a0]" />
+            <span className="truncate font-medium text-sm text-white/80">
               {activeSessionId
-                ? sessions.find((s) => s.id === activeSessionId)?.title ??
-                  "Conversation"
+                ? (sessions.find((s) => s.id === activeSessionId)?.title ??
+                  "Conversation")
                 : "New conversation"}
             </span>
           </div>
-          <div className="ml-auto text-xs text-white/30 font-mono shrink-0">
+          <div className="ml-auto shrink-0 font-mono text-white/30 text-xs">
             claude-sonnet-4-6 via SDK
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 md:px-6">
           {allMessages.length === 0 && !streaming && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex flex-col items-center justify-center h-full text-center"
+              className="flex h-full flex-col items-center justify-center text-center"
+              initial={{ opacity: 0, y: 20 }}
             >
-              <div className="w-16 h-16 rounded-full bg-[#00d4a0]/10 border border-[#00d4a0]/30 flex items-center justify-center mb-4">
-                <span className="text-2xl font-bold text-[#00d4a0]">T</span>
+              <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-[#00d4a0]/30 bg-[#00d4a0]/10">
+                <span className="font-bold text-2xl text-[#00d4a0]">T</span>
               </div>
-              <h2 className="text-xl font-semibold text-white mb-2">
+              <h2 className="mb-2 font-semibold text-white text-xl">
                 TARS is ready
               </h2>
-              <p className="text-white/40 text-sm max-w-sm">
+              <p className="max-w-sm text-sm text-white/40">
                 Your personal operations AI. Ask about your infrastructure,
                 projects, or anything else.
               </p>
@@ -713,21 +745,21 @@ export default function ChatPage() {
           {allMessages.map((msg) => (
             <MessageBubble
               key={msg.id}
-              role={msg.role as "user" | "assistant"}
               parts={msg.parts as MessagePart[]}
+              role={msg.role as "user" | "assistant"}
             />
           ))}
 
           {streaming && (
             <MessageBubble
-              role="assistant"
-              parts={streaming.parts}
               isStreaming={streaming.isStreaming}
+              parts={streaming.parts}
+              role="assistant"
             />
           )}
 
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2 rounded-lg border border-red-400/20 bg-red-400/10 px-4 py-3 text-red-400 text-sm">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>{error}</span>
             </div>
@@ -737,8 +769,8 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="px-4 md:px-6 pb-4 md:pb-6 pt-3 flex-shrink-0 border-t border-white/5">
-          <PromptInput onSend={sendMessage} disabled={isLoading} />
+        <div className="flex-shrink-0 border-white/5 border-t px-4 pt-3 pb-4 md:px-6 md:pb-6">
+          <PromptInput disabled={isLoading} onSend={sendMessage} />
           <div className="mt-2 text-center text-[10px] text-white/20">
             TARS has access to Read, Write, Bash, Glob, Grep, WebFetch, Task
           </div>

@@ -1,17 +1,15 @@
 import { cn } from "@/lib/utils";
 import type { RunStatus } from "./types";
 
-const STATUS_CONFIG: Record<
-  RunStatus,
-  { label: string; className: string }
-> = {
+const STATUS_CONFIG: Record<RunStatus, { label: string; className: string }> = {
   started: {
     label: "In Progress",
     className: "bg-blue-500/10 text-blue-400 border border-blue-500/30",
   },
   completed: {
     label: "Completed",
-    className: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
+    className:
+      "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
   },
   "skipped-no-findings": {
     label: "No Findings",
@@ -50,7 +48,7 @@ export function RunStatusBadge({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide",
+        "inline-flex items-center rounded-full px-2.5 py-0.5 font-medium text-xs uppercase tracking-wide",
         config.className,
         className
       )}
@@ -73,7 +71,7 @@ export function SeverityBadge({ severity }: { severity: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-mono font-medium uppercase",
+        "inline-flex items-center rounded-full px-2 py-0.5 font-medium font-mono text-xs uppercase",
         cls
       )}
     >

@@ -49,7 +49,7 @@ describe("loadProjectsYaml", () => {
     writeFileSync(
       TMP_YAML,
       "my-project:\n  kind: product\n  auto_review: true\n  auto_fix: false\n",
-      "utf8",
+      "utf8"
     );
     const { parsed } = await loadProjectsYaml();
     expect(parsed["my-project"]).toBeDefined();
@@ -64,7 +64,7 @@ describe("saveProjectsYaml", () => {
     await invalidateCache();
 
     const result = await saveProjectsYaml(
-      "test-project:\n  kind: sandbox\n  auto_review: true\n",
+      "test-project:\n  kind: sandbox\n  auto_review: true\n"
     );
     expect(result.ok).toBe(true);
 
@@ -94,11 +94,11 @@ describe("saveProjectsYaml", () => {
     writeFileSync(
       TMP_YAML,
       "konverge:\n  kind: client\n  protect_mode: true\n",
-      "utf8",
+      "utf8"
     );
 
     const result = await saveProjectsYaml(
-      "konverge:\n  kind: client\n  protect_mode: false\n",
+      "konverge:\n  kind: client\n  protect_mode: false\n"
     );
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -111,12 +111,12 @@ describe("saveProjectsYaml", () => {
     await invalidateCache();
 
     const result = await saveProjectsYaml(
-      "konverge:\n  kind: client\n  auto_review: true\n",
+      "konverge:\n  kind: client\n  auto_review: true\n"
     );
     expect(result.ok).toBe(true);
 
     const { parsed } = await loadProjectsYaml();
-    expect(parsed["konverge"].protect_mode).toBe(true);
+    expect(parsed.konverge.protect_mode).toBe(true);
   });
 });
 
@@ -125,7 +125,7 @@ describe("saveKillSwitches", () => {
     writeFileSync(
       TMP_YAML,
       "proj-a:\n  auto_review: false\n  auto_fix: false\nproj-b:\n  auto_review: true\n",
-      "utf8",
+      "utf8"
     );
     await invalidateCache();
 

@@ -28,11 +28,16 @@ export const codexFixValidateHandler: JobHandler = async (ctx) => {
   delete env.OPENAI_BASE_URL;
   const filteredEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(env)) {
-    if (typeof v === "string") filteredEnv[k] = v;
+    if (typeof v === "string") {
+      filteredEnv[k] = v;
+    }
   }
   filteredEnv.HOME = process.env.HOME ?? "/home/shaun";
-  filteredEnv.CODEX_HOME = process.env.CODEX_HOME ?? filteredEnv.HOME + "/.codex";
-  filteredEnv.PATH = process.env.PATH ?? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+  filteredEnv.CODEX_HOME =
+    process.env.CODEX_HOME ?? `${filteredEnv.HOME}/.codex`;
+  filteredEnv.PATH =
+    process.env.PATH ??
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
   const codex = new Codex({ env: filteredEnv });
   const thread = codex.startThread({
@@ -45,9 +50,9 @@ export const codexFixValidateHandler: JobHandler = async (ctx) => {
 
   const prompt = [
     "Validate the candidate diff against the rubric. Return JSON: { agrees, confidence (0-1), rationale, concerns[] }.",
-    "Rubric:\n" + input.rubric,
-    input.context ? "Context:\n" + input.context : null,
-    "Candidate diff:\n```diff\n" + input.diff + "\n```",
+    `Rubric:\n${input.rubric}`,
+    input.context ? `Context:\n${input.context}` : null,
+    `Candidate diff:\n\`\`\`diff\n${input.diff}\n\`\`\``,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -62,7 +67,9 @@ export const codexFixValidateHandler: JobHandler = async (ctx) => {
     (thread as unknown as { id?: string | null }).id ??
     (thread as unknown as { threadId?: string | null }).threadId ??
     null;
-  if (threadId) await ctx.updateSessionId(threadId);
+  if (threadId) {
+    await ctx.updateSessionId(threadId);
+  }
 
   const text = turn.finalResponse ?? "";
   return parseValidationJson(text);
@@ -79,19 +86,26 @@ function parseValidationJson(text: string): CodexFixValidateOutput {
     }
   };
   const direct = tryParse(text.trim());
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
   const fenced = text.match(/```(?:json)?\s*([\s\S]+?)```/);
   if (fenced) {
     const inner = tryParse(fenced[1].trim());
-    if (inner) return inner;
+    if (inner) {
+      return inner;
+    }
   }
   const first = text.indexOf("{");
   const last = text.lastIndexOf("}");
   if (first >= 0 && last > first) {
     const recovered = tryParse(text.slice(first, last + 1));
-    if (recovered) return recovered;
+    if (recovered) {
+      return recovered;
+    }
   }
   throw new Error(
-    "codex-fix-validate output did not contain valid JSON. First 300 chars: " + text.slice(0, 300),
+    "codex-fix-validate output did not contain valid JSON. First 300 chars: " +
+      text.slice(0, 300)
   );
 }

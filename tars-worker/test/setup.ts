@@ -10,7 +10,9 @@ let pool: pg.Pool | undefined;
 export function getTestPool(): pg.Pool {
   if (!pool) {
     const url = process.env.TARS_APP_DB_URL;
-    if (!url) throw new Error("TARS_APP_DB_URL not set for tests");
+    if (!url) {
+      throw new Error("TARS_APP_DB_URL not set for tests");
+    }
     pool = new Pool({ connectionString: url, max: 4 });
   }
   return pool;
@@ -23,7 +25,7 @@ export async function ensureSchema(): Promise<void> {
     "lib",
     "db",
     "migrations",
-    "0001_tars_jobs.sql",
+    "0001_tars_jobs.sql"
   );
   const sql = readFileSync(sqlPath, "utf8");
   await getTestPool().query(sql);

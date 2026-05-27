@@ -1,16 +1,15 @@
 export const runtime = "nodejs";
 
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { query } from "@anthropic-ai/claude-agent-sdk";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { db, migrationClient } from "@/lib/db";
-import { chatSessions, chatMessages } from "@/lib/db/chat-schema";
-import { users } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
-import { auth } from "@/lib/auth";
+import { query } from "@anthropic-ai/claude-agent-sdk";
+import { and, eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { db, migrationClient } from "@/lib/db";
+import { chatMessages, chatSessions } from "@/lib/db/chat-schema";
 
 // Cache SOUL.md at module load time
 let soulPrompt: string;
@@ -49,7 +48,9 @@ export async function POST(req: NextRequest) {
   let userId = "anon-tars-single-user";
   try {
     const session = await auth.api.getSession({ headers: await headers() });
-    if (session?.user?.id) userId = session.user.id;
+    if (session?.user?.id) {
+      userId = session.user.id;
+    }
   } catch {
     // use anon
   }
@@ -212,7 +213,9 @@ export async function POST(req: NextRequest) {
             for (const block of msg.message.content) {
               if (block.type === "text" && block.text) {
                 assistantParts.push({ type: "text", text: block.text });
-                if (!fullText) fullText = block.text;
+                if (!fullText) {
+                  fullText = block.text;
+                }
               } else if (block.type === "tool_use") {
                 const toolPart = {
                   type: "tool-call",

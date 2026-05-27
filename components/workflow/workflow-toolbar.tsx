@@ -81,9 +81,9 @@ import { WorkflowIssuesOverlay } from "../overlays/workflow-issues-overlay";
 import { WorkflowIcon } from "../ui/workflow-icon";
 import { UserMenu } from "../workflows/user-menu";
 
-type WorkflowToolbarProps = {
+interface WorkflowToolbarProps {
   workflowId?: string;
-};
+}
 
 // Helper functions to reduce complexity
 function updateNodesStatus(
@@ -99,11 +99,11 @@ function updateNodesStatus(
   }
 }
 
-type MissingIntegrationInfo = {
+interface MissingIntegrationInfo {
   integrationType: IntegrationType;
   integrationLabel: string;
   nodeNames: string[];
-};
+}
 
 // Built-in actions that require integrations but aren't in the plugin registry
 const BUILTIN_ACTION_INTEGRATIONS: Record<string, IntegrationType> = {
@@ -116,7 +116,7 @@ const BUILTIN_INTEGRATION_LABELS: Record<string, string> = {
 };
 
 // Type for broken template reference info
-type BrokenTemplateReferenceInfo = {
+interface BrokenTemplateReferenceInfo {
   nodeId: string;
   nodeLabel: string;
   brokenReferences: Array<{
@@ -125,7 +125,7 @@ type BrokenTemplateReferenceInfo = {
     referencedNodeId: string;
     displayText: string;
   }>;
-};
+}
 
 // Extract template variables from a string and check if they reference existing nodes
 function extractTemplateReferences(
@@ -225,14 +225,14 @@ function getBrokenTemplateReferences(
 }
 
 // Type for missing required fields info
-type MissingRequiredFieldInfo = {
+interface MissingRequiredFieldInfo {
   nodeId: string;
   nodeLabel: string;
   missingFields: Array<{
     fieldKey: string;
     fieldLabel: string;
   }>;
-};
+}
 
 // Check if a field value is effectively empty
 function isFieldEmpty(value: unknown): boolean {
@@ -377,7 +377,7 @@ function getMissingIntegrations(
   );
 }
 
-type ExecuteTestWorkflowParams = {
+interface ExecuteTestWorkflowParams {
   workflowId: string;
   nodes: WorkflowNode[];
   updateNodeData: (update: {
@@ -387,7 +387,7 @@ type ExecuteTestWorkflowParams = {
   pollingIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>;
   setIsExecuting: (value: boolean) => void;
   setSelectedExecutionId: (value: string | null) => void;
-};
+}
 
 async function executeTestWorkflow({
   workflowId,
@@ -476,7 +476,7 @@ async function executeTestWorkflow({
 }
 
 // Hook for workflow handlers
-type WorkflowHandlerParams = {
+interface WorkflowHandlerParams {
   currentWorkflowId: string | null;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
@@ -494,7 +494,7 @@ type WorkflowHandlerParams = {
   setSelectedNodeId: (id: string | null) => void;
   setSelectedExecutionId: (id: string | null) => void;
   userIntegrations: Array<{ id: string; type: IntegrationType }>;
-};
+}
 
 function useWorkflowHandlers({
   currentWorkflowId,
@@ -797,7 +797,9 @@ function useWorkflowActions(state: ReturnType<typeof useWorkflowState>) {
       confirmVariant: "destructive" as const,
       destructive: true,
       onConfirm: async () => {
-        if (!currentWorkflowId) return;
+        if (!currentWorkflowId) {
+          return;
+        }
         try {
           await api.workflow.delete(currentWorkflowId);
           toast.success("Workflow deleted successfully");

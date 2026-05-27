@@ -51,10 +51,10 @@ const getDescription = (type: IntegrationType): string =>
   SYSTEM_INTEGRATION_DESCRIPTIONS[type] ||
   "";
 
-type AddConnectionOverlayProps = {
+interface AddConnectionOverlayProps {
   overlayId: string;
   onSuccess?: (integrationId: string) => void;
-};
+}
 
 /**
  * Overlay for selecting a connection type to add
@@ -185,11 +185,11 @@ export function AddConnectionOverlay({
   );
 }
 
-type ConfigureConnectionOverlayProps = {
+interface ConfigureConnectionOverlayProps {
   overlayId: string;
   type: IntegrationType;
   onSuccess?: (integrationId: string) => void;
-};
+}
 
 /**
  * Secret field component for password inputs
@@ -254,7 +254,7 @@ export function ConfigureConnectionOverlay({
   const { push, closeAll } = useOverlay();
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{
+  const [_testResult, setTestResult] = useState<{
     status: "success" | "error";
     message: string;
   } | null>(null);
@@ -375,7 +375,9 @@ export function ConfigureConnectionOverlay({
       );
     }
 
-    if (!formFields) return null;
+    if (!formFields) {
+      return null;
+    }
 
     return formFields.map((field) => {
       if (field.type === "password") {

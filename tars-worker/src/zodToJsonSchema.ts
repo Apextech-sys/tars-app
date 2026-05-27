@@ -1,16 +1,18 @@
-import { z } from "zod";
+import type { z } from "zod";
 
 // biome-ignore lint/suspicious/noExplicitAny: schema introspection is loose
 export function zodToJsonSchema(schema: z.ZodTypeAny): any {
   const def = (schema as unknown as { _def: any })._def;
-  if (!def) return {};
+  if (!def) {
+    return {};
+  }
   const t = def.typeName ?? def.type;
 
   switch (t) {
     case "ZodObject":
     case "object": {
       const shape =
-        typeof def.shape === "function" ? def.shape() : def.shape ?? {};
+        typeof def.shape === "function" ? def.shape() : (def.shape ?? {});
       const properties: Record<string, unknown> = {};
       const required: string[] = [];
       for (const [key, value] of Object.entries(shape)) {
@@ -21,7 +23,9 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): any {
           (typeof v.isOptional === "function" && v.isOptional()) ||
           inner?.typeName === "ZodOptional" ||
           inner?.type === "optional";
-        if (!isOpt) required.push(key);
+        if (!isOpt) {
+          required.push(key);
+        }
       }
       return {
         type: "object",
@@ -51,7 +55,9 @@ export function zodToJsonSchema(schema: z.ZodTypeAny): any {
       // Zod v4 returns enum values as an object { Key: "Key", ... }; v3 as array. Normalize.
       const values = Array.isArray(raw)
         ? raw
-        : (raw && typeof raw === "object" ? Object.values(raw) : []);
+        : raw && typeof raw === "object"
+          ? Object.values(raw)
+          : [];
       return { type: "string", enum: values };
     }
     case "ZodOptional":

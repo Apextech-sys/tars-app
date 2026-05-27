@@ -16,12 +16,12 @@ import {
 import { TimezoneSelect } from "@/components/ui/timezone-select";
 import { SchemaBuilder, type SchemaField } from "./schema-builder";
 
-type TriggerConfigProps = {
+interface TriggerConfigProps {
   config: Record<string, unknown>;
   onUpdateConfig: (key: string, value: string) => void;
   disabled: boolean;
   workflowId?: string;
-};
+}
 
 export function TriggerConfig({
   config,
@@ -30,7 +30,7 @@ export function TriggerConfig({
   workflowId,
 }: TriggerConfigProps) {
   const webhookUrl = workflowId
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/workflows/${workflowId}/webhook`
+    ? `${typeof window === "undefined" ? "" : window.location.origin}/api/workflows/${workflowId}/webhook`
     : "";
 
   const handleCopyWebhookUrl = () => {

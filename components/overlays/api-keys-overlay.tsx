@@ -11,18 +11,18 @@ import { ConfirmOverlay } from "./confirm-overlay";
 import { Overlay } from "./overlay";
 import { useOverlay } from "./overlay-provider";
 
-type ApiKey = {
+interface ApiKey {
   id: string;
   name: string | null;
   keyPrefix: string;
   createdAt: string;
   lastUsedAt: string | null;
   key?: string;
-};
+}
 
-type ApiKeysOverlayProps = {
+interface ApiKeysOverlayProps {
   overlayId: string;
-};
+}
 
 /**
  * Overlay for creating a new API key.

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
 import {
   AlertCircle,
   CheckCircle2,
@@ -9,7 +8,9 @@ import {
   RefreshCw,
   Save,
 } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { NotificationsSettingsSection } from "@/components/tars/notifications-settings-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,12 +20,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { NotificationsSettingsSection } from "@/components/tars/notifications-settings-section";
 import {
-  type ProjectPolicy,
-  type ProjectsMap,
   loadModelSettings,
   loadProjectsYaml,
+  type ProjectsMap,
   saveKillSwitches,
   saveModelSettings,
   saveProjectsYaml,
@@ -57,9 +56,9 @@ function Section({
 }) {
   return (
     <section className="rounded-lg border bg-card">
-      <div className="p-4 md:p-5 border-b">
+      <div className="border-b p-4 md:p-5">
         <h2 className="font-semibold text-base">{title}</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+        <p className="mt-0.5 text-muted-foreground text-sm">{description}</p>
       </div>
       <div className="p-4 md:p-5">{children}</div>
     </section>
@@ -98,12 +97,12 @@ function YamlEditorSection() {
 
   return (
     <Section
-      title="Project policies"
       description="YAML source for /home/shaun/.tars-state/knowledge/projects.yaml. Edits auto-invalidate the policy cache."
+      title="Project policies"
     >
       <div className="space-y-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-md border bg-muted/50 px-3 py-2">
-          <Lock className="size-3.5 text-yellow-500 shrink-0" />
+        <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
+          <Lock className="size-3.5 shrink-0 text-yellow-500" />
           <span>
             <strong>konverge.protect_mode</strong> is hardcoded in{" "}
             <code className="text-xs">workflows/lib/konverge-guard.ts</code> and
@@ -112,25 +111,22 @@ function YamlEditorSection() {
         </div>
 
         <textarea
-          className="w-full rounded-md border bg-background font-mono text-xs px-3 py-2.5 min-h-[200px] md:min-h-[480px] focus:outline-none focus:ring-2 focus:ring-ring resize-y" style={{ fontSize: "16px" }}
-          value={raw}
+          className="min-h-[200px] w-full resize-y rounded-md border bg-background px-3 py-2.5 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring md:min-h-[480px]"
           onChange={(e) => setRaw(e.target.value)}
           spellCheck={false}
+          style={{ fontSize: "16px" }}
+          value={raw}
         />
 
         {error && (
-          <div className="flex items-start gap-2 text-sm text-destructive rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2">
-            <AlertCircle className="size-4 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         <div className="flex items-center gap-2">
-          <Button
-            onClick={save}
-            disabled={!isDirty || isPending}
-            size="sm"
-          >
+          <Button disabled={!isDirty || isPending} onClick={save} size="sm">
             {isPending ? (
               <RefreshCw className="size-3.5 animate-spin" />
             ) : (
@@ -168,7 +164,7 @@ function KillSwitchesSection() {
   const toggle = (
     key: string,
     field: "auto_review" | "auto_fix",
-    current: boolean,
+    current: boolean
   ) => {
     setPending((prev) => ({
       ...prev,
@@ -178,9 +174,11 @@ function KillSwitchesSection() {
 
   const effectiveVal = (
     key: string,
-    field: "auto_review" | "auto_fix",
+    field: "auto_review" | "auto_fix"
   ): boolean => {
-    if (pending[key]?.[field] !== undefined) return pending[key][field]!;
+    if (pending[key]?.[field] !== undefined) {
+      return pending[key][field]!;
+    }
     return (parsed[key]?.[field] as boolean | undefined) ?? false;
   };
 
@@ -208,12 +206,12 @@ function KillSwitchesSection() {
 
   return (
     <Section
-      title="Kill switches"
       description="Toggle auto-review and auto-fix per project. Changes are previewed before saving."
+      title="Kill switches"
     >
       <div className="space-y-4">
         {projects.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No projects found.</p>
+          <p className="text-muted-foreground text-sm">No projects found.</p>
         ) : (
           <div className="space-y-2">
             {projects.map(([key]) => {
@@ -226,35 +224,36 @@ function KillSwitchesSection() {
 
               return (
                 <div
-                  key={key}
                   className={cn(
                     "flex items-center justify-between gap-4 rounded-md border px-4 py-3",
-                    changed && "border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20",
+                    changed &&
+                      "border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20"
                   )}
+                  key={key}
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono text-sm font-medium truncate">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate font-medium font-mono text-sm">
                       {key}
                     </span>
                     {changed && (
-                      <Badge variant="warning" className="text-xs">
+                      <Badge className="text-xs" variant="warning">
                         unsaved
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-4 shrink-0">
+                  <div className="flex shrink-0 items-center gap-4">
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+                          <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
                             <input
-                              type="checkbox"
                               checked={autoReview}
+                              className="size-5 cursor-pointer accent-primary"
                               disabled={isKonverge}
                               onChange={() =>
                                 toggle(key, "auto_review", autoReview)
                               }
-                              className="size-5 accent-primary cursor-pointer"
+                              type="checkbox"
                             />
                             Auto-review
                           </label>
@@ -270,15 +269,13 @@ function KillSwitchesSection() {
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+                          <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
                             <input
-                              type="checkbox"
                               checked={autoFix}
+                              className="size-5 cursor-pointer accent-primary"
                               disabled={isKonverge}
-                              onChange={() =>
-                                toggle(key, "auto_fix", autoFix)
-                              }
-                              className="size-5 accent-primary cursor-pointer"
+                              onChange={() => toggle(key, "auto_fix", autoFix)}
+                              type="checkbox"
                             />
                             Auto-fix
                           </label>
@@ -298,12 +295,12 @@ function KillSwitchesSection() {
         )}
 
         {hasPending && (
-          <div className="flex items-center gap-3 rounded-md border border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20 px-4 py-3">
-            <Info className="size-4 text-yellow-600 shrink-0" />
-            <p className="text-sm text-yellow-700 dark:text-yellow-300 flex-1">
+          <div className="flex items-center gap-3 rounded-md border border-yellow-400 bg-yellow-50 px-4 py-3 dark:bg-yellow-950/20">
+            <Info className="size-4 shrink-0 text-yellow-600" />
+            <p className="flex-1 text-sm text-yellow-700 dark:text-yellow-300">
               {Object.keys(pending).length} project(s) have pending changes.
             </p>
-            <Button size="sm" onClick={save} disabled={isPending}>
+            <Button disabled={isPending} onClick={save} size="sm">
               {isPending ? (
                 <RefreshCw className="size-3.5 animate-spin" />
               ) : (
@@ -350,16 +347,16 @@ function ModelPickerSection() {
 
   return (
     <Section
-      title="Model picker"
       description="Global defaults for chat and code-review models. Stored in app_settings table."
+      title="Model picker"
     >
       <div className="space-y-5">
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Chat model</label>
+          <label className="font-medium text-sm">Chat model</label>
           <select
             className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            value={chatModel}
             onChange={(e) => setChatModel(e.target.value)}
+            value={chatModel}
           >
             {CHAT_MODELS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -370,11 +367,11 @@ function ModelPickerSection() {
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium">Code-review model</label>
+          <label className="font-medium text-sm">Code-review model</label>
           <select
             className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            value={codeReviewModel}
             onChange={(e) => setCodeReviewModel(e.target.value)}
+            value={codeReviewModel}
           >
             {CODE_REVIEW_MODELS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -384,7 +381,7 @@ function ModelPickerSection() {
           </select>
         </div>
 
-        <Button onClick={save} disabled={!isDirty || isPending} size="sm">
+        <Button disabled={!isDirty || isPending} onClick={save} size="sm">
           {isPending ? (
             <RefreshCw className="size-3.5 animate-spin" />
           ) : (
@@ -402,10 +399,10 @@ function ModelPickerSection() {
 export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 md:space-y-8 md:py-8">
         <div>
-          <h1 className="text-2xl font-bold">Settings</h1>
-          <p className="text-muted-foreground text-sm mt-1">
+          <h1 className="font-bold text-2xl">Settings</h1>
+          <p className="mt-1 text-muted-foreground text-sm">
             Project policies, kill switches, and model configuration.
           </p>
         </div>

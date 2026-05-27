@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { auditLog, prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
@@ -46,9 +46,7 @@ export async function GET(
       db
         .select()
         .from(tarsJobs)
-        .where(
-          sql`${tarsJobs.payload}->>'runId' = ${runId}`
-        )
+        .where(sql`${tarsJobs.payload}->>'runId' = ${runId}`)
         .orderBy(asc(tarsJobs.createdAt)),
     ]);
 
@@ -86,6 +84,9 @@ export async function GET(
     });
   } catch (err) {
     console.error("GET /api/tars/pr-runs/[runId] error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

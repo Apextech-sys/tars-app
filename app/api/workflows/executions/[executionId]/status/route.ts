@@ -4,10 +4,10 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { workflowExecutionLogs, workflowExecutions } from "@/lib/db/schema";
 
-type NodeStatus = {
+interface NodeStatus {
   nodeId: string;
   status: "pending" | "running" | "success" | "error";
-};
+}
 
 export async function GET(
   request: Request,

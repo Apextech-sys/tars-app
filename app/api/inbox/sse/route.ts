@@ -17,10 +17,12 @@ export async function GET(request: Request) {
       let closed = false;
 
       const send = (data: unknown) => {
-        if (closed) return;
+        if (closed) {
+          return;
+        }
         try {
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify(data)}\n\n`),
+            encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
           );
         } catch {
           // client disconnected

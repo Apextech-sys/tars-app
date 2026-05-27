@@ -25,8 +25,8 @@ import { join } from "node:path";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import {
   BriefComposeInputSchema,
-  BriefOutputSchema,
   type BriefOutput,
+  BriefOutputSchema,
 } from "../../../lib/tars/brief/schema.js";
 import type { JobHandler } from "../types.js";
 
@@ -140,7 +140,9 @@ export const claudeBriefComposeHandler: JobHandler = async (ctx) => {
     }
     if (msg.type === "system" && msg.subtype === "init") {
       sessionId = msg.session_id;
-      if (sessionId) await ctx.updateSessionId(sessionId);
+      if (sessionId) {
+        await ctx.updateSessionId(sessionId);
+      }
       ctx.log("claude-brief-compose: session", { sessionId });
     } else if (msg.type === "result") {
       sessionId = msg.session_id ?? sessionId;
@@ -149,7 +151,7 @@ export const claudeBriefComposeHandler: JobHandler = async (ctx) => {
       } else {
         throw new Error(
           `claude-brief-compose failed: ${msg.subtype}` +
-            (msg.errors?.length ? ` — ${msg.errors.join("; ")}` : ""),
+            (msg.errors?.length ? ` — ${msg.errors.join("; ")}` : "")
         );
       }
     }
@@ -162,10 +164,12 @@ export const claudeBriefComposeHandler: JobHandler = async (ctx) => {
   return await parseBriefOutput(finalText);
 };
 
-function buildUserPrompt(input: ReturnType<typeof BriefComposeInputSchema.parse>): string {
+function buildUserPrompt(
+  input: ReturnType<typeof BriefComposeInputSchema.parse>
+): string {
   const lines: string[] = [];
   lines.push(
-    `Compose the ${input.kind} brief for ${input.date}. Window: ${input.windowStart} → ${input.windowEnd}.`,
+    `Compose the ${input.kind} brief for ${input.date}. Window: ${input.windowStart} → ${input.windowEnd}.`
   );
   lines.push("");
   lines.push("CONTEXT — graph snapshot");
@@ -179,14 +183,14 @@ function buildUserPrompt(input: ReturnType<typeof BriefComposeInputSchema.parse>
   lines.push("```");
   lines.push("");
   lines.push(
-    `CONTEXT — audit_log window (${input.audit_window.total_entries} entries)`,
+    `CONTEXT — audit_log window (${input.audit_window.total_entries} entries)`
   );
   lines.push("```json");
   lines.push(JSON.stringify(input.audit_window, null, 2));
   lines.push("```");
   lines.push("");
   lines.push(
-    `CONTEXT — open PRs (${input.open_prs.length}), recent issues (${input.recent_issues.length}), commit activity by repo (${input.recent_repo_activity.length})`,
+    `CONTEXT — open PRs (${input.open_prs.length}), recent issues (${input.recent_issues.length}), commit activity by repo (${input.recent_repo_activity.length})`
   );
   lines.push("```json");
   lines.push(
@@ -197,13 +201,13 @@ function buildUserPrompt(input: ReturnType<typeof BriefComposeInputSchema.parse>
         recent_repo_activity: input.recent_repo_activity,
       },
       null,
-      2,
-    ),
+      2
+    )
   );
   lines.push("```");
   lines.push("");
   lines.push(
-    "Return ONLY the JSON object described in the system prompt. No prose, no fences.",
+    "Return ONLY the JSON object described in the system prompt. No prose, no fences."
   );
   return lines.join("\n");
 }
@@ -280,15 +284,25 @@ async function parseBriefOutput(text: string): Promise<BriefOutput> {
    * structure stays valid.
    */
   const stripLoneSurrogates = (s: string): string => {
-    return s
-      // High surrogate not followed by low surrogate escape
-      .replace(/\\u(d[89ab][0-9a-fA-F]{2})(?!\\u(d[cdef][0-9a-fA-F]{2}))/g, "")
-      // Low surrogate not preceded by high surrogate escape
-      .replace(/(?<!\\u(d[89ab][0-9a-fA-F]{2}))\\u(d[cdef][0-9a-fA-F]{2})/g, "");
+    return (
+      s
+        // High surrogate not followed by low surrogate escape
+        .replace(
+          /\\u(d[89ab][0-9a-fA-F]{2})(?!\\u(d[cdef][0-9a-fA-F]{2}))/g,
+          ""
+        )
+        // Low surrogate not preceded by high surrogate escape
+        .replace(
+          /(?<!\\u(d[89ab][0-9a-fA-F]{2}))\\u(d[cdef][0-9a-fA-F]{2})/g,
+          ""
+        )
+    );
   };
 
   const direct = tryParse(text.trim());
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
 
   // Strip an outer fence by anchoring to the FIRST opening ``` and the
   // LAST closing ```. A non-greedy regex breaks when the body itself
@@ -301,14 +315,18 @@ async function parseBriefOutput(text: string): Promise<BriefOutput> {
     inner = inner.replace(/^[ \t]*json[ \t]*\r?\n/, "");
     inner = inner.trim();
     const innerDirect = tryParse(inner);
-    if (innerDirect) return innerDirect;
+    if (innerDirect) {
+      return innerDirect;
+    }
     const innerEscaped = tryParse(reescapeNewlines(inner));
-    if (innerEscaped) return innerEscaped;
+    if (innerEscaped) {
+      return innerEscaped;
+    }
     // Strip lone surrogates AND re-escape newlines together.
-    const innerCleaned = tryParse(
-      reescapeNewlines(stripLoneSurrogates(inner)),
-    );
-    if (innerCleaned) return innerCleaned;
+    const innerCleaned = tryParse(reescapeNewlines(stripLoneSurrogates(inner)));
+    if (innerCleaned) {
+      return innerCleaned;
+    }
   }
 
   // Last-ditch: pull the outermost { ... } block.
@@ -317,14 +335,20 @@ async function parseBriefOutput(text: string): Promise<BriefOutput> {
   if (first >= 0 && last > first) {
     const candidate = text.slice(first, last + 1);
     const recovered = tryParse(candidate);
-    if (recovered) return recovered;
+    if (recovered) {
+      return recovered;
+    }
     // Try with newline re-escaping.
     const recoveredEscaped = tryParse(reescapeNewlines(candidate));
-    if (recoveredEscaped) return recoveredEscaped;
+    if (recoveredEscaped) {
+      return recoveredEscaped;
+    }
     const recoveredCleaned = tryParse(
-      reescapeNewlines(stripLoneSurrogates(candidate)),
+      reescapeNewlines(stripLoneSurrogates(candidate))
     );
-    if (recoveredCleaned) return recoveredCleaned;
+    if (recoveredCleaned) {
+      return recoveredCleaned;
+    }
   }
 
   // Last-resort: dump the raw text for offline diagnosis. We deliberately
@@ -336,13 +360,13 @@ async function parseBriefOutput(text: string): Promise<BriefOutput> {
       await fs.writeFile(
         `/tmp/tars-brief-fail-${Date.now()}.txt`,
         text,
-        "utf8",
+        "utf8"
       );
     } catch {
       // ignore
     }
   })();
   throw new Error(
-    `claude-brief-compose output did not contain a valid brief JSON. Length=${text.length}. First 300: ${text.slice(0, 300)} ; Last 300: ${text.slice(-300)}`,
+    `claude-brief-compose output did not contain a valid brief JSON. Length=${text.length}. First 300: ${text.slice(0, 300)} ; Last 300: ${text.slice(-300)}`
   );
 }

@@ -76,9 +76,9 @@ export async function fetchInboxItems(): Promise<InboxItem[]> {
         eq(escalations.status, "open"),
         and(
           eq(escalations.status, "snoozed"),
-          gte(escalations.snoozedUntil, sql`now()`),
-        ),
-      ),
+          gte(escalations.snoozedUntil, sql`now()`)
+        )
+      )
     )
     .orderBy(sql`${escalations.createdAt} DESC`)
     .limit(100);
@@ -103,7 +103,10 @@ export async function fetchInboxItems(): Promise<InboxItem[]> {
     .select()
     .from(prReviewRuns)
     .where(
-      and(eq(prReviewRuns.status, "started"), lt(prReviewRuns.createdAt, fiveMinAgo)),
+      and(
+        eq(prReviewRuns.status, "started"),
+        lt(prReviewRuns.createdAt, fiveMinAgo)
+      )
     )
     .limit(50);
 
@@ -125,7 +128,7 @@ export async function fetchInboxItems(): Promise<InboxItem[]> {
     .select()
     .from(tarsJobs)
     .where(
-      and(eq(tarsJobs.status, "failed"), gte(tarsJobs.createdAt, sevenDaysAgo)),
+      and(eq(tarsJobs.status, "failed"), gte(tarsJobs.createdAt, sevenDaysAgo))
     )
     .orderBy(sql`${tarsJobs.createdAt} DESC`)
     .limit(50);
@@ -195,7 +198,8 @@ export async function fetchInboxItems(): Promise<InboxItem[]> {
 
 export async function fetchInboxBadgeCount(): Promise<number> {
   const items = await fetchInboxItems();
-  return items.filter((i) => i.kind !== "escalation" || i.status === "open").length;
+  return items.filter((i) => i.kind !== "escalation" || i.status === "open")
+    .length;
 }
 
 /**
@@ -215,10 +219,7 @@ export async function fetchPrDisagreement(runId: string): Promise<{
     .select()
     .from(prReviewRuns)
     .where(
-      and(
-        eq(prReviewRuns.runId, runId),
-        eq(prReviewRuns.status, "disagreed"),
-      ),
+      and(eq(prReviewRuns.runId, runId), eq(prReviewRuns.status, "disagreed"))
     )
     .limit(1);
   if (rows.length === 0) {
@@ -249,7 +250,11 @@ export async function resolveEscalation(id: string, note: string) {
       updatedAt: new Date(),
     })
     .where(eq(escalations.id, id));
-  try { revalidatePath("/inbox"); } catch { /* no-op outside request context */ }
+  try {
+    revalidatePath("/inbox");
+  } catch {
+    /* no-op outside request context */
+  }
 }
 
 export async function snoozeEscalation(id: string, hours: number) {
@@ -261,7 +266,11 @@ export async function snoozeEscalation(id: string, hours: number) {
       updatedAt: new Date(),
     })
     .where(eq(escalations.id, id));
-  try { revalidatePath("/inbox"); } catch { /* no-op outside request context */ }
+  try {
+    revalidatePath("/inbox");
+  } catch {
+    /* no-op outside request context */
+  }
 }
 
 export async function deferEscalation(id: string) {
@@ -269,7 +278,11 @@ export async function deferEscalation(id: string) {
     .update(escalations)
     .set({ status: "deferred", updatedAt: new Date() })
     .where(eq(escalations.id, id));
-  try { revalidatePath("/inbox"); } catch { /* no-op outside request context */ }
+  try {
+    revalidatePath("/inbox");
+  } catch {
+    /* no-op outside request context */
+  }
 }
 
 export async function createEscalation(data: {
@@ -287,5 +300,9 @@ export async function createEscalation(data: {
     payload: data.payload ?? null,
     status: "open",
   });
-  try { revalidatePath("/inbox"); } catch { /* no-op outside request context */ }
+  try {
+    revalidatePath("/inbox");
+  } catch {
+    /* no-op outside request context */
+  }
 }

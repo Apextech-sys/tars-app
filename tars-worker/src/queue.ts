@@ -1,16 +1,14 @@
 import { and, eq, lt, or, sql } from "drizzle-orm";
 import pg from "pg";
+import { tarsJobs } from "../../lib/db/worker-schema.js";
 import type { Config } from "./config.js";
 import { getDb, withTx } from "./db.js";
 import { logger } from "./logger.js";
-import { tarsJobs } from "../../lib/db/worker-schema.js";
 import type { JobRow } from "./types.js";
 
 const { Client } = pg;
 
-export async function claimNextJob(
-  workerId: string,
-): Promise<JobRow | null> {
+export async function claimNextJob(workerId: string): Promise<JobRow | null> {
   return withTx(async (client) => {
     const claimSql = `
       WITH next AS (
@@ -34,7 +32,9 @@ export async function claimNextJob(
       RETURNING t.*;
     `;
     const res = await client.query<DbJobRow>(claimSql, [workerId]);
-    if (res.rows.length === 0) return null;
+    if (res.rows.length === 0) {
+      return null;
+    }
     return rowToJob(res.rows[0]);
   });
 }
@@ -56,7 +56,7 @@ export async function markDone(jobId: string, result: unknown): Promise<void> {
 export async function markFailed(
   jobId: string,
   errorText: string,
-  opts: { allowRetry?: boolean } = {},
+  opts: { allowRetry?: boolean } = {}
 ): Promise<{ requeued: boolean }> {
   const allowRetry = opts.allowRetry ?? true;
   const db = getDb();
@@ -69,7 +69,9 @@ export async function markFailed(
     .where(eq(tarsJobs.id, jobId))
     .limit(1);
 
-  if (rows.length === 0) return { requeued: false };
+  if (rows.length === 0) {
+    return { requeued: false };
+  }
   const { attempts, maxAttempts } = rows[0];
   const hasRetriesLeft = allowRetry && attempts < maxAttempts;
 
@@ -99,13 +101,10 @@ export async function markFailed(
 
 export async function updateJobSession(
   jobId: string,
-  sessionId: string,
+  sessionId: string
 ): Promise<void> {
   const db = getDb();
-  await db
-    .update(tarsJobs)
-    .set({ sessionId })
-    .where(eq(tarsJobs.id, jobId));
+  await db.update(tarsJobs).set({ sessionId }).where(eq(tarsJobs.id, jobId));
 }
 
 export async function reclaimStuckJobs(cfg: Config): Promise<number> {
@@ -122,14 +121,14 @@ export async function reclaimStuckJobs(cfg: Config): Promise<number> {
     .where(
       and(
         eq(tarsJobs.status, "running"),
-        or(lt(tarsJobs.lockedAt, cutoff), sql`${tarsJobs.lockedAt} IS NULL`),
-      ),
+        or(lt(tarsJobs.lockedAt, cutoff), sql`${tarsJobs.lockedAt} IS NULL`)
+      )
     )
     .returning({ id: tarsJobs.id });
   if (res.length > 0) {
     logger().warn(
       { reclaimed: res.length, ids: res.map((r) => r.id) },
-      "reclaimed stuck jobs",
+      "reclaimed stuck jobs"
     );
   }
   return res.length;
@@ -137,7 +136,7 @@ export async function reclaimStuckJobs(cfg: Config): Promise<number> {
 
 export async function startNotifyListener(
   cfg: Config,
-  onPoke: () => void,
+  onPoke: () => void
 ): Promise<() => Promise<void>> {
   const client = new Client({ connectionString: cfg.TARS_APP_DB_URL });
   await client.connect();
@@ -147,7 +146,9 @@ export async function startNotifyListener(
   let pending: NodeJS.Timeout | null = null;
   const debounceMs = cfg.TARS_WORKER_NOTIFY_DEBOUNCE_MS;
   const fire = (): void => {
-    if (pending) return;
+    if (pending) {
+      return;
+    }
     pending = setTimeout(() => {
       pending = null;
       try {
@@ -167,7 +168,9 @@ export async function startNotifyListener(
   });
 
   return async () => {
-    if (pending) clearTimeout(pending);
+    if (pending) {
+      clearTimeout(pending);
+    }
     try {
       await client.query("UNLISTEN tars_jobs_new");
     } catch {

@@ -154,7 +154,7 @@ export async function POST(
       (node) => node.data.type === "trigger"
     );
 
-    if (!triggerNode || triggerNode.data.config?.triggerType !== "Webhook") {
+    if (triggerNode?.data.config?.triggerType !== "Webhook") {
       return NextResponse.json(
         { error: "This workflow is not configured for webhook triggers" },
         { status: 400, headers: corsHeaders }

@@ -7,7 +7,7 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
 
   // Helper: assert no horizontal scrollbar on body
   async function assertNoHorizontalScroll(
-    page: import("@playwright/test").Page,
+    page: import("@playwright/test").Page
   ) {
     const hasHScroll = await page.evaluate(() => {
       return document.body.scrollWidth > document.body.clientWidth;
@@ -16,10 +16,7 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
   }
 
   // Helper: wait for page load (no nav to wait for)
-  async function loadPage(
-    page: import("@playwright/test").Page,
-    path: string,
-  ) {
+  async function loadPage(page: import("@playwright/test").Page, path: string) {
     await page.goto(path, { waitUntil: "domcontentloaded" });
     // Short wait for hydration
     await page.waitForTimeout(500);
@@ -42,7 +39,9 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
     await loadPage(page, "/inbox");
     const hamburger = page.locator('[data-testid="hamburger-btn"]');
     await hamburger.click({ force: true });
-    const drawer = page.locator('[role="dialog"][aria-label="Navigation menu"]');
+    const drawer = page.locator(
+      '[role="dialog"][aria-label="Navigation menu"]'
+    );
     await expect(drawer).toBeVisible();
     await expect(drawer.locator('a[href="/settings"]')).toBeVisible();
   });
@@ -89,7 +88,7 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
     await page.evaluate(() => {
       localStorage.setItem(
         "tars:notification-settings",
-        JSON.stringify({ enabled: true, severity_threshold: "blocker" }),
+        JSON.stringify({ enabled: true, severity_threshold: "blocker" })
       );
     });
 
@@ -99,7 +98,7 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
 
     // Verify localStorage was persisted and is readable
     const storedSettings = await page.evaluate(() =>
-      localStorage.getItem("tars:notification-settings"),
+      localStorage.getItem("tars:notification-settings")
     );
     const parsed = JSON.parse(storedSettings ?? "{}") as {
       enabled: boolean;
@@ -109,7 +108,9 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
     expect(parsed.severity_threshold).toBe("blocker");
 
     // Confirm the toggle UI reflects the setting
-    const toggleAfterReload = page.locator('[data-testid="notifications-toggle"]');
+    const toggleAfterReload = page.locator(
+      '[data-testid="notifications-toggle"]'
+    );
     await expect(toggleAfterReload).toBeVisible();
     // The aria-checked value reflects settings.enabled from localStorage
     // Note: in headless environment with denied Notification API, the toggle
@@ -157,9 +158,7 @@ test.describe("Mobile — Galaxy S22+ Ultra (384×854)", () => {
   test("/chat — hamburger (session menu) present", async ({ page }) => {
     await loadPage(page, "/chat");
     // Chat has its own session hamburger on mobile
-    const hamburger = page.locator(
-      'button[aria-label="Open chat sessions"]',
-    );
+    const hamburger = page.locator('button[aria-label="Open chat sessions"]');
     await expect(hamburger).toBeVisible();
   });
 

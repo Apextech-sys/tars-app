@@ -21,7 +21,9 @@ export const dynamic = "force-dynamic";
 
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
-  if (sqlClient) return sqlClient;
+  if (sqlClient) {
+    return sqlClient;
+  }
   const url =
     process.env.WORKFLOW_POSTGRES_URL ??
     process.env.DATABASE_URL ??
@@ -32,7 +34,7 @@ function getSql() {
 
 export async function POST(
   req: Request,
-  ctx: { params: Promise<{ id: string }> },
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
@@ -42,28 +44,19 @@ export async function POST(
   try {
     body = (await req.json()) as { message?: string; chatSessionId?: string };
   } catch {
-    return NextResponse.json(
-      { error: "invalid JSON body" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
   const message = (body.message ?? "").trim();
   if (!message) {
-    return NextResponse.json(
-      { error: "message required" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "message required" }, { status: 400 });
   }
   if (message.length > 10_000) {
-    return NextResponse.json(
-      { error: "message too long" },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: "message too long" }, { status: 400 });
   }
 
   try {
     const sql = getSql();
-    const briefRows = await sql/* sql */`
+    const briefRows = await sql /* sql */`
       select id, summary, kind, to_char(date, 'YYYY-MM-DD') as date
       from briefs where id = ${id}::uuid limit 1
     `;
@@ -76,7 +69,7 @@ export async function POST(
       kind: string;
       date: string;
     };
-    const inserted = await sql/* sql */`
+    const inserted = await sql /* sql */`
       insert into brief_replies (brief_id, chat_session_id, body)
       values (${brief.id}::uuid,
               ${body.chatSessionId ? sql`${body.chatSessionId}::uuid` : null},
@@ -117,7 +110,7 @@ export async function POST(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "reply failed" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

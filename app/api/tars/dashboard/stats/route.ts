@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, or, sql } from "drizzle-orm";
+import { eq, gte, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { prReviewRuns } from "@/lib/db/tars-schema";
@@ -30,7 +30,14 @@ export async function GET(req: NextRequest) {
     const errors = recent.filter((r) => r.status === "error").length;
     const disagreed = recent.filter((r) => r.status === "disagreed").length;
     const completed = recent.filter((r) =>
-      ["completed", "skipped-no-findings", "disagreed", "error", "blocked-konverge", "skipped-policy"].includes(r.status)
+      [
+        "completed",
+        "skipped-no-findings",
+        "disagreed",
+        "error",
+        "blocked-konverge",
+        "skipped-policy",
+      ].includes(r.status)
     );
 
     const errorRate = total > 0 ? (errors / total) * 100 : 0;
@@ -55,6 +62,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("GET /api/tars/dashboard/stats error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

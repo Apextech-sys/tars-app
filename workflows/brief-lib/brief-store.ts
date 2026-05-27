@@ -10,10 +10,7 @@
  * workflow lib accesses Postgres — see workflows/lib/audit.ts.
  */
 
-import type {
-  BriefKind,
-  BriefOutput,
-} from "../../lib/tars/brief/schema";
+import type { BriefKind, BriefOutput } from "../../lib/tars/brief/schema";
 
 async function makeSql() {
   const postgres = (await import("postgres")).default;
@@ -37,12 +34,12 @@ export interface InsertPendingBriefArgs {
  * for retry replays — the second call updates source_context only.
  */
 export async function insertPendingBrief(
-  args: InsertPendingBriefArgs,
+  args: InsertPendingBriefArgs
 ): Promise<{ briefId: string }> {
   "use step";
   const sql = await makeSql();
   try {
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       insert into briefs (run_id, date, kind, status, source_context)
       values (
         ${args.runId},
@@ -71,12 +68,12 @@ export interface UpdateBriefStatusArgs {
 }
 
 export async function updateBriefStatus(
-  args: UpdateBriefStatusArgs,
+  args: UpdateBriefStatusArgs
 ): Promise<void> {
   "use step";
   const sql = await makeSql();
   try {
-    await sql/* sql */`
+    await sql /* sql */`
       update briefs set
         status = ${args.status},
         job_id = coalesce(${args.jobId ?? null}, job_id),
@@ -100,7 +97,7 @@ export async function finalizeBrief(args: FinalizeBriefArgs): Promise<void> {
   "use step";
   const sql = await makeSql();
   try {
-    await sql/* sql */`
+    await sql /* sql */`
       update briefs set
         status        = 'ready',
         summary       = ${args.summary},
@@ -129,7 +126,7 @@ export interface MirrorBriefToDiskArgs {
  * so Shaun can diff the two in parallel during the cutover window.
  */
 export async function mirrorBriefToDisk(
-  args: MirrorBriefToDiskArgs,
+  args: MirrorBriefToDiskArgs
 ): Promise<{ path: string }> {
   "use step";
   const fs = await import("node:fs/promises");
@@ -139,12 +136,9 @@ export async function mirrorBriefToDisk(
   await fs.mkdir(dir, { recursive: true });
   const now = new Date();
   const hhmm = `${String(now.getUTCHours()).padStart(2, "0")}${String(
-    now.getUTCMinutes(),
+    now.getUTCMinutes()
   ).padStart(2, "0")}`;
-  const file = path.join(
-    dir,
-    `${args.date}-${hhmm}-tars-${args.kind}.md`,
-  );
+  const file = path.join(dir, `${args.date}-${hhmm}-tars-${args.kind}.md`);
   await fs.writeFile(file, args.bodyMarkdown, "utf8");
   return { path: file };
 }

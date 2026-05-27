@@ -37,11 +37,16 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
   delete env.OPENAI_BASE_URL;
   const filteredEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(env)) {
-    if (typeof v === "string") filteredEnv[k] = v;
+    if (typeof v === "string") {
+      filteredEnv[k] = v;
+    }
   }
   filteredEnv.HOME = process.env.HOME ?? "/home/shaun";
-  filteredEnv.CODEX_HOME = process.env.CODEX_HOME ?? `${filteredEnv.HOME}/.codex`;
-  filteredEnv.PATH = process.env.PATH ?? "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+  filteredEnv.CODEX_HOME =
+    process.env.CODEX_HOME ?? `${filteredEnv.HOME}/.codex`;
+  filteredEnv.PATH =
+    process.env.PATH ??
+    "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
   const codex = new Codex({ env: filteredEnv });
   const thread = codex.startThread({
@@ -54,10 +59,10 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
 
   const prompt = [
     "You are a senior code reviewer. Review the diff and return ONLY a JSON object matching the provided schema.",
-    input.repo ? "Repo: " + input.repo : null,
-    typeof input.prNumber === "number" ? "PR #" + input.prNumber : null,
-    input.context ? "Context:\n" + input.context : null,
-    "Diff:\n```diff\n" + input.diff + "\n```",
+    input.repo ? `Repo: ${input.repo}` : null,
+    typeof input.prNumber === "number" ? `PR #${input.prNumber}` : null,
+    input.context ? `Context:\n${input.context}` : null,
+    `Diff:\n\`\`\`diff\n${input.diff}\n\`\`\``,
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -72,7 +77,9 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
     (thread as unknown as { id?: string | null }).id ??
     (thread as unknown as { threadId?: string | null }).threadId ??
     null;
-  if (threadId) await ctx.updateSessionId(threadId);
+  if (threadId) {
+    await ctx.updateSessionId(threadId);
+  }
 
   const text = turn.finalResponse ?? "";
   return parseReviewJson(text);
@@ -89,20 +96,27 @@ function parseReviewJson(text: string): CodexReviewOutput {
     }
   };
   const direct = tryParse(text.trim());
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
   const fenced = text.match(/```(?:json)?\s*([\s\S]+?)```/);
   if (fenced) {
     const inner = tryParse(fenced[1].trim());
-    if (inner) return inner;
+    if (inner) {
+      return inner;
+    }
   }
   const first = text.indexOf("{");
   const last = text.lastIndexOf("}");
   if (first >= 0 && last > first) {
     const candidate = text.slice(first, last + 1);
     const recovered = tryParse(candidate);
-    if (recovered) return recovered;
+    if (recovered) {
+      return recovered;
+    }
   }
   throw new Error(
-    "codex-review output did not contain valid JSON. First 300 chars: " + text.slice(0, 300),
+    "codex-review output did not contain valid JSON. First 300 chars: " +
+      text.slice(0, 300)
   );
 }

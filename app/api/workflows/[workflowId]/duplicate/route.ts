@@ -7,7 +7,7 @@ import { workflows } from "@/lib/db/schema";
 import { generateId } from "@/lib/utils/id";
 
 // Node type for type-safe node manipulation
-type WorkflowNodeLike = {
+interface WorkflowNodeLike {
   id: string;
   data?: {
     config?: {
@@ -18,7 +18,7 @@ type WorkflowNodeLike = {
     [key: string]: unknown;
   };
   [key: string]: unknown;
-};
+}
 
 // Helper to strip integration IDs from nodes when duplicating
 function stripIntegrationIds(nodes: WorkflowNodeLike[]): WorkflowNodeLike[] {
@@ -39,12 +39,12 @@ function stripIntegrationIds(nodes: WorkflowNodeLike[]): WorkflowNodeLike[] {
 }
 
 // Edge type for type-safe edge manipulation
-type WorkflowEdgeLike = {
+interface WorkflowEdgeLike {
   id: string;
   source: string;
   target: string;
   [key: string]: unknown;
-};
+}
 
 // Helper to update edge references to new node IDs
 function updateEdgeReferences(

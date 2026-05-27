@@ -1,7 +1,7 @@
 "use server";
 
-import { eq, sql } from "drizzle-orm";
 import { readFileSync, writeFileSync } from "node:fs";
+import { eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import YAML from "yaml";
 import { db } from "@/lib/db";
@@ -56,7 +56,9 @@ export async function loadProjectsYaml(): Promise<{
   }
 }
 
-export async function saveProjectsYaml(yamlText: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function saveProjectsYaml(
+  yamlText: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
   let parsed: ProjectsMap;
   try {
     parsed = (YAML.parse(yamlText) ?? {}) as ProjectsMap;
@@ -71,7 +73,7 @@ export async function saveProjectsYaml(yamlText: string): Promise<{ ok: true } |
 
   // Re-enforce konverge protect_mode — cannot be changed via UI
   if ("konverge" in parsed) {
-    const konverge = parsed["konverge"] as ProjectPolicy;
+    const konverge = parsed.konverge as ProjectPolicy;
     if (konverge.protect_mode === false) {
       return {
         ok: false,
@@ -80,13 +82,17 @@ export async function saveProjectsYaml(yamlText: string): Promise<{ ok: true } |
       };
     }
     // Always write protect_mode: true for konverge
-    (parsed["konverge"] as ProjectPolicy).protect_mode = true;
+    (parsed.konverge as ProjectPolicy).protect_mode = true;
   }
 
   try {
     writeFileSync(getProjectsYamlPath(), YAML.stringify(parsed), "utf8");
     invalidateCache();
-    try { revalidatePath("/settings"); } catch { /* no-op outside request context */ }
+    try {
+      revalidatePath("/settings");
+    } catch {
+      /* no-op outside request context */
+    }
     return { ok: true };
   } catch (e) {
     return { ok: false, error: `Write failed: ${(e as Error).message}` };
@@ -96,14 +102,20 @@ export async function saveProjectsYaml(yamlText: string): Promise<{ ok: true } |
 // ---------- Kill switches ----------
 
 export async function saveKillSwitches(
-  changes: Record<string, { auto_review?: boolean; auto_fix?: boolean }>,
+  changes: Record<string, { auto_review?: boolean; auto_fix?: boolean }>
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { parsed } = await loadProjectsYaml();
 
   for (const [key, vals] of Object.entries(changes)) {
-    if (!parsed[key]) continue;
-    if (vals.auto_review !== undefined) parsed[key].auto_review = vals.auto_review;
-    if (vals.auto_fix !== undefined) parsed[key].auto_fix = vals.auto_fix;
+    if (!parsed[key]) {
+      continue;
+    }
+    if (vals.auto_review !== undefined) {
+      parsed[key].auto_review = vals.auto_review;
+    }
+    if (vals.auto_fix !== undefined) {
+      parsed[key].auto_fix = vals.auto_fix;
+    }
   }
 
   return saveProjectsYaml(YAML.stringify(parsed));
@@ -118,15 +130,11 @@ export async function loadModelSettings(): Promise<{
   const rows = await db
     .select()
     .from(appSettings)
-    .where(
-      eq(appSettings.key, "chat_model"),
-    );
+    .where(eq(appSettings.key, "chat_model"));
   const crRows = await db
     .select()
     .from(appSettings)
-    .where(
-      eq(appSettings.key, "code_review_model"),
-    );
+    .where(eq(appSettings.key, "code_review_model"));
 
   const chatModel =
     (rows[0]?.value as string | undefined) ?? "claude-sonnet-4-5";
@@ -150,5 +158,9 @@ export async function saveModelSettings(settings: {
       target: appSettings.key,
       set: { value: sql`EXCLUDED.value`, updatedAt: new Date() },
     });
-  try { revalidatePath("/settings"); } catch { /* no-op outside request context */ }
+  try {
+    revalidatePath("/settings");
+  } catch {
+    /* no-op outside request context */
+  }
 }

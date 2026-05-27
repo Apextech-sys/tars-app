@@ -28,7 +28,9 @@ export class JobRunner {
   }
 
   poke(): void {
-    if (this.wakeUp) this.wakeUp();
+    if (this.wakeUp) {
+      this.wakeUp();
+    }
   }
 
   async stop(graceMs = 30_000): Promise<void> {
@@ -41,7 +43,7 @@ export class JobRunner {
     if (this.inFlight > 0) {
       logger().warn(
         { inFlight: this.inFlight },
-        "stop() grace period elapsed with jobs still running",
+        "stop() grace period elapsed with jobs still running"
       );
     }
   }
@@ -52,13 +54,13 @@ export class JobRunner {
         !this.stopping &&
         this.inFlight < this.cfg.TARS_WORKER_CONCURRENCY
       ) {
-        const job = await claimNextJob(this.cfg.TARS_WORKER_ID).catch(
-          (err) => {
-            logger().error({ err }, "claimNextJob threw");
-            return null;
-          },
-        );
-        if (!job) break;
+        const job = await claimNextJob(this.cfg.TARS_WORKER_ID).catch((err) => {
+          logger().error({ err }, "claimNextJob threw");
+          return null;
+        });
+        if (!job) {
+          break;
+        }
         this.inFlight++;
         void this.processJob(job)
           .catch((err) => {
@@ -69,7 +71,9 @@ export class JobRunner {
             this.poke();
           });
       }
-      if (this.stopping) break;
+      if (this.stopping) {
+        break;
+      }
       await this.waitForWork();
     }
   }
@@ -78,7 +82,9 @@ export class JobRunner {
     return new Promise<void>((resolve) => {
       let done = false;
       const finish = (): void => {
-        if (done) return;
+        if (done) {
+          return;
+        }
         done = true;
         clearTimeout(t);
         this.wakeUp = undefined;
@@ -98,12 +104,12 @@ export class JobRunner {
     const handler = getHandler(job.kind);
     if (!handler) {
       log("no handler — failing job");
-      await markFailed(job.id, "no handler for kind '" + job.kind + "'", {
+      await markFailed(job.id, `no handler for kind '${job.kind}'`, {
         allowRetry: false,
       });
       await this.fireCallback(job, {
         status: "failed",
-        errorText: "no handler for kind '" + job.kind + "'",
+        errorText: `no handler for kind '${job.kind}'`,
       });
       return;
     }
@@ -124,7 +130,7 @@ export class JobRunner {
         } catch (err) {
           logger().warn(
             { err, jobId: job.id, sessionId },
-            "updateJobSession failed",
+            "updateJobSession failed"
           );
         }
       },
@@ -138,18 +144,19 @@ export class JobRunner {
       log("done");
       await this.fireCallback(job, { status: "done", result });
     } catch (err) {
-      const errorText = err instanceof Error ? err.stack ?? err.message : String(err);
+      const errorText =
+        err instanceof Error ? (err.stack ?? err.message) : String(err);
       log("failed", { errorText });
       const { requeued } = await markFailed(job.id, errorText, {
         allowRetry: !ac.signal.aborted,
       });
-      if (!requeued) {
+      if (requeued) {
+        log("requeued for retry");
+      } else {
         await this.fireCallback(job, {
           status: "failed",
           errorText,
         });
-      } else {
-        log("requeued for retry");
       }
     } finally {
       clearTimeout(timeout);
@@ -158,7 +165,7 @@ export class JobRunner {
 
   private async fireCallback(
     job: JobRow,
-    body: { status: "done" | "failed"; result?: unknown; errorText?: string },
+    body: { status: "done" | "failed"; result?: unknown; errorText?: string }
   ): Promise<void> {
     try {
       await postCallback(this.cfg, job, {

@@ -6,7 +6,7 @@ import { Overlay } from "./overlay";
 import { useOverlay } from "./overlay-provider";
 import type { OverlayAction, OverlayActionVariant } from "./types";
 
-type ConfirmOverlayProps = {
+interface ConfirmOverlayProps {
   overlayId: string;
   /** Title of the confirmation dialog */
   title?: string;
@@ -24,7 +24,7 @@ type ConfirmOverlayProps = {
   onConfirm: () => void | Promise<void>;
   /** Callback when cancelled */
   onCancel?: () => void;
-};
+}
 
 /**
  * A reusable confirmation overlay.

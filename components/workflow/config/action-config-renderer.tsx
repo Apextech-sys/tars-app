@@ -20,12 +20,12 @@ import {
 } from "@/plugins";
 import { SchemaBuilder, type SchemaField } from "./schema-builder";
 
-type FieldProps = {
+interface FieldProps {
   field: ActionConfigFieldBase;
   value: string;
   onChange: (value: unknown) => void;
   disabled?: boolean;
-};
+}
 
 function TemplateInputField({ field, value, onChange, disabled }: FieldProps) {
   return (
@@ -208,12 +208,12 @@ function FieldGroup({
   );
 }
 
-type ActionConfigRendererProps = {
+interface ActionConfigRendererProps {
   fields: ActionConfigField[];
   config: Record<string, unknown>;
   onUpdateConfig: (key: string, value: unknown) => void;
   disabled?: boolean;
-};
+}
 
 /**
  * Renders action config fields declaratively

@@ -7,19 +7,19 @@ import {
 } from "@/lib/db/integrations";
 import type { IntegrationConfig } from "@/lib/types/integration";
 
-export type GetIntegrationResponse = {
+export interface GetIntegrationResponse {
   id: string;
   name: string;
   type: string;
   config: IntegrationConfig;
   createdAt: string;
   updatedAt: string;
-};
+}
 
-export type UpdateIntegrationRequest = {
+export interface UpdateIntegrationRequest {
   name?: string;
   config?: IntegrationConfig;
-};
+}
 
 /**
  * GET /api/integrations/[integrationId]

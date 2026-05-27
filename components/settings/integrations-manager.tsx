@@ -19,10 +19,10 @@ const SYSTEM_INTEGRATION_LABELS: Record<string, string> = {
   database: "Database",
 };
 
-type IntegrationsManagerProps = {
+interface IntegrationsManagerProps {
   onIntegrationChange?: () => void;
   filter?: string;
-};
+}
 
 export function IntegrationsManager({
   onIntegrationChange,
@@ -64,7 +64,9 @@ export function IntegrationsManager({
           integration.type,
       }))
       .filter((integration) => {
-        if (!filter) return true;
+        if (!filter) {
+          return true;
+        }
         return (
           integration.label.toLowerCase().includes(filterLower) ||
           integration.name.toLowerCase().includes(filterLower) ||

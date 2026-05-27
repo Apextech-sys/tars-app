@@ -12,7 +12,7 @@ export async function GET(
     const rows = await db
       .select()
       .from(webhookEvents)
-      .where(eq(webhookEvents.id, parseInt(id, 10)))
+      .where(eq(webhookEvents.id, Number.parseInt(id, 10)))
       .limit(1);
 
     if (rows.length === 0) {
@@ -26,6 +26,9 @@ export async function GET(
     });
   } catch (err) {
     console.error("GET /api/tars/webhooks/[id] error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

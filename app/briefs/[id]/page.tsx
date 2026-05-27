@@ -11,16 +11,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import postgres from "postgres";
-
-import { Markdown } from "@/components/tars/markdown";
 import { BriefReplyForm } from "@/components/tars/brief-reply-form";
+import { Markdown } from "@/components/tars/markdown";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
-  if (sqlClient) return sqlClient;
+  if (sqlClient) {
+    return sqlClient;
+  }
   const url =
     process.env.WORKFLOW_POSTGRES_URL ??
     process.env.DATABASE_URL ??
@@ -45,10 +46,12 @@ interface BriefRow {
 }
 
 async function loadBrief(id: string): Promise<BriefRow | null> {
-  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return null;
+  }
   try {
     const sql = getSql();
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       select id::text as id, to_char(date, 'YYYY-MM-DD') as date,
              kind, status, summary, body_markdown, insights, source_context,
              run_id, error_text,
@@ -58,7 +61,9 @@ async function loadBrief(id: string): Promise<BriefRow | null> {
       where id = ${id}::uuid
       limit 1
     `;
-    if (rows.length === 0) return null;
+    if (rows.length === 0) {
+      return null;
+    }
     return rows[0] as unknown as BriefRow;
   } catch (err) {
     console.error("/briefs/[id] load failed", err);
@@ -73,7 +78,9 @@ export default async function BriefDetailPage({
 }) {
   const { id } = await params;
   const brief = await loadBrief(id);
-  if (!brief) return notFound();
+  if (!brief) {
+    return notFound();
+  }
 
   const kindLabel =
     brief.kind === "morning"
@@ -83,19 +90,19 @@ export default async function BriefDetailPage({
         : "Adhoc Brief";
 
   return (
-    <div className="pointer-events-auto min-h-screen w-full text-zinc-100 px-6 py-10">
-      <div className="max-w-3xl mx-auto">
-        <nav className="text-sm text-zinc-500 mb-6">
-          <Link href="/briefs" className="hover:text-zinc-300">
+    <div className="pointer-events-auto min-h-screen w-full px-6 py-10 text-zinc-100">
+      <div className="mx-auto max-w-3xl">
+        <nav className="mb-6 text-sm text-zinc-500">
+          <Link className="hover:text-zinc-300" href="/briefs">
             ← All briefs
           </Link>
         </nav>
 
         <header className="mb-6">
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="font-semibold text-3xl tracking-tight">
             {kindLabel} — {brief.date}
           </h1>
-          <p className="text-xs text-zinc-500 mt-2">
+          <p className="mt-2 text-xs text-zinc-500">
             run_id <code className="text-zinc-400">{brief.run_id}</code>
             {brief.completed_at ? ` · completed ${brief.completed_at}` : ""}
             {!brief.completed_at && brief.status !== "ready"
@@ -104,14 +111,18 @@ export default async function BriefDetailPage({
           </p>
         </header>
 
-        {brief.status !== "ready" ? (
+        {brief.status === "ready" ? (
+          <article className="prose-tars">
+            <Markdown text={brief.body_markdown ?? "(empty)"} />
+          </article>
+        ) : (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-6 text-sm">
-            <p className="text-zinc-300 mb-2">
+            <p className="mb-2 text-zinc-300">
               Status:{" "}
               <span className="font-semibold uppercase">{brief.status}</span>
             </p>
             {brief.error_text ? (
-              <pre className="text-xs text-rose-300 bg-black/40 p-3 rounded mt-2 overflow-x-auto">
+              <pre className="mt-2 overflow-x-auto rounded bg-black/40 p-3 text-rose-300 text-xs">
                 {brief.error_text}
               </pre>
             ) : (
@@ -120,17 +131,13 @@ export default async function BriefDetailPage({
               </p>
             )}
           </div>
-        ) : (
-          <article className="prose-tars">
-            <Markdown text={brief.body_markdown ?? "(empty)"} />
-          </article>
         )}
 
         <section className="mt-10">
-          <h2 className="text-xl font-semibold mb-3 text-zinc-100">
+          <h2 className="mb-3 font-semibold text-xl text-zinc-100">
             Reply to TARS
           </h2>
-          <p className="text-sm text-zinc-400 mb-4">
+          <p className="mb-4 text-sm text-zinc-400">
             Threads this brief into a new chat session with context attached.
           </p>
           <BriefReplyForm briefId={brief.id} />

@@ -28,10 +28,10 @@ export type ContextMenuState = {
   edgeId?: string;
 } | null;
 
-type WorkflowContextMenuProps = {
+interface WorkflowContextMenuProps {
   menuState: ContextMenuState;
   onClose: () => void;
-};
+}
 
 export function WorkflowContextMenu({
   menuState,
@@ -197,13 +197,13 @@ export function WorkflowContextMenu({
   );
 }
 
-type MenuItemProps = {
+interface MenuItemProps {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   variant?: "default" | "destructive";
   disabled?: boolean;
-};
+}
 
 function MenuItem({
   icon,

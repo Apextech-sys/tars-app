@@ -2,12 +2,7 @@ import type { TarsJob } from "../../lib/db/worker-schema.js";
 
 export type JobRow = TarsJob;
 
-export type JobStatus =
-  | "queued"
-  | "running"
-  | "done"
-  | "failed"
-  | "cancelled";
+export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";
 
 export interface HandlerContext {
   job: JobRow;

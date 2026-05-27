@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { generateAIActionPrompts } from "@/plugins";
 
 // Simple type for operations
-type Operation = {
+interface Operation {
   op:
     | "setName"
     | "setDescription"
@@ -23,7 +23,7 @@ type Operation = {
     position?: { x: number; y: number };
     data?: unknown;
   };
-};
+}
 
 function encodeMessage(encoder: TextEncoder, message: object): Uint8Array {
   return encoder.encode(`${JSON.stringify(message)}\n`);

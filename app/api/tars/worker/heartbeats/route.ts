@@ -19,9 +19,13 @@ export async function GET() {
         const lastSeenMs = w.lastSeen.getTime();
         const ageSeconds = Math.floor((now - lastSeenMs) / 1000);
         let healthStatus: "green" | "amber" | "red";
-        if (ageSeconds < 60) healthStatus = "green";
-        else if (ageSeconds < 300) healthStatus = "amber";
-        else healthStatus = "red";
+        if (ageSeconds < 60) {
+          healthStatus = "green";
+        } else if (ageSeconds < 300) {
+          healthStatus = "amber";
+        } else {
+          healthStatus = "red";
+        }
 
         return {
           workerId: w.workerId,
@@ -37,6 +41,9 @@ export async function GET() {
     });
   } catch (err) {
     console.error("GET /api/tars/worker/heartbeats error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

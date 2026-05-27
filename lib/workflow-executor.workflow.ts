@@ -36,21 +36,21 @@ const SYSTEM_ACTIONS: Record<string, StepImporter> = {
   },
 };
 
-type ExecutionResult = {
+interface ExecutionResult {
   success: boolean;
   data?: unknown;
   error?: string;
-};
+}
 
 type NodeOutputs = Record<string, { label: string; data: unknown }>;
 
-export type WorkflowExecutionInput = {
+export interface WorkflowExecutionInput {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   triggerInput?: Record<string, unknown>;
   executionId?: string;
   workflowId?: string; // Used by steps to fetch credentials
-};
+}
 
 /**
  * Helper to replace template variables in conditions
@@ -121,10 +121,10 @@ function replaceTemplateVariable(
   return varName;
 }
 
-type ConditionEvalResult = {
+interface ConditionEvalResult {
   result: boolean;
   resolvedValues: Record<string, unknown>;
-};
+}
 
 /**
  * Evaluate condition expression with template variable replacement

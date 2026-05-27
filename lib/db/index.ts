@@ -2,6 +2,12 @@ import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
+  chatMessages,
+  chatMessagesRelations,
+  chatSessions,
+  chatSessionsRelations,
+} from "./chat-schema";
+import {
   accounts,
   apiKeys,
   integrations,
@@ -14,22 +20,16 @@ import {
   workflows,
 } from "./schema";
 import {
-  chatSessions,
-  chatMessages,
-  chatSessionsRelations,
-  chatMessagesRelations,
-} from "./chat-schema";
-import { tarsJobs, workerHeartbeats } from "./worker-schema";
-import {
-  auditLog,
-  prReviewRuns,
-  escalations,
   appSettings,
+  auditLog,
+  briefReplies,
+  briefs,
+  escalations,
+  prReviewRuns,
   repoSettings,
   webhookEvents,
-  briefs,
-  briefReplies,
 } from "./tars-schema";
+import { tarsJobs, workerHeartbeats } from "./worker-schema";
 
 // Construct schema object for drizzle
 const schema = {

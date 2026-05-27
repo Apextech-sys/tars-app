@@ -81,13 +81,13 @@ async function createVercelApiKey(
   return { token: newKey.apiKeyString, id: newKey.apiKey?.id };
 }
 
-type SaveIntegrationParams = {
+interface SaveIntegrationParams {
   userId: string;
   apiKey: string;
   apiKeyId: string;
   teamId: string;
   teamName: string;
-};
+}
 
 /**
  * Save managed integration in database

@@ -10,7 +10,7 @@ async function main(): Promise<void> {
   initLogger(cfg);
   logger().info(
     { workerId: cfg.TARS_WORKER_ID, version: cfg.WORKER_VERSION },
-    "tars-worker starting",
+    "tars-worker starting"
   );
 
   initDb(cfg);
@@ -25,7 +25,9 @@ async function main(): Promise<void> {
 
   let shuttingDown = false;
   const shutdown = async (signal: string): Promise<void> => {
-    if (shuttingDown) return;
+    if (shuttingDown) {
+      return;
+    }
     shuttingDown = true;
     logger().info({ signal }, "shutdown signal received");
     try {

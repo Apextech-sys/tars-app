@@ -21,7 +21,7 @@
  * The handler returns within 10 s — workflow runs asynchronously.
  */
 
-import { timingSafeEqual, createHmac } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { webhookEvents } from "@/lib/db/tars-schema";
@@ -57,10 +57,14 @@ interface PullRequestPayload {
 function verifyGitHubSignature(
   rawBody: Buffer,
   signature: string | null,
-  secret: string,
+  secret: string
 ): boolean {
-  if (!signature) return false;
-  if (!signature.startsWith("sha256=")) return false;
+  if (!signature) {
+    return false;
+  }
+  if (!signature.startsWith("sha256=")) {
+    return false;
+  }
 
   const expectedHex = signature.slice("sha256=".length);
   const computed = createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -68,7 +72,7 @@ function verifyGitHubSignature(
   try {
     return timingSafeEqual(
       Buffer.from(computed, "hex"),
-      Buffer.from(expectedHex, "hex"),
+      Buffer.from(expectedHex, "hex")
     );
   } catch {
     // Buffers of different length -> invalid
@@ -116,7 +120,7 @@ async function logWebhookEvent(opts: {
 export function GET(): NextResponse {
   return NextResponse.json(
     { error: "Method Not Allowed. POST only." },
-    { status: 405, headers: { Allow: "POST" } },
+    { status: 405, headers: { Allow: "POST" } }
   );
 }
 
@@ -128,7 +132,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     console.error("[webhook/github] GITHUB_WEBHOOK_SECRET not configured");
     return NextResponse.json(
       { error: "Webhook secret not configured" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 
@@ -139,12 +143,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const signature = req.headers.get("x-hub-signature-256");
   if (!verifyGitHubSignature(rawBodyBuffer, signature, secret)) {
     console.warn(
-      "[webhook/github] rejected: invalid or missing x-hub-signature-256",
+      "[webhook/github] rejected: invalid or missing x-hub-signature-256"
     );
-    return NextResponse.json(
-      { error: "Invalid signature" },
-      { status: 401 },
-    );
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
   // 3. Parse event metadata
@@ -156,7 +157,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     payload = JSON.parse(rawBodyBuffer.toString("utf-8"));
   } catch {
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON payload" },
+      { status: 400 }
+    );
   }
 
   const repoFullName: string =
@@ -164,7 +168,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const action: string | null = payload?.action ?? null;
 
   console.info(
-    `[webhook/github] event=${eventType} action=${action} repo=${repoFullName} delivery=${deliveryId}`,
+    `[webhook/github] event=${eventType} action=${action} repo=${repoFullName} delivery=${deliveryId}`
   );
 
   // 4. Check if this repo is on the watchlist
@@ -172,7 +176,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     where: (t, { eq }) => eq(t.repoKey, repoFullName),
   });
 
-  if (!repoSetting || !repoSetting.webhookEnabled) {
+  if (!repoSetting?.webhookEnabled) {
     // Not watched -- accept delivery but take no action (don't expose 404 to GitHub)
     await logWebhookEvent({
       eventType,
@@ -190,11 +194,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // 5. Only act on pull_request events with specific actions
-  const PR_ACTIONS = new Set([
-    "opened",
-    "synchronize",
-    "ready_for_review",
-  ]);
+  const PR_ACTIONS = new Set(["opened", "synchronize", "ready_for_review"]);
 
   if (eventType !== "pull_request" || !PR_ACTIONS.has(action ?? "")) {
     await logWebhookEvent({
@@ -238,9 +238,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // 6. Konverge guard: if auto_fix is disabled, pass policyOverride to workflow.
   // This is the FIRST line of defense; the workflow has a hardcoded guard as second.
-  const policyOverride = repoSetting.autoFix
-    ? undefined
-    : { autoFix: false };
+  const policyOverride = repoSetting.autoFix ? undefined : { autoFix: false };
 
   // 7. Trigger PR review workflow -- fire-and-forget (202 within 10 s)
   let triggeredRun: string | null = null;
@@ -268,12 +266,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       };
       triggeredRun = workflowData.workflowRunId ?? null;
       console.info(
-        `[webhook/github] workflow queued: runId=${triggeredRun} pr=${repoFullName}#${prNumber}`,
+        `[webhook/github] workflow queued: runId=${triggeredRun} pr=${repoFullName}#${prNumber}`
       );
     } else {
       const errText = await workflowResp.text();
       console.error(
-        `[webhook/github] workflow trigger failed: status=${workflowResp.status} body=${errText}`,
+        `[webhook/github] workflow trigger failed: status=${workflowResp.status} body=${errText}`
       );
     }
   } catch (err) {
@@ -304,6 +302,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       prNumber,
       workflowRunId: triggeredRun,
     },
-    { status: 202 },
+    { status: 202 }
   );
 }

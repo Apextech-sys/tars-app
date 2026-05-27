@@ -4,9 +4,9 @@ import type { NodeProps } from "@xyflow/react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-type AddNodeData = {
+interface AddNodeData {
   onClick?: () => void;
-};
+}
 
 export function AddNode({ data }: NodeProps & { data?: AddNodeData }) {
   return (

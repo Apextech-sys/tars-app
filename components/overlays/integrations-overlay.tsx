@@ -11,9 +11,9 @@ import { AddConnectionOverlay } from "./add-connection-overlay";
 import { Overlay } from "./overlay";
 import { useOverlay } from "./overlay-provider";
 
-type IntegrationsOverlayProps = {
+interface IntegrationsOverlayProps {
   overlayId: string;
-};
+}
 
 export function IntegrationsOverlay({ overlayId }: IntegrationsOverlayProps) {
   const { push, closeAll } = useOverlay();

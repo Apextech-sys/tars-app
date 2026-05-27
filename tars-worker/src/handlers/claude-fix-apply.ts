@@ -13,13 +13,13 @@ const FixInputSchema = z.object({
   context: z.string().optional(),
 });
 
-export type ClaudeFixApplyOutput = {
+export interface ClaudeFixApplyOutput {
   diff: string;
   shortstat: string;
   filesChanged: string[];
   summary: string;
   sessionId?: string;
-};
+}
 
 export const claudeFixApplyHandler: JobHandler = async (ctx) => {
   const input = FixInputSchema.parse(ctx.job.payload);
@@ -31,8 +31,8 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     "After editing, run any relevant tests if a quick test command is obvious.",
     "Do NOT commit. Leave the working tree dirty so the caller can inspect the diff.",
     "",
-    input.context ? "Context:\n" + input.context : null,
-    "Instructions:\n" + input.instructions,
+    input.context ? `Context:\n${input.context}` : null,
+    `Instructions:\n${input.instructions}`,
   ]
     .filter(Boolean)
     .join("\n");
@@ -66,23 +66,22 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     }
     if (msg.type === "system" && msg.subtype === "init") {
       sessionId = msg.session_id;
-      if (sessionId) await ctx.updateSessionId(sessionId);
+      if (sessionId) {
+        await ctx.updateSessionId(sessionId);
+      }
     } else if (msg.type === "result") {
       sessionId = msg.session_id ?? sessionId;
       if (msg.subtype === "success") {
         summary = msg.result ?? "";
       } else {
-        throw new Error("claude-fix-apply failed: " + msg.subtype);
+        throw new Error(`claude-fix-apply failed: ${msg.subtype}`);
       }
     }
   }
 
   const diff = await runGit(input.repoPath, ["diff"]);
   const shortstat = await runGit(input.repoPath, ["diff", "--shortstat"]);
-  const filesChangedRaw = await runGit(input.repoPath, [
-    "diff",
-    "--name-only",
-  ]);
+  const filesChangedRaw = await runGit(input.repoPath, ["diff", "--name-only"]);
   const filesChanged = filesChangedRaw
     .split("\n")
     .map((s) => s.trim())
@@ -100,12 +99,14 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
 async function ensureRepo(
   repoPath: string,
   repoUrl: string | undefined,
-  branch: string | undefined,
+  branch: string | undefined
 ): Promise<void> {
   try {
-    await access(repoPath + "/.git");
+    await access(`${repoPath}/.git`);
     if (branch) {
-      await runGit(repoPath, ["fetch", "origin", branch]).catch(() => undefined);
+      await runGit(repoPath, ["fetch", "origin", branch]).catch(
+        () => undefined
+      );
       await runGit(repoPath, ["checkout", branch]).catch(() => undefined);
     }
     return;
@@ -113,11 +114,13 @@ async function ensureRepo(
     // not present — clone
   }
   if (!repoUrl) {
-    throw new Error("repoPath " + repoPath + " does not exist and no repoUrl given");
+    throw new Error(`repoPath ${repoPath} does not exist and no repoUrl given`);
   }
   await mkdir(dirname(repoPath), { recursive: true });
   const cloneArgs = ["clone"];
-  if (branch) cloneArgs.push("--branch", branch);
+  if (branch) {
+    cloneArgs.push("--branch", branch);
+  }
   cloneArgs.push(repoUrl, repoPath);
   await runGit(dirname(repoPath), cloneArgs);
 }
@@ -134,8 +137,11 @@ function runGit(cwd: string, args: string[]): Promise<string> {
       err += String(b);
     });
     child.on("close", (code) => {
-      if (code === 0) resolve(out);
-      else reject(new Error("git " + args.join(" ") + " (exit " + code + "): " + err));
+      if (code === 0) {
+        resolve(out);
+      } else {
+        reject(new Error(`git ${args.join(" ")} (exit ${code}): ${err}`));
+      }
     });
     child.on("error", reject);
   });

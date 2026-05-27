@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 
-import { prReviewWorkflow, type PRReviewInput } from "@/workflows/pr-review";
+import { type PRReviewInput, prReviewWorkflow } from "@/workflows/pr-review";
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    if (!body.owner || !body.repo || !body.prNumber) {
+    if (!(body.owner && body.repo && body.prNumber)) {
       return NextResponse.json(
         { error: "owner, repo, prNumber required" },
         { status: 400 }

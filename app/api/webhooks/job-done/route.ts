@@ -12,7 +12,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!secret) {
     return NextResponse.json(
       { error: "TARS_WORKER_CALLBACK_SECRET not configured" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!signature) {
     return NextResponse.json(
       { error: "missing x-tars-signature header" },
-      { status: 401 },
+      { status: 401 }
     );
   }
 
@@ -46,10 +46,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.jobId || !body.status) {
+  if (!(body.jobId && body.status)) {
     return NextResponse.json(
       { error: "missing jobId or status in body" },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (rows.length === 0) {
     return NextResponse.json(
       { ok: false, reason: "job not found", jobId: body.jobId },
-      { status: 404 },
+      { status: 404 }
     );
   }
 
@@ -77,11 +77,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // workflow (the queue + status row already captures the result).
   try {
     const mod = await import("workflow").catch(() => null);
-    const sendEvent = (mod as unknown as {
-      sendEvent?: (name: string, payload: unknown) => Promise<void>;
-    } | null)?.sendEvent;
+    const sendEvent = (
+      mod as unknown as {
+        sendEvent?: (name: string, payload: unknown) => Promise<void>;
+      } | null
+    )?.sendEvent;
     if (typeof sendEvent === "function") {
-      await sendEvent("job:" + body.jobId + ":done", body);
+      await sendEvent(`job:${body.jobId}:done`, body);
     }
   } catch {
     // intentionally silent — webhook is best-effort wrt workflow resume.

@@ -45,9 +45,7 @@ async function getOctokit() {
   return new Octokit({ auth: token, userAgent: "tars-brief/0.1" });
 }
 
-const DEFAULT_OWNERS = (
-  process.env.TARS_BRIEF_GH_OWNERS ?? "Apextech-sys"
-)
+const DEFAULT_OWNERS = (process.env.TARS_BRIEF_GH_OWNERS ?? "Apextech-sys")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -65,7 +63,9 @@ export async function fetchOpenPRs(args: {
     const octo = await getOctokit();
     const items: OpenPRRow[] = [];
     for (const owner of DEFAULT_OWNERS) {
-      if (items.length >= maxPRs) break;
+      if (items.length >= maxPRs) {
+        break;
+      }
       const q = `is:pr is:open archived:false user:${owner}`;
       const r = await octo.search.issuesAndPullRequests({
         q,
@@ -84,7 +84,9 @@ export async function fetchOpenPRs(args: {
           author: issue.user?.login,
           draft: issue.draft ?? false,
         });
-        if (items.length >= maxPRs) break;
+        if (items.length >= maxPRs) {
+          break;
+        }
       }
     }
     return { items, available: true };
@@ -108,7 +110,9 @@ export async function fetchRecentIssues(args: {
     const since = new Date(args.windowStart).toISOString().slice(0, 10);
     const items: RecentIssueRow[] = [];
     for (const owner of DEFAULT_OWNERS) {
-      if (items.length >= maxIssues) break;
+      if (items.length >= maxIssues) {
+        break;
+      }
       const q = `is:issue archived:false user:${owner} updated:>=${since}`;
       const r = await octo.search.issuesAndPullRequests({
         q,
@@ -126,7 +130,9 @@ export async function fetchRecentIssues(args: {
           url: issue.html_url,
           state: issue.state,
         });
-        if (items.length >= maxIssues) break;
+        if (items.length >= maxIssues) {
+          break;
+        }
       }
     }
     return { items, available: true };
@@ -172,7 +178,9 @@ export async function fetchCommitActivity(args: {
         if (existing) {
           existing.commits += 1;
         } else {
-          if (byRepo.size >= maxRepos) continue;
+          if (byRepo.size >= maxRepos) {
+            continue;
+          }
           byRepo.set(repo, {
             repo,
             commits: 1,
@@ -184,7 +192,7 @@ export async function fetchCommitActivity(args: {
       }
     }
     const items = Array.from(byRepo.values()).sort(
-      (a, b) => b.commits - a.commits,
+      (a, b) => b.commits - a.commits
     );
     return { items, available: true };
   } catch (err) {

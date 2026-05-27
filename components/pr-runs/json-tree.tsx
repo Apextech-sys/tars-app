@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface JsonTreeProps {
@@ -20,7 +20,7 @@ function JsonValue({
   const [expanded, setExpanded] = useState(depth < 2);
 
   if (value === null) {
-    return <span className="text-zinc-500 font-mono text-xs">null</span>;
+    return <span className="font-mono text-xs text-zinc-500">null</span>;
   }
   if (typeof value === "boolean") {
     return (
@@ -35,26 +35,26 @@ function JsonValue({
     );
   }
   if (typeof value === "number") {
-    return <span className="text-amber-400 font-mono text-xs">{value}</span>;
+    return <span className="font-mono text-amber-400 text-xs">{value}</span>;
   }
   if (typeof value === "string") {
     return (
-      <span className="text-emerald-300 font-mono text-xs">
+      <span className="font-mono text-emerald-300 text-xs">
         &quot;{value}&quot;
       </span>
     );
   }
   if (Array.isArray(value)) {
     if (value.length === 0) {
-      return <span className="text-zinc-400 font-mono text-xs">[]</span>;
+      return <span className="font-mono text-xs text-zinc-400">[]</span>;
     }
     return (
       <span>
         <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-0.5 text-zinc-300 hover:text-white font-mono text-xs"
           aria-expanded={expanded}
+          className="inline-flex items-center gap-0.5 font-mono text-xs text-zinc-300 hover:text-white"
+          onClick={() => setExpanded((e) => !e)}
+          type="button"
         >
           {expanded ? (
             <ChevronDown className="size-3 shrink-0" />
@@ -62,18 +62,18 @@ function JsonValue({
             <ChevronRight className="size-3 shrink-0" />
           )}
           <span className="text-zinc-400">
-            [{value.length} item{value.length !== 1 ? "s" : ""}]
+            [{value.length} item{value.length === 1 ? "" : "s"}]
           </span>
         </button>
         {expanded && (
-          <div className="ml-4 border-l border-zinc-700 pl-3 mt-1 space-y-1">
+          <div className="mt-1 ml-4 space-y-1 border-zinc-700 border-l pl-3">
             {value.map((item, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: position is stable for display
-              <div key={i} className="flex gap-2 items-start">
-                <span className="text-zinc-600 font-mono text-xs shrink-0 pt-0.5">
+              <div className="flex items-start gap-2" key={i}>
+                <span className="shrink-0 pt-0.5 font-mono text-xs text-zinc-600">
                   {i}:
                 </span>
-                <JsonValue value={item} depth={depth + 1} />
+                <JsonValue depth={depth + 1} value={item} />
               </div>
             ))}
           </div>
@@ -84,15 +84,15 @@ function JsonValue({
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>);
     if (entries.length === 0) {
-      return <span className="text-zinc-400 font-mono text-xs">{"{}"}</span>;
+      return <span className="font-mono text-xs text-zinc-400">{"{}"}</span>;
     }
     return (
       <span>
         <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="inline-flex items-center gap-0.5 text-zinc-300 hover:text-white font-mono text-xs"
           aria-expanded={expanded}
+          className="inline-flex items-center gap-0.5 font-mono text-xs text-zinc-300 hover:text-white"
+          onClick={() => setExpanded((e) => !e)}
+          type="button"
         >
           {expanded ? (
             <ChevronDown className="size-3 shrink-0" />
@@ -101,18 +101,18 @@ function JsonValue({
           )}
           <span className="text-zinc-400">
             {"{"}
-            {entries.length} key{entries.length !== 1 ? "s" : ""}
+            {entries.length} key{entries.length === 1 ? "" : "s"}
             {"}"}
           </span>
         </button>
         {expanded && (
-          <div className="ml-4 border-l border-zinc-700 pl-3 mt-1 space-y-1">
+          <div className="mt-1 ml-4 space-y-1 border-zinc-700 border-l pl-3">
             {entries.map(([key, val]) => (
-              <div key={key} className="flex gap-2 items-start flex-wrap">
-                <span className="text-blue-300 font-mono text-xs shrink-0 pt-0.5">
+              <div className="flex flex-wrap items-start gap-2" key={key}>
+                <span className="shrink-0 pt-0.5 font-mono text-blue-300 text-xs">
                   {key}:
                 </span>
-                <JsonValue value={val} depth={depth + 1} />
+                <JsonValue depth={depth + 1} value={val} />
               </div>
             ))}
           </div>
@@ -121,7 +121,7 @@ function JsonValue({
     );
   }
   return (
-    <span className="text-zinc-400 font-mono text-xs">{String(value)}</span>
+    <span className="font-mono text-xs text-zinc-400">{String(value)}</span>
   );
 }
 
@@ -129,11 +129,11 @@ export function JsonTree({ data, depth = 0, className }: JsonTreeProps) {
   return (
     <div
       className={cn(
-        "rounded-lg bg-zinc-950/60 border border-zinc-800 p-3 overflow-auto",
+        "overflow-auto rounded-lg border border-zinc-800 bg-zinc-950/60 p-3",
         className
       )}
     >
-      <JsonValue value={data} depth={depth} />
+      <JsonValue depth={depth} value={data} />
     </div>
   );
 }

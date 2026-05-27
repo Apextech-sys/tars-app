@@ -81,12 +81,12 @@ function isValidIdentifier(str: string): boolean {
   return VALID_IDENTIFIER_REGEX.test(str);
 }
 
-type PluginConfig = {
+interface PluginConfig {
   integrationName: string;
   integrationDescription: string;
   actionName: string;
   actionDescription: string;
-};
+}
 
 /**
  * Replace all placeholders in content

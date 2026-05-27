@@ -4,7 +4,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Inline the signature verifier for pure unit testing without Next.js deps.
@@ -15,10 +15,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 function verifyGitHubSignature(
   rawBody: Buffer,
   signature: string | null,
-  secret: string,
+  secret: string
 ): boolean {
-  if (!signature) return false;
-  if (!signature.startsWith("sha256=")) return false;
+  if (!signature) {
+    return false;
+  }
+  if (!signature.startsWith("sha256=")) {
+    return false;
+  }
 
   const expectedHex = signature.slice("sha256=".length);
   const computed = createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -26,7 +30,7 @@ function verifyGitHubSignature(
   try {
     return timingSafeEqual(
       Buffer.from(computed, "hex"),
-      Buffer.from(expectedHex, "hex"),
+      Buffer.from(expectedHex, "hex")
     );
   } catch {
     // Buffers of different length -> invalid
@@ -53,13 +57,13 @@ describe("verifyGitHubSignature", () => {
   it("passes a valid HMAC-SHA256 signature", () => {
     const sig = makeSignature(VALID_BODY, TEST_SECRET);
     expect(
-      verifyGitHubSignature(Buffer.from(VALID_BODY), sig, TEST_SECRET),
+      verifyGitHubSignature(Buffer.from(VALID_BODY), sig, TEST_SECRET)
     ).toBe(true);
   });
 
   it("rejects a missing signature header (null)", () => {
     expect(
-      verifyGitHubSignature(Buffer.from(VALID_BODY), null, TEST_SECRET),
+      verifyGitHubSignature(Buffer.from(VALID_BODY), null, TEST_SECRET)
     ).toBe(false);
   });
 
@@ -69,36 +73,36 @@ describe("verifyGitHubSignature", () => {
       .digest("hex");
     // Provide raw hex without the sha256= prefix
     expect(
-      verifyGitHubSignature(Buffer.from(VALID_BODY), mac, TEST_SECRET),
+      verifyGitHubSignature(Buffer.from(VALID_BODY), mac, TEST_SECRET)
     ).toBe(false);
   });
 
   it("rejects a signature computed with the wrong secret", () => {
     const sig = makeSignature(VALID_BODY, "wrong-secret");
     expect(
-      verifyGitHubSignature(Buffer.from(VALID_BODY), sig, TEST_SECRET),
+      verifyGitHubSignature(Buffer.from(VALID_BODY), sig, TEST_SECRET)
     ).toBe(false);
   });
 
   it("rejects a signature over a tampered body", () => {
     const sig = makeSignature(VALID_BODY, TEST_SECRET);
-    const tampered = VALID_BODY + " extra";
-    expect(
-      verifyGitHubSignature(Buffer.from(tampered), sig, TEST_SECRET),
-    ).toBe(false);
+    const tampered = `${VALID_BODY} extra`;
+    expect(verifyGitHubSignature(Buffer.from(tampered), sig, TEST_SECRET)).toBe(
+      false
+    );
   });
 
   it("rejects a truncated hex signature (length mismatch)", () => {
     const sig = makeSignature(VALID_BODY, TEST_SECRET);
     const truncated = sig.slice(0, -10); // lop off last 5 bytes of hex
     expect(
-      verifyGitHubSignature(Buffer.from(VALID_BODY), truncated, TEST_SECRET),
+      verifyGitHubSignature(Buffer.from(VALID_BODY), truncated, TEST_SECRET)
     ).toBe(false);
   });
 
   it("rejects sha256= with empty value", () => {
     expect(
-      verifyGitHubSignature(Buffer.from(VALID_BODY), "sha256=", TEST_SECRET),
+      verifyGitHubSignature(Buffer.from(VALID_BODY), "sha256=", TEST_SECRET)
     ).toBe(false);
   });
 
@@ -214,9 +218,7 @@ describe("POST /api/webhooks/github — route handler", () => {
       sender: { login: "test-user" },
     });
 
-    const resp = await POST(
-      makeRequest({ body, secret: TEST_SECRET }) as any,
-    );
+    const resp = await POST(makeRequest({ body, secret: TEST_SECRET }) as any);
     expect(resp.status).toBe(204);
   });
 
@@ -253,9 +255,7 @@ describe("POST /api/webhooks/github — route handler", () => {
       sender: { login: "dev-user" },
     });
 
-    const resp = await POST(
-      makeRequest({ body, secret: TEST_SECRET }) as any,
-    );
+    const resp = await POST(makeRequest({ body, secret: TEST_SECRET }) as any);
     expect(resp.status).toBe(202);
 
     const data = await resp.json();
@@ -265,7 +265,7 @@ describe("POST /api/webhooks/github — route handler", () => {
 
     expect(mockFetch).toHaveBeenCalledWith(
       "http://127.0.0.1:3001/api/tars/pr-review",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST" })
     );
   });
 
@@ -281,13 +281,15 @@ describe("POST /api/webhooks/github — route handler", () => {
     });
 
     let capturedBody: any;
-    const mockFetch = vi.fn().mockImplementation(async (_url: string, opts: any) => {
-      capturedBody = JSON.parse(opts.body as string);
-      return {
-        ok: true,
-        json: async () => ({ workflowRunId: "wfr_konverge_guard" }),
-      };
-    });
+    const mockFetch = vi
+      .fn()
+      .mockImplementation(async (_url: string, opts: any) => {
+        capturedBody = JSON.parse(opts.body as string);
+        return {
+          ok: true,
+          json: async () => ({ workflowRunId: "wfr_konverge_guard" }),
+        };
+      });
     vi.stubGlobal("fetch", mockFetch);
 
     const body = JSON.stringify({
@@ -306,9 +308,7 @@ describe("POST /api/webhooks/github — route handler", () => {
       sender: { login: "konverge-bot" },
     });
 
-    const resp = await POST(
-      makeRequest({ body, secret: TEST_SECRET }) as any,
-    );
+    const resp = await POST(makeRequest({ body, secret: TEST_SECRET }) as any);
     expect(resp.status).toBe(202);
     // First line of defense: policyOverride must be passed to the workflow
     expect(capturedBody.policyOverride).toEqual({ autoFix: false });
@@ -339,9 +339,7 @@ describe("POST /api/webhooks/github — route handler", () => {
       sender: { login: "dev" },
     });
 
-    const resp = await POST(
-      makeRequest({ body, secret: TEST_SECRET }) as any,
-    );
+    const resp = await POST(makeRequest({ body, secret: TEST_SECRET }) as any);
     expect(resp.status).toBe(204);
   });
 
@@ -369,7 +367,7 @@ describe("POST /api/webhooks/github — route handler", () => {
         body,
         secret: TEST_SECRET,
         eventType: "push",
-      }) as any,
+      }) as any
     );
     expect(resp.status).toBe(204);
   });
@@ -383,7 +381,9 @@ describe("POST /api/webhooks/github — route handler", () => {
       autoFix: true,
     });
 
-    const mockFetch = vi.fn().mockRejectedValue(new Error("connection refused"));
+    const mockFetch = vi
+      .fn()
+      .mockRejectedValue(new Error("connection refused"));
     vi.stubGlobal("fetch", mockFetch);
 
     const body = JSON.stringify({
@@ -404,9 +404,7 @@ describe("POST /api/webhooks/github — route handler", () => {
 
     // Even if the workflow dispatch fails, we still return 202
     // (GitHub won't retry unnecessarily; the event is logged)
-    const resp = await POST(
-      makeRequest({ body, secret: TEST_SECRET }) as any,
-    );
+    const resp = await POST(makeRequest({ body, secret: TEST_SECRET }) as any);
     expect(resp.status).toBe(202);
     const data = await resp.json();
     expect(data.workflowRunId).toBeNull();

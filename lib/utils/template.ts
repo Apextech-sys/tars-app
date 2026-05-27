@@ -8,12 +8,12 @@
 const TEMPLATE_PATTERN = /\{\{([^}]+)\}\}/g;
 const ARRAY_ACCESS_PATTERN = /^([^[]+)\[(\d+)\]$/;
 
-export type NodeOutputs = {
+export interface NodeOutputs {
   [nodeId: string]: {
     label: string;
     data: unknown;
   };
-};
+}
 
 // Helper function to process new format references (@nodeId:DisplayName)
 function processNewFormatReference(
@@ -31,7 +31,7 @@ function processNewFormatReference(
   const nodeId = withoutAt.substring(0, colonIndex);
   const rest = withoutAt.substring(colonIndex + 1);
   const dotIndex = rest.indexOf(".");
-  const fieldPath = dotIndex !== -1 ? rest.substring(dotIndex + 1) : "";
+  const fieldPath = dotIndex === -1 ? "" : rest.substring(dotIndex + 1);
 
   if (!fieldPath) {
     const nodeOutput = nodeOutputs[nodeId];

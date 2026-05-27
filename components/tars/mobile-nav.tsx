@@ -55,26 +55,28 @@ export function MobileTopBar({
   inboxCount?: number;
 }) {
   const isNarrow = useIsNarrow();
-  if (!isNarrow) return null;
+  if (!isNarrow) {
+    return null;
+  }
 
   return (
-    <header className="flex items-center gap-3 border-b bg-background px-4 py-3 md:hidden sticky top-0 z-40">
+    <header className="sticky top-0 z-40 flex items-center gap-3 border-b bg-background px-4 py-3 md:hidden">
       <Button
-        size="sm"
-        variant="ghost"
-        className="min-h-[44px] min-w-[44px] p-0 relative"
         aria-label="Open navigation menu"
+        className="relative min-h-[44px] min-w-[44px] p-0"
         data-testid="hamburger-btn"
         onClick={onOpen}
+        size="sm"
+        variant="ghost"
       >
         <AlignJustify className="size-5" />
         {inboxCount && inboxCount > 0 ? (
-          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
+          <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-destructive font-bold text-[9px] text-destructive-foreground">
             {inboxCount > 9 ? "9+" : inboxCount}
           </span>
         ) : null}
       </Button>
-      <span className="text-sm font-semibold text-foreground">{title}</span>
+      <span className="font-semibold text-foreground text-sm">{title}</span>
     </header>
   );
 }
@@ -107,59 +109,59 @@ export function MobileDrawer({
       {/* Backdrop */}
       <div
         aria-hidden="true"
-        onClick={onClose}
         className={cn(
-          "fixed inset-0 z-50 bg-black/40 transition-opacity duration-200 md:hidden pointer-events-auto",
-          open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none",
+          "pointer-events-auto fixed inset-0 z-50 bg-black/40 transition-opacity duration-200 md:hidden",
+          open
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0"
         )}
+        onClick={onClose}
       />
       {/* Drawer panel */}
       <div
-        role="dialog"
-        aria-modal="true"
         aria-label="Navigation menu"
+        aria-modal="true"
         className={cn(
-          "fixed left-0 top-0 z-50 flex h-full w-64 flex-col bg-background border-r shadow-xl transition-transform duration-200 md:hidden pointer-events-auto",
-          open ? "translate-x-0" : "-translate-x-full",
+          "pointer-events-auto fixed top-0 left-0 z-50 flex h-full w-64 flex-col border-r bg-background shadow-xl transition-transform duration-200 md:hidden",
+          open ? "translate-x-0" : "-translate-x-full"
         )}
+        role="dialog"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="size-6 rounded bg-[#00d4a0] flex items-center justify-center">
-              <span className="text-[10px] font-bold text-black">T</span>
+            <div className="flex size-6 items-center justify-center rounded bg-[#00d4a0]">
+              <span className="font-bold text-[10px] text-black">T</span>
             </div>
-            <span className="text-sm font-semibold">TARS</span>
+            <span className="font-semibold text-sm">TARS</span>
           </div>
           <Button
+            aria-label="Close navigation menu"
+            className="min-h-[44px] min-w-[44px] p-0"
+            onClick={onClose}
             size="sm"
             variant="ghost"
-            className="min-h-[44px] min-w-[44px] p-0"
-            aria-label="Close navigation menu"
-            onClick={onClose}
           >
             <X className="size-5" />
           </Button>
         </div>
 
         {/* Nav links */}
-        <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-y-auto p-2">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const isActive =
-              href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(href);
+              href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (
               <Link
-                key={href}
-                href={href}
+                aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors min-h-[44px]",
+                  "flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-3 font-medium text-sm transition-colors",
                   isActive
                     ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
                 )}
-                aria-current={isActive ? "page" : undefined}
+                href={href}
+                key={href}
               >
                 <Icon className="size-4 shrink-0" />
                 {label}
@@ -177,30 +179,28 @@ export function DesktopSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex md:w-56 lg:w-64 md:flex-col md:border-r md:bg-background md:shrink-0 h-screen sticky top-0">
+    <aside className="sticky top-0 hidden h-screen md:flex md:w-56 md:shrink-0 md:flex-col md:border-r md:bg-background lg:w-64">
       <div className="flex items-center gap-2 border-b px-4 py-3">
-        <div className="size-6 rounded bg-[#00d4a0] flex items-center justify-center">
-          <span className="text-[10px] font-bold text-black">T</span>
+        <div className="flex size-6 items-center justify-center rounded bg-[#00d4a0]">
+          <span className="font-bold text-[10px] text-black">T</span>
         </div>
-        <span className="text-sm font-semibold">TARS</span>
+        <span className="font-semibold text-sm">TARS</span>
       </div>
-      <nav className="flex-1 overflow-y-auto p-2 space-y-1">
+      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive =
-            href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(href);
+            href === "/" ? pathname === "/" : pathname.startsWith(href);
           return (
             <Link
-              key={href}
-              href={href}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2 font-medium text-sm transition-colors",
                 isActive
                   ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
               )}
-              aria-current={isActive ? "page" : undefined}
+              href={href}
+              key={href}
             >
               <Icon className="size-4 shrink-0" />
               {label}
@@ -228,14 +228,14 @@ export function DashboardShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen bg-background pointer-events-auto">
+    <div className="pointer-events-auto flex min-h-screen bg-background">
       <DesktopSidebar />
-      <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
-      <div className="flex flex-1 flex-col min-w-0">
+      <MobileDrawer onClose={() => setDrawerOpen(false)} open={drawerOpen} />
+      <div className="flex min-w-0 flex-1 flex-col">
         <MobileTopBar
-          title={title}
-          onOpen={() => setDrawerOpen(true)}
           inboxCount={inboxCount}
+          onOpen={() => setDrawerOpen(true)}
+          title={title}
         />
         <main className="flex-1">{children}</main>
       </div>

@@ -21,9 +21,9 @@ import {
   getSingleProvider,
 } from "@/lib/auth-providers";
 
-type AuthDialogProps = {
+interface AuthDialogProps {
   children?: ReactNode;
-};
+}
 
 const VercelIcon = ({ className = "mr-2 h-3 w-3" }: { className?: string }) => (
   <svg
@@ -137,7 +137,7 @@ const getButtonText = (loading: boolean, mode: "signin" | "signup") => {
   return mode === "signup" ? "Sign Up" : "Sign In";
 };
 
-type EmailFormProps = {
+interface EmailFormProps {
   mode: "signin" | "signup";
   name: string;
   email: string;
@@ -149,7 +149,7 @@ type EmailFormProps = {
   onPasswordChange: (password: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onToggleMode: () => void;
-};
+}
 
 const EmailForm = ({
   mode,
@@ -227,7 +227,7 @@ const EmailForm = ({
   </div>
 );
 
-type SocialButtonsProps = {
+interface SocialButtonsProps {
   enabledProviders: {
     vercel: boolean;
     github: boolean;
@@ -235,7 +235,7 @@ type SocialButtonsProps = {
   };
   onSignIn: (provider: "github" | "google" | "vercel") => void;
   loadingProvider: "github" | "google" | "vercel" | null;
-};
+}
 
 const SocialButtons = ({
   enabledProviders,
@@ -282,15 +282,15 @@ const SocialButtons = ({
   </div>
 );
 
-type UseAuthHandlers = {
+interface UseAuthHandlers {
   handleSocialSignIn: (
     provider: "github" | "google" | "vercel"
   ) => Promise<void>;
   handleEmailAuth: (e: React.FormEvent) => Promise<void>;
   toggleMode: () => void;
-};
+}
 
-type AuthHandlersOptions = {
+interface AuthHandlersOptions {
   mode: "signin" | "signup";
   setMode: (newMode: "signin" | "signup") => void;
   email: string;
@@ -300,7 +300,7 @@ type AuthHandlersOptions = {
   setLoading: (loading: boolean) => void;
   setLoadingProvider: (provider: "github" | "google" | "vercel" | null) => void;
   setOpen: (open: boolean) => void;
-};
+}
 
 const useAuthHandlers = (options: AuthHandlersOptions): UseAuthHandlers => {
   const {
@@ -395,11 +395,11 @@ const useAuthHandlers = (options: AuthHandlersOptions): UseAuthHandlers => {
   };
 };
 
-type SingleProviderButtonProps = {
+interface SingleProviderButtonProps {
   provider: Provider;
   loadingProvider: "github" | "google" | "vercel" | null;
   onSignIn: (provider: "github" | "google" | "vercel") => Promise<void>;
-};
+}
 
 // Module-level flag to persist sign-in loading state across component remounts
 // This prevents the flash of normal state when OAuth triggers session refresh
@@ -441,7 +441,7 @@ const SingleProviderButton = ({
   );
 };
 
-type EmailOnlyDialogProps = {
+interface EmailOnlyDialogProps {
   children: ReactNode;
   open: boolean;
   mode: "signin" | "signup";
@@ -456,7 +456,7 @@ type EmailOnlyDialogProps = {
   onPasswordChange: (password: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onToggleMode: () => void;
-};
+}
 
 const EmailOnlyDialog = ({
   children,

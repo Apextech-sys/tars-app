@@ -1,21 +1,24 @@
 import {
+  Clock,
   ExternalLink,
   GitPullRequest,
   MessageSquare,
-  User,
-  Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { RunStatusBadge } from "./status-badge";
 import type { PolicyConfig, PrRun } from "./types";
-import { cn } from "@/lib/utils";
 
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
-  if (s < 60) return `${s}s`;
+  if (s < 60) {
+    return `${s}s`;
+  }
   const m = Math.floor(s / 60);
   const rem = s % 60;
-  if (m < 60) return `${m}m ${rem}s`;
+  if (m < 60) {
+    return `${m}m ${rem}s`;
+  }
   const h = Math.floor(m / 60);
   return `${h}h ${m % 60}m`;
 }
@@ -27,19 +30,17 @@ function PolicyChip({
   label: string;
   value: boolean | string | number | undefined | null;
 }) {
-  const isActive = value === true || (typeof value === "string" && value !== "false");
-  const displayValue =
-    typeof value === "number"
-      ? `${label}: ${value}`
-      : label;
+  const isActive =
+    value === true || (typeof value === "string" && value !== "false");
+  const displayValue = typeof value === "number" ? `${label}: ${value}` : label;
 
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border",
+        "inline-flex items-center rounded-full border px-2.5 py-0.5 font-medium text-xs",
         isActive
-          ? "bg-primary/10 text-primary border-primary/30"
-          : "bg-zinc-800/50 text-zinc-500 border-zinc-700"
+          ? "border-primary/30 bg-primary/10 text-primary"
+          : "border-zinc-700 bg-zinc-800/50 text-zinc-500"
       )}
     >
       {displayValue}
@@ -52,7 +53,13 @@ function PolicyChip({
   );
 }
 
-export function RunHeader({ run, prTitle }: { run: PrRun; prTitle?: string | null }) {
+export function RunHeader({
+  run,
+  prTitle,
+}: {
+  run: PrRun;
+  prTitle?: string | null;
+}) {
   const policy = run.policy as PolicyConfig | null;
   const ghUrl = `https://github.com/${run.owner}/${run.repo}/pull/${run.prNumber}`;
 
@@ -69,14 +76,14 @@ export function RunHeader({ run, prTitle }: { run: PrRun; prTitle?: string | nul
     <div className="space-y-4">
       {/* Title row */}
       <div className="flex flex-wrap items-start gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <GitPullRequest className="size-5 text-muted-foreground shrink-0" />
-            <h1 className="text-xl font-semibold leading-tight">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <GitPullRequest className="size-5 shrink-0 text-muted-foreground" />
+            <h1 className="font-semibold text-xl leading-tight">
               {prTitle ?? `PR #${run.prNumber}`}
             </h1>
           </div>
-          <p className="text-sm text-muted-foreground mt-1 font-mono">
+          <p className="mt-1 font-mono text-muted-foreground text-sm">
             {run.owner}/{run.repo}
             <span className="text-foreground/60"> #</span>
             {run.prNumber}
@@ -86,19 +93,19 @@ export function RunHeader({ run, prTitle }: { run: PrRun; prTitle?: string | nul
       </div>
 
       {/* Meta grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {run.prSha && (
           <div className="space-y-0.5">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+            <p className="text-muted-foreground text-xs uppercase tracking-wide">
               Head SHA
             </p>
-            <p className="font-mono text-sm bg-muted px-2 py-1 rounded w-fit">
+            <p className="w-fit rounded bg-muted px-2 py-1 font-mono text-sm">
               {run.prSha.slice(0, 7)}
             </p>
           </div>
         )}
         <div className="space-y-0.5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          <p className="text-muted-foreground text-xs uppercase tracking-wide">
             Duration
           </p>
           <div className="flex items-center gap-1.5 text-sm">
@@ -107,42 +114,38 @@ export function RunHeader({ run, prTitle }: { run: PrRun; prTitle?: string | nul
           </div>
         </div>
         <div className="space-y-0.5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          <p className="text-muted-foreground text-xs uppercase tracking-wide">
             Created
           </p>
-          <p className="text-sm">
-            {new Date(run.createdAt).toLocaleString()}
-          </p>
+          <p className="text-sm">{new Date(run.createdAt).toLocaleString()}</p>
         </div>
         <div className="space-y-0.5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          <p className="text-muted-foreground text-xs uppercase tracking-wide">
             Updated
           </p>
-          <p className="text-sm">
-            {new Date(run.updatedAt).toLocaleString()}
-          </p>
+          <p className="text-sm">{new Date(run.updatedAt).toLocaleString()}</p>
         </div>
       </div>
 
       {/* Links */}
       <div className="flex flex-wrap gap-2">
         <Link
-          href={ghUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
           aria-label={`Open PR #${run.prNumber} on GitHub`}
+          className="inline-flex items-center gap-1.5 text-primary text-sm hover:underline"
+          href={ghUrl}
+          rel="noopener noreferrer"
+          target="_blank"
         >
           <ExternalLink className="size-3.5" />
           View on GitHub
         </Link>
         {run.reviewCommentUrl && (
           <Link
-            href={run.reviewCommentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
             aria-label="View posted review comment"
+            className="inline-flex items-center gap-1.5 text-primary text-sm hover:underline"
+            href={run.reviewCommentUrl}
+            rel="noopener noreferrer"
+            target="_blank"
           >
             <MessageSquare className="size-3.5" />
             Review comment
@@ -153,7 +156,7 @@ export function RunHeader({ run, prTitle }: { run: PrRun; prTitle?: string | nul
       {/* Policy chips */}
       {policy && (
         <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide">
+          <p className="text-muted-foreground text-xs uppercase tracking-wide">
             Policy
           </p>
           <div className="flex flex-wrap gap-1.5">

@@ -13,21 +13,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export type SchemaField = {
+export interface SchemaField {
   id?: string;
   name: string;
   type: "string" | "number" | "boolean" | "array" | "object";
   itemType?: "string" | "number" | "boolean" | "object";
   fields?: SchemaField[];
   description?: string;
-};
+}
 
-type SchemaBuilderProps = {
+interface SchemaBuilderProps {
   schema: SchemaField[];
   onChange: (schema: SchemaField[]) => void;
   disabled?: boolean;
   level?: number;
-};
+}
 
 export function SchemaBuilder({
   schema,

@@ -5,8 +5,8 @@
  * Uses the real Postgres DB (DATABASE_URL must be set).
  */
 
-import { afterAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 // Mock next/cache before any action imports
 vi.mock("next/cache", () => ({
@@ -14,8 +14,6 @@ vi.mock("next/cache", () => ({
   revalidateTag: vi.fn(),
 }));
 
-import { db } from "@/lib/db";
-import { escalations } from "@/lib/db/tars-schema";
 import {
   createEscalation,
   deferEscalation,
@@ -23,6 +21,8 @@ import {
   resolveEscalation,
   snoozeEscalation,
 } from "@/app/inbox/actions";
+import { db } from "@/lib/db";
+import { escalations } from "@/lib/db/tars-schema";
 
 // Track IDs created during test so we can clean up
 const createdIds: string[] = [];
@@ -32,7 +32,7 @@ async function insertTestEscalation(
     title: string;
     severity: "info" | "warn" | "blocker";
     source: string;
-  }> = {},
+  }> = {}
 ): Promise<string> {
   const [row] = await db
     .insert(escalations)
@@ -97,8 +97,8 @@ describe("snoozeEscalation", () => {
     expect(row.status).toBe("snoozed");
     expect(row.snoozedUntil).not.toBeNull();
     const delta = row.snoozedUntil!.getTime() - before.getTime();
-    expect(delta).toBeGreaterThan(3590_000);
-    expect(delta).toBeLessThan(3610_000);
+    expect(delta).toBeGreaterThan(3_590_000);
+    expect(delta).toBeLessThan(3_610_000);
   });
 
   it("can snooze for 24h", async () => {
@@ -111,7 +111,7 @@ describe("snoozeEscalation", () => {
       .where(eq(escalations.id, id));
 
     const delta = row.snoozedUntil!.getTime() - Date.now();
-    expect(delta).toBeGreaterThan(23 * 3600_000);
+    expect(delta).toBeGreaterThan(23 * 3_600_000);
   });
 });
 
@@ -146,7 +146,7 @@ describe("createEscalation + fetchInboxItems", () => {
 
     const items = await fetchInboxItems();
     const found = items.find(
-      (i) => i.kind === "escalation" && i.title === title,
+      (i) => i.kind === "escalation" && i.title === title
     );
     expect(found).toBeDefined();
     expect(found?.kind).toBe("escalation");

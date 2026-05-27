@@ -21,8 +21,17 @@
  */
 
 import { sleep } from "workflow";
-import { writeAudit } from "./lib/audit";
-import { dispatchJob, pollJobOnce } from "./lib/worker-dispatch";
+import {
+  type BriefKind,
+  BriefOutputSchema,
+  renderBriefMarkdown,
+} from "../lib/tars/brief/schema";
+import {
+  finalizeBrief,
+  insertPendingBrief,
+  mirrorBriefToDisk,
+  updateBriefStatus,
+} from "./brief-lib/brief-store";
 import {
   buildAuditWindow,
   buildGraphSnapshot,
@@ -33,17 +42,8 @@ import {
   fetchOpenPRs,
   fetchRecentIssues,
 } from "./brief-lib/repo-activity";
-import {
-  finalizeBrief,
-  insertPendingBrief,
-  mirrorBriefToDisk,
-  updateBriefStatus,
-} from "./brief-lib/brief-store";
-import {
-  BriefOutputSchema,
-  renderBriefMarkdown,
-  type BriefKind,
-} from "../lib/tars/brief/schema";
+import { writeAudit } from "./lib/audit";
+import { dispatchJob, pollJobOnce } from "./lib/worker-dispatch";
 
 export interface BriefWorkflowInput {
   kind: BriefKind;
@@ -76,7 +76,7 @@ function todayUtcISO(now = new Date()): string {
 
 function computeWindow(
   kind: BriefKind,
-  now = new Date(),
+  now = new Date()
 ): { windowStart: string; windowEnd: string } {
   const end = now;
   const lookbackHours = kind === "adhoc" ? 1 : 12;
@@ -88,7 +88,7 @@ function computeWindow(
 }
 
 export async function briefWorkflow(
-  input: BriefWorkflowInput,
+  input: BriefWorkflowInput
 ): Promise<BriefWorkflowResult> {
   "use workflow";
 
@@ -107,7 +107,7 @@ export async function briefWorkflow(
     step: string,
     status: "start" | "ok" | "skip" | "error" | "info",
     data: Record<string, unknown> = {},
-    message?: string,
+    message?: string
   ) => {
     await writeAudit({
       runId,

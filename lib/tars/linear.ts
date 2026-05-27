@@ -12,13 +12,17 @@ export function verifyLinearSignature(args: {
   rawBody: string;
 }): boolean {
   const { webhookSecret, signatureHeader, rawBody } = args;
-  if (!webhookSecret || !signatureHeader) return false;
+  if (!(webhookSecret && signatureHeader)) {
+    return false;
+  }
   const expected = createHmac("sha256", webhookSecret)
     .update(rawBody, "utf8")
     .digest("hex");
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(signatureHeader, "utf8");
-  if (a.length !== b.length) return false;
+  if (a.length !== b.length) {
+    return false;
+  }
   try {
     return timingSafeEqual(a, b);
   } catch {
@@ -79,7 +83,9 @@ export async function fetchLinearIssueContext(args: {
       project: { name: string | null } | null;
     };
   }>;
-  if (!json.data?.issue) return null;
+  if (!json.data?.issue) {
+    return null;
+  }
   const i = json.data.issue;
   return {
     id: i.id,
@@ -139,7 +145,7 @@ export interface ProjectMeta {
 }
 
 export async function loadProjectsByLinearTeam(
-  projectsYamlPath = "/home/shaun/.tars-state/knowledge/projects.yaml",
+  projectsYamlPath = "/home/shaun/.tars-state/knowledge/projects.yaml"
 ): Promise<Map<string, ProjectMeta>> {
   try {
     const fs = await import("node:fs/promises");
@@ -149,9 +155,13 @@ export async function loadProjectsByLinearTeam(
     const parsed = yaml.parse(raw) as Record<string, any>;
     const m = new Map<string, ProjectMeta>();
     for (const [, val] of Object.entries(parsed ?? {})) {
-      if (!val || typeof val !== "object") continue;
+      if (!val || typeof val !== "object") {
+        continue;
+      }
       const linearTeam = val.linear_team as string | undefined;
-      if (!linearTeam) continue;
+      if (!linearTeam) {
+        continue;
+      }
       m.set(linearTeam, {
         business: val.business as string,
         visibility: val.visibility === "personal" ? "personal" : "work",

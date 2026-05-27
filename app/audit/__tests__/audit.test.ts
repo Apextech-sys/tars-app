@@ -10,10 +10,10 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  exportAuditCsv,
   fetchAuditDistinctRepos,
   fetchAuditDistinctSteps,
   fetchAuditLogs,
-  exportAuditCsv,
 } from "@/app/audit/actions";
 
 describe("fetchAuditLogs", () => {
@@ -44,7 +44,9 @@ describe("fetchAuditLogs", () => {
   it("filters by runId substring", async () => {
     // Get any runId that exists
     const all = await fetchAuditLogs({ limit: 1 });
-    if (all.rows.length === 0) return; // no data, skip
+    if (all.rows.length === 0) {
+      return; // no data, skip
+    }
 
     const runId = all.rows[0].runId.slice(0, 6);
     const filtered = await fetchAuditLogs({ runId });
@@ -53,7 +55,9 @@ describe("fetchAuditLogs", () => {
 
   it("filters by step", async () => {
     const steps = await fetchAuditDistinctSteps();
-    if (steps.length === 0) return; // no data
+    if (steps.length === 0) {
+      return; // no data
+    }
 
     const step = steps[0];
     const result = await fetchAuditLogs({ steps: [step] });
@@ -62,7 +66,9 @@ describe("fetchAuditLogs", () => {
 
   it("filters by repo", async () => {
     const repos = await fetchAuditDistinctRepos();
-    if (repos.length === 0) return; // no data
+    if (repos.length === 0) {
+      return; // no data
+    }
 
     const repo = repos[0];
     const result = await fetchAuditLogs({ repos: [repo] });
@@ -83,7 +89,9 @@ describe("fetchAuditLogs", () => {
   });
 
   it("date range filter works", async () => {
-    const future = new Date(Date.now() + 86400_000).toISOString().slice(0, 10);
+    const _future = new Date(Date.now() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     const result = await fetchAuditLogs({ dateTo: "2000-01-01" });
     // Nothing should be before year 2000 — empty result expected
     expect(result.rows.length).toBe(0);

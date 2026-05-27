@@ -2,12 +2,12 @@
 
 import {
   ConnectionMode,
-  PanOnScrollMode,
   MiniMap,
   type Node,
   type NodeMouseHandler,
   type OnConnect,
   type OnConnectStartParams,
+  PanOnScrollMode,
   useReactFlow,
   type Connection as XYFlowConnection,
   type Edge as XYFlowEdge,
@@ -15,11 +15,11 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@/components/ai-elements/canvas";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { Connection } from "@/components/ai-elements/connection";
 import { Controls } from "@/components/ai-elements/controls";
 import { AIPrompt } from "@/components/ai-elements/prompt";
 import { WorkflowToolbar } from "@/components/workflow/workflow-toolbar";
+import { useIsMobile } from "@/hooks/use-mobile";
 import "@xyflow/react/dist/style.css";
 
 import { PlayCircle, Zap } from "lucide-react";
@@ -551,11 +551,7 @@ export function WorkflowCanvas() {
         isValidConnection={isValidConnection}
         nodes={nodes}
         nodesConnectable={!isGenerating}
-        nodesDraggable={!isGenerating && !isMobile}
-        panOnScroll={isMobile}
-        panOnScrollMode={PanOnScrollMode.Free}
-        zoomOnPinch={true}
-        selectionOnDrag={!isMobile}
+        nodesDraggable={!(isGenerating || isMobile)}
         nodeTypes={nodeTypes}
         onConnect={isGenerating ? undefined : onConnect}
         onConnectEnd={isGenerating ? undefined : onConnectEnd}
@@ -568,6 +564,10 @@ export function WorkflowCanvas() {
         onPaneClick={onPaneClick}
         onPaneContextMenu={isGenerating ? undefined : onPaneContextMenu}
         onSelectionChange={isGenerating ? undefined : onSelectionChange}
+        panOnScroll={isMobile}
+        panOnScrollMode={PanOnScrollMode.Free}
+        selectionOnDrag={!isMobile}
+        zoomOnPinch={true}
       >
         <Panel
           className="workflow-controls-panel border-none bg-transparent p-0"

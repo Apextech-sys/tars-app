@@ -8,9 +8,9 @@ import { api } from "@/lib/api-client";
 import { Overlay } from "./overlay";
 import { useOverlay } from "./overlay-provider";
 
-type SettingsOverlayProps = {
+interface SettingsOverlayProps {
   overlayId: string;
-};
+}
 
 export function SettingsOverlay({ overlayId }: SettingsOverlayProps) {
   const { closeAll } = useOverlay();

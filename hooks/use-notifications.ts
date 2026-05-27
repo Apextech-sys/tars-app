@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   attachClickHandler,
   fireNotification,
   getPermissionState,
-  requestPermission,
   type NotificationSettings,
   type NotificationSeverity,
+  requestPermission,
 } from "@/lib/notifications";
 
 export interface UseNotificationsReturn {
@@ -21,7 +21,7 @@ export interface UseNotificationsReturn {
     id: string,
     title: string,
     body: string,
-    severity: NotificationSeverity,
+    severity: NotificationSeverity
   ) => void;
 }
 
@@ -47,7 +47,9 @@ function loadSettings(): NotificationSettings {
 }
 
 function saveSettings(s: NotificationSettings): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined") {
+    return;
+  }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
 }
 
@@ -56,7 +58,7 @@ export function useNotifications(): UseNotificationsReturn {
   const [permission, setPermission] =
     useState<NotificationPermission>("default");
   const [settings, setSettings] = useState<NotificationSettings>(() =>
-    loadSettings(),
+    loadSettings()
   );
 
   // Sync permission state on mount
@@ -64,11 +66,12 @@ export function useNotifications(): UseNotificationsReturn {
     setPermission(getPermissionState());
   }, []);
 
-  const promptPermission = useCallback(async (): Promise<NotificationPermission> => {
-    const result = await requestPermission();
-    setPermission(result);
-    return result;
-  }, []);
+  const promptPermission =
+    useCallback(async (): Promise<NotificationPermission> => {
+      const result = await requestPermission();
+      setPermission(result);
+      return result;
+    }, []);
 
   const updateSettings = useCallback((patch: Partial<NotificationSettings>) => {
     setSettings((prev) => {
@@ -99,14 +102,14 @@ export function useNotifications(): UseNotificationsReturn {
       id: string,
       title: string,
       body: string,
-      severity: NotificationSeverity,
+      severity: NotificationSeverity
     ) => {
       const n = fireNotification({ id, title, body, severity, settings });
       if (n) {
         attachClickHandler(n, id, (path) => router.push(path));
       }
     },
-    [settings, router],
+    [settings, router]
   );
 
   const testFire = useCallback(() => {
@@ -114,9 +117,16 @@ export function useNotifications(): UseNotificationsReturn {
       "test",
       "TARS — test notification",
       "Notifications are working correctly.",
-      "info",
+      "info"
     );
   }, [notify]);
 
-  return { permission, settings, promptPermission, updateSettings, testFire, notify };
+  return {
+    permission,
+    settings,
+    promptPermission,
+    updateSettings,
+    testFire,
+    notify,
+  };
 }

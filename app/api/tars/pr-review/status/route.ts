@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const owner = url.searchParams.get("owner");
   const repo = url.searchParams.get("repo");
   const prNumber = Number(url.searchParams.get("prNumber") ?? "0");
-  if (!owner || !repo || !prNumber) {
+  if (!(owner && repo && prNumber)) {
     return NextResponse.json(
       { error: "owner, repo, prNumber required" },
       { status: 400 }
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
   }
   try {
     const sql = getSql();
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       select run_id, owner, repo, pr_number, pr_sha, status, findings_count,
              review_comment_url, error, disagreed_payload, created_at, updated_at
       from pr_review_runs

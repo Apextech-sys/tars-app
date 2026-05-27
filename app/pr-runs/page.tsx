@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,7 +9,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -57,18 +56,20 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
   "skipped-no-findings": "bg-zinc-500/10 text-zinc-400 border border-zinc-700",
   "skipped-policy": "bg-zinc-500/10 text-zinc-400 border border-zinc-700",
-  "blocked-konverge": "bg-amber-500/10 text-amber-400 border border-amber-500/30",
+  "blocked-konverge":
+    "bg-amber-500/10 text-amber-400 border border-amber-500/30",
   disagreed: "bg-purple-500/10 text-purple-400 border border-purple-500/30",
   error: "bg-red-500/10 text-red-400 border border-red-500/30",
 };
 
 function StatusChip({ status }: { status: string }) {
   const cls =
-    STATUS_COLORS[status] ?? "bg-zinc-500/10 text-zinc-400 border border-zinc-700";
+    STATUS_COLORS[status] ??
+    "bg-zinc-500/10 text-zinc-400 border border-zinc-700";
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wide whitespace-nowrap",
+        "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 font-medium text-xs uppercase tracking-wide",
         cls
       )}
     >
@@ -80,11 +81,17 @@ function StatusChip({ status }: { status: string }) {
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) {
+    return `${s}s ago`;
+  }
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) {
+    return `${m}m ago`;
+  }
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) {
+    return `${h}h ago`;
+  }
   return `${Math.floor(h / 24)}d ago`;
 }
 
@@ -113,16 +120,26 @@ export default function PrRunsListPage() {
         setLoading(true);
         try {
           const params = new URLSearchParams();
-          if (statuses.length > 0) params.set("status", statuses.join(","));
-          if (repo) params.set("repo", repo);
-          if (from) params.set("from", from);
-          if (to) params.set("to", to);
+          if (statuses.length > 0) {
+            params.set("status", statuses.join(","));
+          }
+          if (repo) {
+            params.set("repo", repo);
+          }
+          if (from) {
+            params.set("from", from);
+          }
+          if (to) {
+            params.set("to", to);
+          }
           params.set("limit", String(PAGE_SIZE));
           params.set("offset", String(p * PAGE_SIZE));
 
           const res = await fetch(`/api/tars/pr-runs?${params.toString()}`);
-          if (!res.ok) throw new Error("Failed");
-          const data = await res.json() as { runs: RunRow[]; total: number };
+          if (!res.ok) {
+            throw new Error("Failed");
+          }
+          const data = (await res.json()) as { runs: RunRow[]; total: number };
           setRuns(data.runs);
           setTotal(data.total);
         } finally {
@@ -150,24 +167,24 @@ export default function PrRunsListPage() {
   function RunCard({ run }: { run: RunRow }) {
     return (
       <Link
+        className="block space-y-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent/50"
         href={`/pr-runs/${encodeURIComponent(run.runId)}`}
-        className="block rounded-lg border border-border bg-card p-4 space-y-3 hover:bg-accent/50 transition-colors"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="font-medium text-sm truncate">
+            <p className="truncate font-medium text-sm">
               {run.prTitle ?? `PR #${run.prNumber}`}
             </p>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">
+            <p className="mt-0.5 font-mono text-muted-foreground text-xs">
               {run.owner}/{run.repo} #{run.prNumber}
             </p>
           </div>
           <StatusChip status={run.status} />
         </div>
-        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-3 text-muted-foreground text-xs">
           {run.findingsCount > 0 && (
             <span>
-              {run.findingsCount} finding{run.findingsCount !== 1 ? "s" : ""}
+              {run.findingsCount} finding{run.findingsCount === 1 ? "" : "s"}
             </span>
           )}
           <span className="ml-auto">{relativeTime(run.updatedAt)}</span>
@@ -178,34 +195,32 @@ export default function PrRunsListPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto px-4 py-6 md:py-8 space-y-6">
+      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:py-8">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold">PR Runs</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {total.toLocaleString()} total run{total !== 1 ? "s" : ""}
+            <h1 className="font-bold text-2xl">PR Runs</h1>
+            <p className="mt-1 text-muted-foreground text-sm">
+              {total.toLocaleString()} total run{total === 1 ? "" : "s"}
             </p>
           </div>
           <Button
-            size="sm"
-            variant="outline"
             className="min-h-[44px]"
+            disabled={isPending}
             onClick={() =>
               load(selectedStatuses, repoFilter, dateFrom, dateTo, page)
             }
-            disabled={isPending}
+            size="sm"
+            variant="outline"
           >
-            <RefreshCw
-              className={cn("size-4", isPending && "animate-spin")}
-            />
+            <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
             Refresh
           </Button>
         </div>
 
         {/* Filters */}
-        <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
+          <div className="mb-2 flex items-center gap-2 text-muted-foreground text-sm">
             <Filter className="size-3.5" />
             Filters
           </div>
@@ -214,15 +229,15 @@ export default function PrRunsListPage() {
           <div className="flex flex-wrap gap-1.5">
             {ALL_STATUSES.map((s) => (
               <button
-                key={s}
-                type="button"
-                onClick={() => toggleStatus(s)}
                 className={cn(
-                  "px-2.5 py-1 rounded-full text-xs border transition-colors min-h-[32px]",
+                  "min-h-[32px] rounded-full border px-2.5 py-1 text-xs transition-colors",
                   selectedStatuses.includes(s)
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted border-border hover:bg-accent"
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-muted hover:bg-accent"
                 )}
+                key={s}
+                onClick={() => toggleStatus(s)}
+                type="button"
               >
                 {s}
               </button>
@@ -231,49 +246,51 @@ export default function PrRunsListPage() {
 
           <div className="flex flex-wrap gap-3">
             <Input
-              placeholder="owner/repo"
               className="w-full sm:w-48"
-              value={repoFilter}
               onChange={(e) => {
                 setRepoFilter(e.target.value);
                 setPage(0);
               }}
+              placeholder="owner/repo"
+              value={repoFilter}
             />
             <Input
-              type="date"
               className="w-full sm:w-auto"
-              value={dateFrom}
               onChange={(e) => {
                 setDateFrom(e.target.value);
                 setPage(0);
               }}
               title="From date"
+              type="date"
+              value={dateFrom}
             />
             <Input
-              type="date"
               className="w-full sm:w-auto"
-              value={dateTo}
               onChange={(e) => {
                 setDateTo(e.target.value);
                 setPage(0);
               }}
               title="To date"
+              type="date"
+              value={dateTo}
             />
           </div>
         </div>
 
         {/* Mobile cards */}
-        <div className="md:hidden space-y-3">
+        <div className="space-y-3 md:hidden">
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="size-5 animate-spin text-muted-foreground" />
             </div>
           ) : runs.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-              <div className="size-12 rounded-full bg-muted flex items-center justify-center">
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
                 <Filter className="size-5" />
               </div>
-              <p className="text-sm font-medium">No PR runs match these filters</p>
+              <p className="font-medium text-sm">
+                No PR runs match these filters
+              </p>
               <p className="text-xs">Try adjusting the status or date range</p>
             </div>
           ) : (
@@ -282,7 +299,7 @@ export default function PrRunsListPage() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block rounded-lg border border-border bg-card overflow-hidden">
+        <div className="hidden overflow-hidden rounded-lg border border-border bg-card md:block">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -302,7 +319,7 @@ export default function PrRunsListPage() {
                     <TableRow key={`skeleton-${i}`}>
                       {Array.from({ length: 6 }).map((__, j) => (
                         <TableCell key={j}>
-                          <div className="h-4 bg-muted animate-pulse rounded" />
+                          <div className="h-4 animate-pulse rounded bg-muted" />
                         </TableCell>
                       ))}
                     </TableRow>
@@ -310,12 +327,12 @@ export default function PrRunsListPage() {
                 ) : runs.length === 0 ? (
                   <TableRow>
                     <TableCell
+                      className="py-16 text-center text-muted-foreground"
                       colSpan={6}
-                      className="text-center py-16 text-muted-foreground"
                     >
                       <div className="flex flex-col items-center gap-2">
                         <Filter className="size-8 opacity-40" />
-                        <p className="text-sm font-medium">
+                        <p className="font-medium text-sm">
                           No PR runs match these filters
                         </p>
                       </div>
@@ -323,13 +340,13 @@ export default function PrRunsListPage() {
                   </TableRow>
                 ) : (
                   runs.map((run) => (
-                    <TableRow key={run.runId} className="group">
+                    <TableRow className="group" key={run.runId}>
                       <TableCell>
                         <div className="space-y-0.5">
-                          <p className="font-medium text-sm max-w-[280px] truncate">
+                          <p className="max-w-[280px] truncate font-medium text-sm">
                             {run.prTitle ?? `PR #${run.prNumber}`}
                           </p>
-                          <p className="text-xs text-muted-foreground font-mono">
+                          <p className="font-mono text-muted-foreground text-xs">
                             {run.owner}/{run.repo} #{run.prNumber}
                           </p>
                         </div>
@@ -337,7 +354,7 @@ export default function PrRunsListPage() {
                       <TableCell>
                         <StatusChip status={run.status} />
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-sm">
                         {run.findingsCount > 0 ? (
                           <span>{run.findingsCount}</span>
                         ) : (
@@ -347,25 +364,27 @@ export default function PrRunsListPage() {
                       <TableCell>
                         {run.status === "disagreed" ? (
                           <div className="flex gap-1">
-                            <span className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded-full">
+                            <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-purple-400 text-xs">
                               Codex
                             </span>
-                            <span className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded-full">
+                            <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-purple-400 text-xs">
                               Claude
                             </span>
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-muted-foreground text-xs">
+                            —
+                          </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
                         {relativeTime(run.updatedAt)}
                       </TableCell>
                       <TableCell>
                         <Link
-                          href={`/pr-runs/${encodeURIComponent(run.runId)}`}
-                          className="inline-flex items-center gap-1 text-xs text-primary hover:underline min-h-[32px]"
                           aria-label={`View run ${run.runId}`}
+                          className="inline-flex min-h-[32px] items-center gap-1 text-primary text-xs hover:underline"
+                          href={`/pr-runs/${encodeURIComponent(run.runId)}`}
                         >
                           View
                           <ExternalLink className="size-3" />
@@ -381,28 +400,28 @@ export default function PrRunsListPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div className="flex items-center justify-between text-muted-foreground text-sm">
             <span>
               {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)}{" "}
               of {total}
             </span>
             <div className="flex gap-2">
               <Button
-                variant="outline"
-                size="sm"
                 className="min-h-[44px]"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0 || isPending}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                size="sm"
+                variant="outline"
               >
                 <ChevronLeft className="size-4" />
                 Previous
               </Button>
               <Button
-                variant="outline"
-                size="sm"
                 className="min-h-[44px]"
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                 disabled={page >= totalPages - 1 || isPending}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                size="sm"
+                variant="outline"
               >
                 Next
                 <ChevronRight className="size-4" />

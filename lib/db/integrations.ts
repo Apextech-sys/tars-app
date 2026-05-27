@@ -95,7 +95,7 @@ function decryptConfig(encryptedConfig: string): Record<string, unknown> {
   }
 }
 
-export type DecryptedIntegration = {
+export interface DecryptedIntegration {
   id: string;
   userId: string;
   name: string;
@@ -104,7 +104,7 @@ export type DecryptedIntegration = {
   isManaged: boolean | null;
   createdAt: Date;
   updatedAt: Date;
-};
+}
 
 /**
  * Get all integrations for a user, optionally filtered by type
@@ -265,13 +265,13 @@ export async function deleteIntegration(
 /**
  * Workflow node structure for validation
  */
-type WorkflowNodeForValidation = {
+interface WorkflowNodeForValidation {
   data?: {
     config?: {
       integrationId?: string;
     };
   };
-};
+}
 
 /**
  * Extract all integration IDs from workflow nodes

@@ -15,7 +15,9 @@ export const dynamic = "force-dynamic";
 
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
-  if (sqlClient) return sqlClient;
+  if (sqlClient) {
+    return sqlClient;
+  }
   const url =
     process.env.WORKFLOW_POSTGRES_URL ??
     process.env.DATABASE_URL ??
@@ -39,7 +41,7 @@ interface BriefRow {
 async function loadBriefs(): Promise<BriefRow[]> {
   try {
     const sql = getSql();
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       select id::text as id, to_char(date, 'YYYY-MM-DD') as date,
              kind, status, summary, run_id, error_text,
              to_char(created_at, 'YYYY-MM-DD HH24:MI UTC') as created_at,
@@ -57,16 +59,14 @@ async function loadBriefs(): Promise<BriefRow[]> {
 
 function statusBadge(status: BriefRow["status"]) {
   const map: Record<BriefRow["status"], string> = {
-    pending:
-      "bg-amber-500/10 text-amber-300 border border-amber-500/30",
-    composing:
-      "bg-blue-500/10 text-blue-300 border border-blue-500/30",
+    pending: "bg-amber-500/10 text-amber-300 border border-amber-500/30",
+    composing: "bg-blue-500/10 text-blue-300 border border-blue-500/30",
     ready: "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30",
     failed: "bg-rose-500/10 text-rose-300 border border-rose-500/30",
   };
   return (
     <span
-      className={`text-xs px-2 py-0.5 rounded-full uppercase tracking-wide ${map[status]}`}
+      className={`rounded-full px-2 py-0.5 text-xs uppercase tracking-wide ${map[status]}`}
     >
       {status}
     </span>
@@ -74,19 +74,25 @@ function statusBadge(status: BriefRow["status"]) {
 }
 
 function kindEmoji(kind: BriefRow["kind"]): string {
-  if (kind === "morning") return "Morning";
-  if (kind === "evening") return "Evening";
+  if (kind === "morning") {
+    return "Morning";
+  }
+  if (kind === "evening") {
+    return "Evening";
+  }
   return "Adhoc";
 }
 
 export default async function BriefsPage() {
   const briefs = await loadBriefs();
   return (
-    <div className="pointer-events-auto min-h-screen w-full text-zinc-100 px-4 md:px-6 py-6 md:py-10">
-      <div className="max-w-3xl mx-auto">
+    <div className="pointer-events-auto min-h-screen w-full px-4 py-6 text-zinc-100 md:px-6 md:py-10">
+      <div className="mx-auto max-w-3xl">
         <header className="mb-8">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">TARS Briefs</h1>
-          <p className="text-sm text-zinc-400 mt-2">
+          <h1 className="font-semibold text-2xl tracking-tight md:text-3xl">
+            TARS Briefs
+          </h1>
+          <p className="mt-2 text-sm text-zinc-400">
             Twice-daily situation reports composed from the TARS graph,
             projects.yaml, audit log, and recent repo activity.
           </p>
@@ -94,9 +100,9 @@ export default async function BriefsPage() {
 
         {briefs.length === 0 ? (
           <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-            No briefs yet. The first one lands at 06:00 UTC tomorrow, or you
-            can trigger one manually:
-            <pre className="mt-3 p-3 rounded bg-black/40 text-xs text-zinc-300 overflow-x-auto">
+            No briefs yet. The first one lands at 06:00 UTC tomorrow, or you can
+            trigger one manually:
+            <pre className="mt-3 overflow-x-auto rounded bg-black/40 p-3 text-xs text-zinc-300">
               {`curl -X POST http://localhost:3001/api/tars/briefs \\\n  -H 'content-type: application/json' \\\n  -d '{"kind":"morning","authToken":"$TARS_INTERNAL_SECRET"}'`}
             </pre>
           </div>
@@ -104,25 +110,25 @@ export default async function BriefsPage() {
           <ul className="space-y-3">
             {briefs.map((b) => (
               <li
+                className="rounded-lg border border-zinc-800 bg-zinc-950/40 transition-colors hover:bg-zinc-900/50"
                 key={b.id}
-                className="rounded-lg border border-zinc-800 bg-zinc-950/40 hover:bg-zinc-900/50 transition-colors"
               >
                 <Link
+                  className="block rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-zinc-700"
                   href={`/briefs/${b.id}`}
-                  className="block p-4 focus:outline-none focus:ring-2 focus:ring-zinc-700 rounded-lg"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-zinc-200">
+                      <span className="font-medium text-sm text-zinc-200">
                         {kindEmoji(b.kind)} — {b.date}
                       </span>
                       {statusBadge(b.status)}
                     </div>
-                    <span className="text-xs text-zinc-500 shrink-0">
+                    <span className="shrink-0 text-xs text-zinc-500">
                       {b.completed_at ?? b.created_at}
                     </span>
                   </div>
-                  <p className="text-sm text-zinc-300 line-clamp-2">
+                  <p className="line-clamp-2 text-sm text-zinc-300">
                     {b.summary ??
                       (b.status === "failed"
                         ? `(failed: ${b.error_text?.slice(0, 200) ?? "no detail"})`

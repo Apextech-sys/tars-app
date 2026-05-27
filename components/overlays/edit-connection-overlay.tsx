@@ -23,12 +23,12 @@ const getLabel = (type: string): string => {
   return labels[type] || SYSTEM_INTEGRATION_LABELS[type] || type;
 };
 
-type EditConnectionOverlayProps = {
+interface EditConnectionOverlayProps {
   overlayId: string;
   integration: Integration;
   onSuccess?: () => void;
   onDelete?: () => void;
-};
+}
 
 /**
  * Secret field with "Configured" state for edit mode
@@ -137,7 +137,7 @@ export function EditConnectionOverlay({
   const { push, closeAll } = useOverlay();
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{
+  const [_testResult, setTestResult] = useState<{
     status: "success" | "error";
     message: string;
   } | null>(null);
@@ -281,7 +281,9 @@ export function EditConnectionOverlay({
       );
     }
 
-    if (!formFields) return null;
+    if (!formFields) {
+      return null;
+    }
 
     return formFields.map((field) => {
       if (field.type === "password") {
@@ -372,11 +374,11 @@ export function EditConnectionOverlay({
   );
 }
 
-type DeleteConnectionOverlayProps = {
+interface DeleteConnectionOverlayProps {
   overlayId: string;
   integration: Integration;
   onSuccess?: () => void;
-};
+}
 
 /**
  * Overlay for deleting a connection with optional key revocation

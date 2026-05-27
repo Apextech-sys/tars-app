@@ -14,18 +14,18 @@ export type OverlayActionVariant =
 /**
  * Action button configuration for overlay footer
  */
-export type OverlayAction = {
+export interface OverlayAction {
   label: string;
   onClick: () => void;
   variant?: OverlayActionVariant;
   disabled?: boolean;
   loading?: boolean;
-};
+}
 
 /**
  * Configuration options when opening an overlay
  */
-export type OverlayOptions = {
+export interface OverlayOptions {
   /** Title displayed in the header */
   title?: string;
   /** Description displayed below the title */
@@ -38,7 +38,7 @@ export type OverlayOptions = {
   closeOnEscape?: boolean;
   /** Callback when overlay is closed */
   onClose?: () => void;
-};
+}
 
 /**
  * Props passed to overlay components
@@ -51,7 +51,7 @@ export type OverlayComponentProps<P = Record<string, unknown>> = P & {
 /**
  * A single item in the overlay stack
  */
-export type OverlayStackItem<P = Record<string, unknown>> = {
+export interface OverlayStackItem<P = Record<string, unknown>> {
   /** Unique identifier for this overlay instance */
   id: string;
   /** The component to render */
@@ -60,21 +60,21 @@ export type OverlayStackItem<P = Record<string, unknown>> = {
   props: P;
   /** Configuration options */
   options: OverlayOptions;
-};
+}
 
 /**
  * Parameters for opening an overlay
  */
-export type OpenOverlayParams<P = Record<string, unknown>> = {
+export interface OpenOverlayParams<P = Record<string, unknown>> {
   component: ComponentType<OverlayComponentProps<P>>;
   props?: P;
   options?: OverlayOptions;
-};
+}
 
 /**
  * The overlay context value exposed by useOverlay()
  */
-export type OverlayContextValue = {
+export interface OverlayContextValue {
   /** Current stack of overlays */
   stack: OverlayStackItem[];
   /** Open a new overlay, replacing any existing stack */
@@ -105,12 +105,12 @@ export type OverlayContextValue = {
   hasOverlays: boolean;
   /** Get the depth of the current overlay (0 = first, 1+ = pushed) */
   depth: number;
-};
+}
 
 /**
  * Props for the base Overlay component
  */
-export type OverlayProps = {
+export interface OverlayProps {
   /** Title displayed in the header */
   title?: string;
   /** Description displayed below the title */
@@ -121,12 +121,12 @@ export type OverlayProps = {
   children?: ReactNode;
   /** Additional class name for the content container */
   className?: string;
-};
+}
 
 /**
  * Props for OverlayHeader component
  */
-export type OverlayHeaderProps = {
+export interface OverlayHeaderProps {
   /** Title text */
   title?: string;
   /** Description text */
@@ -141,16 +141,16 @@ export type OverlayHeaderProps = {
   onClose?: () => void;
   /** Additional class name */
   className?: string;
-};
+}
 
 /**
  * Props for OverlayFooter component
  */
-export type OverlayFooterProps = {
+export interface OverlayFooterProps {
   /** Action buttons to render */
   actions?: OverlayAction[];
   /** Additional class name */
   className?: string;
   /** Children to render (alternative to actions) */
   children?: ReactNode;
-};
+}

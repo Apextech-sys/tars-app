@@ -15,7 +15,7 @@ import { Overlay } from "./overlay";
 import { useOverlay } from "./overlay-provider";
 import type { OverlayComponentProps } from "./types";
 
-type BrokenReference = {
+interface BrokenReference {
   nodeId: string;
   nodeLabel: string;
   brokenReferences: {
@@ -23,28 +23,28 @@ type BrokenReference = {
     fieldLabel: string;
     displayText: string;
   }[];
-};
+}
 
-type MissingRequiredField = {
+interface MissingRequiredField {
   nodeId: string;
   nodeLabel: string;
   missingFields: {
     fieldKey: string;
     fieldLabel: string;
   }[];
-};
+}
 
-type MissingIntegration = {
+interface MissingIntegration {
   integrationType: IntegrationType;
   integrationLabel: string;
   nodeNames: string[];
-};
+}
 
-type WorkflowIssues = {
+interface WorkflowIssues {
   brokenReferences: BrokenReference[];
   missingRequiredFields: MissingRequiredField[];
   missingIntegrations: MissingIntegration[];
-};
+}
 
 type WorkflowIssuesOverlayProps = OverlayComponentProps<{
   issues: WorkflowIssues;

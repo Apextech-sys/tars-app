@@ -13,7 +13,7 @@ import type { OverlayAction } from "./types";
 
 type AlertVariant = "info" | "success" | "warning" | "error";
 
-type AlertOverlayProps = {
+interface AlertOverlayProps {
   overlayId: string;
   /** Title of the alert */
   title?: string;
@@ -25,7 +25,7 @@ type AlertOverlayProps = {
   dismissLabel?: string;
   /** Callback when dismissed */
   onDismiss?: () => void;
-};
+}
 
 const variantConfig: Record<
   AlertVariant,

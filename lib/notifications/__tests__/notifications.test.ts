@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  meetsThreshold,
-  getPermissionState,
   fireNotification,
+  getPermissionState,
+  meetsThreshold,
   type NotificationSettings,
 } from "../index";
 
@@ -69,7 +69,7 @@ describe("fireNotification", () => {
     const mockNotification = vi.fn(function (
       this: Record<string, unknown>,
       title: string,
-      opts: NotificationOptions,
+      opts: NotificationOptions
     ) {
       this.title = title;
       this.body = (opts as Record<string, unknown>).body;

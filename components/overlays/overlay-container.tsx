@@ -60,7 +60,7 @@ const containerVariants: Variants = {
 /**
  * Variants for drawer container
  */
-const drawerContainerVariants: Variants = {
+const _drawerContainerVariants: Variants = {
   hidden: {
     y: "100%",
     opacity: 0.5,
@@ -88,8 +88,12 @@ function getOverlayXPosition(
   isCurrent: boolean,
   isPrevious: boolean
 ): "0%" | "-35%" | "100%" {
-  if (isCurrent) return "0%";
-  if (isPrevious) return "-35%";
+  if (isCurrent) {
+    return "0%";
+  }
+  if (isPrevious) {
+    return "-35%";
+  }
   return "100%";
 }
 
@@ -169,7 +173,7 @@ function DesktopOverlayContainer() {
   }, [stack, isOpen]);
 
   // Use live stack for options checks (only when open)
-  const currentItem = stack[stack.length - 1];
+  const currentItem = stack.at(-1);
   const springTransition = shouldReduceMotion ? { duration: 0.01 } : iosSpring;
   const isPushing = direction === 1;
 
@@ -329,7 +333,7 @@ function MobileOverlayContainer() {
   }, [stack, isOpen]);
 
   // Use live stack for options checks (only when open)
-  const currentItem = stack[stack.length - 1];
+  const currentItem = stack.at(-1);
   const renderCurrentItem = renderStack[currentIndex];
   const springTransition = shouldReduceMotion ? { duration: 0.01 } : iosSpring;
   const isPushing = direction === 1;

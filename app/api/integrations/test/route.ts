@@ -10,15 +10,15 @@ import {
   getIntegration as getPluginFromRegistry,
 } from "@/plugins";
 
-export type TestConnectionRequest = {
+export interface TestConnectionRequest {
   type: IntegrationType;
   config: IntegrationConfig;
-};
+}
 
-export type TestConnectionResult = {
+export interface TestConnectionResult {
   status: "success" | "error";
   message: string;
-};
+}
 
 /**
  * POST /api/integrations/test

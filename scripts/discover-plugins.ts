@@ -252,7 +252,7 @@ export type IntegrationConfig = Record<string, string | undefined>;
 // ============================================================================
 
 /** Analysis result type for step file parsing */
-type StepFileAnalysis = {
+interface StepFileAnalysis {
   hasExportCore: boolean;
   integrationType: string | null;
   coreFunction: {
@@ -263,7 +263,7 @@ type StepFileAnalysis = {
   } | null;
   inputTypes: string[];
   imports: string[];
-};
+}
 
 /** Create empty analysis result */
 function createEmptyAnalysis(): StepFileAnalysis {

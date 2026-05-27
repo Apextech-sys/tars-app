@@ -8,20 +8,19 @@
  */
 
 import { NextResponse } from "next/server";
-import { start } from "workflow/api";
 import postgres from "postgres";
+import { start } from "workflow/api";
 
-import {
-  briefWorkflow,
-  type BriefWorkflowInput,
-} from "@/workflows/brief";
+import { type BriefWorkflowInput, briefWorkflow } from "@/workflows/brief";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
-  if (sqlClient) return sqlClient;
+  if (sqlClient) {
+    return sqlClient;
+  }
   const url =
     process.env.WORKFLOW_POSTGRES_URL ??
     process.env.DATABASE_URL ??
@@ -36,7 +35,9 @@ function unauthorized(): NextResponse {
 
 function authCheck(authToken: string | undefined | null): boolean {
   const expected = process.env.TARS_INTERNAL_SECRET;
-  if (!expected) return true; // dev convenience; deploy sets it
+  if (!expected) {
+    return true; // dev convenience; deploy sets it
+  }
   return authToken === expected;
 }
 
@@ -45,12 +46,14 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => ({}))) as Partial<
       BriefWorkflowInput & { authToken?: string }
     >;
-    if (!authCheck(body.authToken)) return unauthorized();
+    if (!authCheck(body.authToken)) {
+      return unauthorized();
+    }
 
-    if (!body.kind || !["morning", "evening", "adhoc"].includes(body.kind)) {
+    if (!(body.kind && ["morning", "evening", "adhoc"].includes(body.kind))) {
       return NextResponse.json(
         { error: "kind must be morning|evening|adhoc" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -73,7 +76,7 @@ export async function POST(request: Request) {
         error: err instanceof Error ? err.message : "start failed",
         stack: err instanceof Error ? err.stack : undefined,
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -83,11 +86,11 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const limit = Math.max(
       1,
-      Math.min(Number(url.searchParams.get("limit") ?? "20"), 100),
+      Math.min(Number(url.searchParams.get("limit") ?? "20"), 100)
     );
     const kind = url.searchParams.get("kind");
     const sql = getSql();
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       select id, date, kind, status, summary, run_id, job_id, error_text,
              created_at, updated_at, completed_at
       from briefs
@@ -99,7 +102,7 @@ export async function GET(request: Request) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "list failed" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

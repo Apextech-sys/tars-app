@@ -6,10 +6,21 @@ const Schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(20),
   TARS_WORKER_CALLBACK_SECRET: z.string().min(16),
 
-  TARS_WORKER_ID: z.string().min(1).default(`worker-${hostname()}-${process.pid}`),
+  TARS_WORKER_ID: z
+    .string()
+    .min(1)
+    .default(`worker-${hostname()}-${process.pid}`),
   TARS_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
-  TARS_WORKER_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5_000),
-  TARS_WORKER_NOTIFY_DEBOUNCE_MS: z.coerce.number().int().positive().default(100),
+  TARS_WORKER_POLL_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5000),
+  TARS_WORKER_NOTIFY_DEBOUNCE_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(100),
   TARS_WORKER_HEARTBEAT_INTERVAL_MS: z.coerce
     .number()
     .int()

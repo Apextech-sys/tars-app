@@ -3,9 +3,9 @@
  * Tests the chat route logic, session management, and system prompt formatting.
  */
 
-import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // ──────────────────────────────────────────────────────────────
 // Unit: SOUL.md loading
@@ -15,7 +15,10 @@ describe("SOUL.md system prompt", () => {
   it("loads SOUL.md and includes TARS persona content", () => {
     let soulPrompt: string;
     try {
-      soulPrompt = readFileSync(join(process.cwd(), "lib/tars/SOUL.md"), "utf-8");
+      soulPrompt = readFileSync(
+        join(process.cwd(), "lib/tars/SOUL.md"),
+        "utf-8"
+      );
     } catch {
       soulPrompt = "fallback";
     }
@@ -45,7 +48,10 @@ describe("SOUL.md system prompt", () => {
     // Simulate what the route does
     let soulPrompt: string;
     try {
-      soulPrompt = readFileSync(join(process.cwd(), "lib/tars/SOUL.md"), "utf-8");
+      soulPrompt = readFileSync(
+        join(process.cwd(), "lib/tars/SOUL.md"),
+        "utf-8"
+      );
     } catch {
       soulPrompt = "You are TARS, a helpful AI assistant.";
     }
@@ -69,7 +75,11 @@ describe("AI SDK v5 data stream encoding", () => {
   });
 
   it("tool call uses code 9", () => {
-    const toolCall = { toolCallId: "tc_1", toolName: "Read", args: { file_path: "/etc/hostname" } };
+    const toolCall = {
+      toolCallId: "tc_1",
+      toolName: "Read",
+      args: { file_path: "/etc/hostname" },
+    };
     const line = `9:${JSON.stringify(toolCall)}\n`;
     const parsed = JSON.parse(line.substring(2, line.length - 1));
     expect(parsed.toolName).toBe("Read");
@@ -111,7 +121,10 @@ describe("Chat route handler (source validation)", () => {
 
   it("sessions route exports GET and DELETE handlers", () => {
     try {
-      const sessionsPath = join(process.cwd(), "app/api/chat/sessions/[id]/route.ts");
+      const sessionsPath = join(
+        process.cwd(),
+        "app/api/chat/sessions/[id]/route.ts"
+      );
       const content = readFileSync(sessionsPath, "utf-8");
       expect(content).toContain("export async function GET");
       expect(content).toContain("export async function DELETE");

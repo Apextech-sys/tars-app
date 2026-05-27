@@ -10,10 +10,10 @@ import {
   withStepLogging,
 } from "./step-handler";
 
-type TriggerResult = {
+interface TriggerResult {
   success: true;
   data: Record<string, unknown>;
-};
+}
 
 export type TriggerInput = StepInput & {
   triggerData: Record<string, unknown>;

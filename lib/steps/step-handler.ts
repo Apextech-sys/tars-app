@@ -12,25 +12,26 @@ import {
   logWorkflowCompleteDb,
 } from "../workflow-logging";
 
-export type StepContext = {
+export interface StepContext {
   executionId?: string;
   nodeId: string;
   nodeName: string;
   nodeType: string;
-};
+}
 
 /**
  * Base input type that all steps should extend
  * Adds optional _context for logging
  */
+// biome-ignore lint/style/useConsistentTypeDefinitions: must be a type alias so step input types extending it satisfy Record<string, unknown>-style constraints when cast from generic input
 export type StepInput = {
   _context?: StepContext;
 };
 
-type LogInfo = {
+interface LogInfo {
   logId: string;
   startTime: number;
-};
+}
 
 /**
  * Log the start of a step execution
@@ -148,9 +149,9 @@ export type StepContextWithWorkflow = StepContext & {
 /**
  * Extended input type for steps that may handle workflow completion
  */
-export type StepInputWithWorkflow = {
+export interface StepInputWithWorkflow {
   _context?: StepContextWithWorkflow;
-};
+}
 
 /**
  * Wrap step logic with logging

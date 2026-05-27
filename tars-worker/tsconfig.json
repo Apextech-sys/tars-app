@@ -17,6 +17,10 @@
     "rootDir": "..",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "../lib/db/worker-schema.ts", "../lib/tars/brief/schema.ts"],
+  "include": [
+    "src/**/*.ts",
+    "../lib/db/worker-schema.ts",
+    "../lib/tars/brief/schema.ts"
+  ],
   "exclude": ["node_modules", "dist", "test"]
 }

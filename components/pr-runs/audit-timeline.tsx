@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { JsonTree } from "./json-tree";
 import type { AuditLogRow } from "./types";
@@ -9,9 +9,13 @@ import type { AuditLogRow } from "./types";
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) {
+    return `${s}s ago`;
+  }
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s ago`;
+  if (m < 60) {
+    return `${m}m ${s % 60}s ago`;
+  }
   return `${Math.floor(m / 60)}h ${m % 60}m ago`;
 }
 
@@ -55,9 +59,15 @@ function statusBadgeClass(status: string): string {
 }
 
 function isDataFlat(data: unknown): boolean {
-  if (data === null || data === undefined) return true;
-  if (typeof data !== "object") return true;
-  if (Array.isArray(data)) return false;
+  if (data === null || data === undefined) {
+    return true;
+  }
+  if (typeof data !== "object") {
+    return true;
+  }
+  if (Array.isArray(data)) {
+    return false;
+  }
   const vals = Object.values(data as Record<string, unknown>);
   return vals.every((v) => typeof v !== "object" || v === null);
 }
@@ -67,11 +77,11 @@ function FlatDataTable({ data }: { data: Record<string, unknown> }) {
     <table className="w-full text-xs">
       <tbody>
         {Object.entries(data).map(([key, val]) => (
-          <tr key={key} className="border-b border-zinc-800 last:border-0">
-            <td className="py-1 pr-3 font-mono text-blue-300 align-top whitespace-nowrap w-1/3">
+          <tr className="border-zinc-800 border-b last:border-0" key={key}>
+            <td className="w-1/3 whitespace-nowrap py-1 pr-3 align-top font-mono text-blue-300">
               {key}
             </td>
-            <td className="py-1 font-mono text-zinc-300 break-all">
+            <td className="break-all py-1 font-mono text-zinc-300">
               {val === null ? (
                 <span className="text-zinc-600">null</span>
               ) : typeof val === "boolean" ? (
@@ -102,7 +112,7 @@ function AuditDataExpander({ data }: { data: unknown }) {
 
   if (isDataFlat(data)) {
     return (
-      <div className="rounded-md bg-zinc-950/60 border border-zinc-800 p-3">
+      <div className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
         <FlatDataTable data={obj} />
       </div>
     );
@@ -116,7 +126,7 @@ export function AuditTimeline({ rows }: { rows: AuditLogRow[] }) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground text-center py-8">
+      <p className="py-8 text-center text-muted-foreground text-sm">
         No audit log entries for this run.
       </p>
     );
@@ -129,46 +139,46 @@ export function AuditTimeline({ rows }: { rows: AuditLogRow[] }) {
         const isExpanded = expandedId === row.id;
 
         return (
-          <div key={row.id} className="flex gap-3">
+          <div className="flex gap-3" key={row.id}>
             {/* Left rail */}
             <div className="flex flex-col items-center">
               <div
+                aria-hidden="true"
                 className={cn(
-                  "size-3 rounded-full mt-1.5 shrink-0",
+                  "mt-1.5 size-3 shrink-0 rounded-full",
                   statusDotClass(row.status)
                 )}
-                aria-hidden="true"
               />
               {!isLast && (
                 <div
+                  aria-hidden="true"
                   className={cn(
-                    "w-px flex-1 mt-1 border-l-2 border-dashed min-h-[24px]",
+                    "mt-1 min-h-[24px] w-px flex-1 border-l-2 border-dashed",
                     statusRailClass(row.status)
                   )}
-                  aria-hidden="true"
                 />
               )}
             </div>
 
             {/* Content */}
-            <div className="flex-1 pb-4 min-w-0">
-              <div className="flex flex-wrap items-start gap-2 mb-1">
+            <div className="min-w-0 flex-1 pb-4">
+              <div className="mb-1 flex flex-wrap items-start gap-2">
                 <span className="font-semibold text-sm">{row.step}</span>
                 <span
                   className={cn(
-                    "text-xs px-2 py-0.5 rounded-full uppercase tracking-wide",
+                    "rounded-full px-2 py-0.5 text-xs uppercase tracking-wide",
                     statusBadgeClass(row.status)
                   )}
                 >
                   {row.status}
                 </span>
-                <span className="text-xs text-muted-foreground ml-auto shrink-0">
+                <span className="ml-auto shrink-0 text-muted-foreground text-xs">
                   {relativeTime(row.createdAt)}
                 </span>
               </div>
 
               {row.message && (
-                <p className="text-sm text-muted-foreground leading-relaxed mb-2">
+                <p className="mb-2 text-muted-foreground text-sm leading-relaxed">
                   {row.message}
                 </p>
               )}
@@ -176,12 +186,10 @@ export function AuditTimeline({ rows }: { rows: AuditLogRow[] }) {
               {row.data !== null && row.data !== undefined && (
                 <div className="mt-1">
                   <button
-                    type="button"
-                    className="text-xs text-primary hover:underline flex items-center gap-1 min-h-[28px]"
                     aria-expanded={isExpanded}
-                    onClick={() =>
-                      setExpandedId(isExpanded ? null : row.id)
-                    }
+                    className="flex min-h-[28px] items-center gap-1 text-primary text-xs hover:underline"
+                    onClick={() => setExpandedId(isExpanded ? null : row.id)}
+                    type="button"
                   >
                     {isExpanded ? (
                       <ChevronDown className="size-3" />

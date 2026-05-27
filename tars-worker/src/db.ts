@@ -1,7 +1,7 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import type { Config } from "./config.js";
 import * as schema from "../../lib/db/worker-schema.js";
+import type { Config } from "./config.js";
 
 const { Pool } = pg;
 
@@ -25,12 +25,16 @@ export function initDb(cfg: Config): {
 }
 
 export function getDb(): NodePgDatabase<typeof schema> {
-  if (!_db) throw new Error("db not initialised — call initDb first");
+  if (!_db) {
+    throw new Error("db not initialised — call initDb first");
+  }
   return _db;
 }
 
 export function getPool(): pg.Pool {
-  if (!_pool) throw new Error("pool not initialised — call initDb first");
+  if (!_pool) {
+    throw new Error("pool not initialised — call initDb first");
+  }
   return _pool;
 }
 
@@ -43,7 +47,7 @@ export async function closeDb(): Promise<void> {
 }
 
 export async function withTx<T>(
-  fn: (client: pg.PoolClient) => Promise<T>,
+  fn: (client: pg.PoolClient) => Promise<T>
 ): Promise<T> {
   const pool = getPool();
   const client = await pool.connect();

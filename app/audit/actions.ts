@@ -55,7 +55,7 @@ function buildWhere(filters: AuditFilters) {
 }
 
 export async function fetchAuditLogs(
-  filters: AuditFilters,
+  filters: AuditFilters
 ): Promise<AuditResult> {
   const limit = Math.min(filters.limit ?? 50, 200);
   const offset = filters.offset ?? 0;
@@ -123,7 +123,9 @@ export async function exportAuditCsv(filters: AuditFilters): Promise<string> {
     "id,run_id,workflow,step,status,owner,repo,pr_number,message,created_at";
 
   const escape = (v: unknown): string => {
-    if (v === null || v === undefined) return "";
+    if (v === null || v === undefined) {
+      return "";
+    }
     const s = String(v);
     if (s.includes(",") || s.includes('"') || s.includes("\n")) {
       return `"${s.replace(/"/g, '""')}"`;
@@ -145,7 +147,7 @@ export async function exportAuditCsv(filters: AuditFilters): Promise<string> {
       r.createdAt.toISOString(),
     ]
       .map(escape)
-      .join(","),
+      .join(",")
   );
 
   return [header, ...lines].join("\n");

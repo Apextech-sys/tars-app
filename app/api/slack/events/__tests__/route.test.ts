@@ -30,9 +30,10 @@ vi.mock("@/lib/tars/chat-runner", () => ({
 }));
 vi.mock("@/lib/tars/slack", async () => {
   // Re-export the real verifySlackSignature but stub postSlackMessage.
-  const actual = await vi.importActual<typeof import("@/lib/tars/slack")>(
-    "@/lib/tars/slack",
-  );
+  const actual =
+    await vi.importActual<typeof import("@/lib/tars/slack")>(
+      "@/lib/tars/slack"
+    );
   return {
     ...actual,
     postSlackMessage: postSlackMessageMock,
@@ -55,9 +56,7 @@ const BOT_TOKEN = "xoxb-test";
 
 function buildSignedRequest(body: object, opts: { stale?: boolean } = {}) {
   const rawBody = JSON.stringify(body);
-  const ts = String(
-    Math.floor(Date.now() / 1000) - (opts.stale ? 1000 : 0),
-  );
+  const ts = String(Math.floor(Date.now() / 1000) - (opts.stale ? 1000 : 0));
   const sig = `v0=${createHmac("sha256", SIGNING_SECRET)
     .update(`v0:${ts}:${rawBody}`)
     .digest("hex")}`;
@@ -128,8 +127,12 @@ describe("POST /api/slack/events", () => {
 
   it("routes app_mention through chat handler and posts response", async () => {
     getAppSettingMock.mockImplementation(async (k: string) => {
-      if (k === "slack_allowed_channels") return ["C123"];
-      if (k === "slack_bot_user_id") return "UBOT";
+      if (k === "slack_allowed_channels") {
+        return ["C123"];
+      }
+      if (k === "slack_bot_user_id") {
+        return "UBOT";
+      }
       return null;
     });
 
@@ -163,8 +166,12 @@ describe("POST /api/slack/events", () => {
 
   it("routes DM even without allowlist", async () => {
     getAppSettingMock.mockImplementation(async (k: string) => {
-      if (k === "slack_allowed_channels") return [];
-      if (k === "slack_bot_user_id") return "UBOT";
+      if (k === "slack_allowed_channels") {
+        return [];
+      }
+      if (k === "slack_bot_user_id") {
+        return "UBOT";
+      }
       return null;
     });
 
@@ -193,8 +200,12 @@ describe("POST /api/slack/events", () => {
 
   it("ignores mention in non-allowed channel", async () => {
     getAppSettingMock.mockImplementation(async (k: string) => {
-      if (k === "slack_allowed_channels") return ["C-allowed"];
-      if (k === "slack_bot_user_id") return "UBOT";
+      if (k === "slack_allowed_channels") {
+        return ["C-allowed"];
+      }
+      if (k === "slack_bot_user_id") {
+        return "UBOT";
+      }
       return null;
     });
 
@@ -221,8 +232,12 @@ describe("POST /api/slack/events", () => {
 
   it("ignores echoes from the bot itself", async () => {
     getAppSettingMock.mockImplementation(async (k: string) => {
-      if (k === "slack_allowed_channels") return ["C123"];
-      if (k === "slack_bot_user_id") return "UBOT";
+      if (k === "slack_allowed_channels") {
+        return ["C123"];
+      }
+      if (k === "slack_bot_user_id") {
+        return "UBOT";
+      }
       return null;
     });
 

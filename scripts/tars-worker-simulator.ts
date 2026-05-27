@@ -59,24 +59,22 @@ async function processJob(
   log(`processing job ${job.job_id} kind=${job.kind}`);
   const startedAt = Date.now();
   try {
-    await sql/* sql */`
+    await sql /* sql */`
       update tars_jobs set status='running', claimed_at=now() where job_id=${job.job_id}
     `;
     const result = await dispatchKind(job.kind, job.payload);
-    await sql/* sql */`
+    await sql /* sql */`
       update tars_jobs
       set status='completed', completed_at=now(), result=${sql.json(result as any)}
       where job_id=${job.job_id}
     `;
     // Resume the workflow hook
     await resumeHook(job.payload.hookToken, result);
-    log(
-      `done job ${job.job_id} (${job.kind}) in ${Date.now() - startedAt}ms`
-    );
+    log(`done job ${job.job_id} (${job.kind}) in ${Date.now() - startedAt}ms`);
   } catch (err) {
     const msg = (err as Error).message;
     log(`error job ${job.job_id} (${job.kind}): ${msg}`);
-    await sql/* sql */`
+    await sql /* sql */`
       update tars_jobs
       set status='error', completed_at=now(), error=${msg}
       where job_id=${job.job_id}
@@ -102,7 +100,7 @@ async function dispatchKind(
   // Real LLM dispatch lives in tars-worker M3. The simulator only proves
   // control flow — for "real" responses, set NO_LLM=0 AND ensure M3 runs.
   // We fall back to mocked responses if the LLM keys are missing.
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENAI_API_KEY) {
+  if (!(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY)) {
     vlog("no LLM keys — using mocked result");
     return mockedResult(kind, payload);
   }
@@ -146,16 +144,26 @@ async function callAnthropic(
       .filter((c) => c.type === "text")
       .map((c) => c.text)
       .join("\n");
-    const jsonMatch = text.match(/```json\s*([\s\S]+?)```/) ?? text.match(/\{[\s\S]+\}$/);
-    const rawJson = jsonMatch ? (Array.isArray(jsonMatch) ? jsonMatch[1] ?? jsonMatch[0] : jsonMatch) : text;
+    const jsonMatch =
+      text.match(/```json\s*([\s\S]+?)```/) ?? text.match(/\{[\s\S]+\}$/);
+    const rawJson = jsonMatch
+      ? Array.isArray(jsonMatch)
+        ? (jsonMatch[1] ?? jsonMatch[0])
+        : jsonMatch
+      : text;
     return JSON.parse(rawJson as string);
   } catch (err) {
-    vlog(`anthropic call failed: ${(err as Error).message} — falling back to mock`);
+    vlog(
+      `anthropic call failed: ${(err as Error).message} — falling back to mock`
+    );
     return mockedResult(kind, payload);
   }
 }
 
-function buildPrompt(kind: string, payload: Record<string, unknown>): string | null {
+function buildPrompt(
+  kind: string,
+  payload: Record<string, unknown>
+): string | null {
   switch (kind) {
     case "codex-review": {
       const diff = (payload.diff as string) ?? "";
@@ -186,7 +194,7 @@ function buildPrompt(kind: string, payload: Record<string, unknown>): string | n
     case "verify-in-context": {
       return [
         "Given these findings and blast-radius context, drop any that conflict with project intent.",
-        "Reply ONLY with JSON: { \"contextNotes\": \"...\", \"finalFindings\": [...], \"droppedFindings\": [{\"finding\": {...}, \"reason\": \"...\"}] }",
+        'Reply ONLY with JSON: { "contextNotes": "...", "finalFindings": [...], "droppedFindings": [{"finding": {...}, "reason": "..."}] }',
         "",
         JSON.stringify(payload),
       ].join("\n");
@@ -201,7 +209,8 @@ function mockedResult(kind: string, payload: Record<string, unknown>): unknown {
     case "codex-review": {
       // Try to produce ONE plausible finding so the workflow exercises every
       // downstream step. We use the first file from the PR.
-      const files = (payload.files as Array<{ filename: string }> | undefined) ?? [];
+      const files =
+        (payload.files as Array<{ filename: string }> | undefined) ?? [];
       const file = files[0]?.filename ?? "README.md";
       return {
         findings: [
@@ -274,18 +283,31 @@ function errorFallbackForKind(kind: string, _msg: string): unknown {
         rationale: "worker error",
       };
     case "verify-in-context":
-      return { contextNotes: "worker error", finalFindings: [], droppedFindings: [] };
+      return {
+        contextNotes: "worker error",
+        finalFindings: [],
+        droppedFindings: [],
+      };
     case "fix-propose":
-      return { patch: "", rationale: "worker error", commitMessage: "", filesTouched: [] };
+      return {
+        patch: "",
+        rationale: "worker error",
+        commitMessage: "",
+        filesTouched: [],
+      };
     case "fix-validate":
-      return { approved: false, rationale: "worker error", hardBlockers: ["worker error"] };
+      return {
+        approved: false,
+        rationale: "worker error",
+        hardBlockers: ["worker error"],
+      };
     default:
       return {};
   }
 }
 
 async function drainPending(sql: ReturnType<typeof postgres>): Promise<void> {
-  const pending = (await sql/* sql */`
+  const pending = (await sql /* sql */`
     select job_id, kind, payload, status from tars_jobs where status='pending' order by created_at asc limit 50
   `) as unknown as JobRow[];
   for (const j of pending) {
@@ -297,7 +319,7 @@ async function drainPending(sql: ReturnType<typeof postgres>): Promise<void> {
 async function main() {
   const sql = postgres(PG_URL, { max: 4, idle_timeout: 0, prepare: false });
   // Ensure tars_jobs exists
-  await sql/* sql */`
+  await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
       kind              text not null,
@@ -317,7 +339,7 @@ async function main() {
   await sql.listen("tars_jobs_new", async (payload) => {
     const jobId = (payload ?? "").trim();
     vlog(`notify tars_jobs_new ${jobId}`);
-    const rows = (await sql/* sql */`
+    const rows = (await sql /* sql */`
       select job_id, kind, payload, status from tars_jobs where job_id=${jobId} and status='pending' limit 1
     `) as unknown as JobRow[];
     if (rows.length > 0) {

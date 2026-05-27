@@ -47,20 +47,20 @@ export async function dispatchJob(
   "use step";
   const crypto = await import("node:crypto");
   const sql = await makeSql();
-  let jobId = crypto.randomUUID();
+  const jobId = crypto.randomUUID();
   try {
     // Resolve idempotency BEFORE INSERT — the existing unique index on
     // idempotency_key is a partial index (WHERE idempotency_key IS NOT NULL),
     // which postgres can't use as an ON CONFLICT target.
     if (opts.idempotencyKey) {
-      const existing = await sql/* sql */`
+      const existing = await sql /* sql */`
         select id from tars_jobs where idempotency_key=${opts.idempotencyKey} limit 1
       `;
       if (existing.length > 0) {
         return { jobId: (existing[0] as { id: string }).id };
       }
     }
-    await sql/* sql */`
+    await sql /* sql */`
       insert into tars_jobs (id, kind, payload, idempotency_key, callback_url, max_attempts)
       values (
         ${jobId},
@@ -87,12 +87,12 @@ export async function waitForJob(
 ): Promise<JobResultRow> {
   "use step";
   const timeoutMs = opts.timeoutMs ?? 8 * 60_000;
-  const pollIntervalMs = opts.pollIntervalMs ?? 2_000;
+  const pollIntervalMs = opts.pollIntervalMs ?? 2000;
   const started = Date.now();
   const sql = await makeSql();
   try {
     while (Date.now() - started < timeoutMs) {
-      const rows = await sql/* sql */`
+      const rows = await sql /* sql */`
         select id, kind, status, result, error_text, attempts, completed_at
         from tars_jobs where id=${jobId} limit 1
       `;
@@ -106,7 +106,11 @@ export async function waitForJob(
           attempts: number;
           completed_at: Date | string | null;
         };
-        if (row.status === "done" || row.status === "failed" || row.status === "cancelled") {
+        if (
+          row.status === "done" ||
+          row.status === "failed" ||
+          row.status === "cancelled"
+        ) {
           return {
             id: row.id,
             kind: row.kind,
@@ -123,7 +127,9 @@ export async function waitForJob(
       }
       await new Promise((r) => setTimeout(r, pollIntervalMs));
     }
-    throw new Error(`waitForJob: timeout after ${timeoutMs}ms for job ${jobId}`);
+    throw new Error(
+      `waitForJob: timeout after ${timeoutMs}ms for job ${jobId}`
+    );
   } finally {
     await sql.end({ timeout: 5 }).catch(() => {});
   }
@@ -142,11 +148,13 @@ export async function pollJobOnce(jobId: string): Promise<JobResultRow | null> {
   "use step";
   const sql = await makeSql();
   try {
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       select id, kind, status, result, error_text, attempts, completed_at
       from tars_jobs where id=${jobId} limit 1
     `;
-    if (rows.length === 0) return null;
+    if (rows.length === 0) {
+      return null;
+    }
     const row = rows[0] as {
       id: string;
       kind: string;
@@ -156,7 +164,11 @@ export async function pollJobOnce(jobId: string): Promise<JobResultRow | null> {
       attempts: number;
       completed_at: Date | string | null;
     };
-    if (row.status !== "done" && row.status !== "failed" && row.status !== "cancelled") {
+    if (
+      row.status !== "done" &&
+      row.status !== "failed" &&
+      row.status !== "cancelled"
+    ) {
       return null;
     }
     return {

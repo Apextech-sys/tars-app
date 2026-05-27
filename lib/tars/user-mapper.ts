@@ -15,12 +15,14 @@ export async function mapSlackUserToTars(slackUserId: string): Promise<string> {
   const existing = await db.query.users.findFirst({
     where: eq(users.slackUserId, slackUserId),
   });
-  if (existing) return existing.id;
+  if (existing) {
+    return existing.id;
+  }
 
   const tarsUserId = `slack:${slackUserId}`;
   await migrationClient`
     INSERT INTO users (id, name, email, email_verified, is_anonymous, created_at, updated_at, slack_user_id)
-    VALUES (${tarsUserId}, ${"Slack " + slackUserId}, NULL, false, true, now(), now(), ${slackUserId})
+    VALUES (${tarsUserId}, ${`Slack ${slackUserId}`}, NULL, false, true, now(), now(), ${slackUserId})
     ON CONFLICT (id) DO UPDATE SET slack_user_id = EXCLUDED.slack_user_id
   `;
   return tarsUserId;
@@ -28,19 +30,21 @@ export async function mapSlackUserToTars(slackUserId: string): Promise<string> {
 
 export async function mapLinearUserToTars(
   linearUserId: string,
-  displayName?: string,
+  displayName?: string
 ): Promise<string> {
   const existing = await db.query.users.findFirst({
     where: eq(users.linearUserId, linearUserId),
   });
-  if (existing) return existing.id;
+  if (existing) {
+    return existing.id;
+  }
 
   const tarsUserId = `linear:${linearUserId}`;
   await migrationClient`
     INSERT INTO users (id, name, email, email_verified, is_anonymous, created_at, updated_at, linear_user_id)
     VALUES (
       ${tarsUserId},
-      ${displayName ?? "Linear " + linearUserId},
+      ${displayName ?? `Linear ${linearUserId}`},
       NULL,
       false,
       true,

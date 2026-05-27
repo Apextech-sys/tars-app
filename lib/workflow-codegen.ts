@@ -10,17 +10,17 @@ import {
 } from "./workflow-codegen-shared";
 import type { WorkflowEdge, WorkflowNode } from "./workflow-store";
 
-type CodeGenOptions = {
+interface CodeGenOptions {
   functionName?: string;
   parameters?: Array<{ name: string; type: string }>;
   returnType?: string;
-};
+}
 
-type GeneratedCode = {
+interface GeneratedCode {
   code: string;
   functionName: string;
   imports: string[];
-};
+}
 
 // Local constants not shared
 const CONST_ASSIGNMENT_PATTERN = /^(\s*)(const\s+\w+\s*=\s*)(.*)$/;
@@ -112,7 +112,7 @@ export function generateWorkflowCode(
     const nodeId = withoutAt.substring(0, colonIndex);
     const rest = withoutAt.substring(colonIndex + 1);
     const dotIndex = rest.indexOf(".");
-    const fieldPath = dotIndex !== -1 ? rest.substring(dotIndex + 1) : "";
+    const fieldPath = dotIndex === -1 ? "" : rest.substring(dotIndex + 1);
 
     const varName = nodeIdToVarName.get(nodeId);
     if (!varName) {
@@ -161,7 +161,7 @@ export function generateWorkflowCode(
     const nodeId = withoutAt.substring(0, colonIndex);
     const rest = withoutAt.substring(colonIndex + 1);
     const dotIndex = rest.indexOf(".");
-    const fieldPath = dotIndex !== -1 ? rest.substring(dotIndex + 1) : "";
+    const fieldPath = dotIndex === -1 ? "" : rest.substring(dotIndex + 1);
 
     const varName = nodeIdToVarName.get(nodeId);
     if (!varName) {

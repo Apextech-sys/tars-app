@@ -19,12 +19,11 @@
  * scripts/tars-worker-simulator.ts must be running to process tars_jobs.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const RUN = process.env.RUN_INTEGRATION === "1";
-const TARS_APP_URL =
-  process.env.TARS_APP_URL ?? "http://localhost:3001";
-const POLL_INTERVAL_MS = 5_000;
+const TARS_APP_URL = process.env.TARS_APP_URL ?? "http://localhost:3001";
+const POLL_INTERVAL_MS = 5000;
 const MAX_WAIT_MS = 12 * 60_000; // 12 minutes
 
 const OWNER = process.env.TARS_TEST_OWNER ?? "Apextech-sys";
@@ -74,54 +73,51 @@ async function pollStatus(): Promise<StatusRow> {
   }
 }
 
-describe.skipIf(!RUN)(
-  "PR review workflow — live PR (tars-app HTTP)",
-  () => {
-    it(
-      `runs end-to-end against ${OWNER}/${REPO}#${PR_NUMBER} and reaches terminal status`,
-      { timeout: MAX_WAIT_MS + 60_000 },
-      async () => {
-        const startResp = await fetch(`${TARS_APP_URL}/api/tars/pr-review`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            owner: OWNER,
-            repo: REPO,
-            prNumber: PR_NUMBER,
-            authToken: process.env.TARS_INTERNAL_SECRET ?? undefined,
-            dryRun: DRY_RUN,
-            policyOverride: {
-              autoFix: false,
-              autoReview: true,
-              issueTracker: "none",
-              slackNotify: false,
-              protectMode: false,
-              severityThreshold: "minor",
-            },
-          }),
-        });
-        const startBody = await startResp.json().catch(() => ({}));
-        expect(startResp.ok, `start failed: ${JSON.stringify(startBody)}`).toBe(true);
-
-        const final = await pollStatus();
-
-        expect([
-          "completed",
-          "skipped-disagreement",
-          "skipped-no-findings",
-          "disagreed",
-        ]).toContain(final.status);
-
-        if (final.status === "completed" && !DRY_RUN) {
-          expect(final.review_comment_url).toBeTruthy();
-          expect(final.review_comment_url).toMatch(
-            new RegExp(
-              `^https://github\\.com/${OWNER}/${REPO}/pull/${PR_NUMBER}`,
-              "i"
-            )
-          );
-        }
-      }
+describe.skipIf(!RUN)("PR review workflow — live PR (tars-app HTTP)", () => {
+  it(`runs end-to-end against ${OWNER}/${REPO}#${PR_NUMBER} and reaches terminal status`, {
+    timeout: MAX_WAIT_MS + 60_000,
+  }, async () => {
+    const startResp = await fetch(`${TARS_APP_URL}/api/tars/pr-review`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        owner: OWNER,
+        repo: REPO,
+        prNumber: PR_NUMBER,
+        authToken: process.env.TARS_INTERNAL_SECRET ?? undefined,
+        dryRun: DRY_RUN,
+        policyOverride: {
+          autoFix: false,
+          autoReview: true,
+          issueTracker: "none",
+          slackNotify: false,
+          protectMode: false,
+          severityThreshold: "minor",
+        },
+      }),
+    });
+    const startBody = await startResp.json().catch(() => ({}));
+    expect(startResp.ok, `start failed: ${JSON.stringify(startBody)}`).toBe(
+      true
     );
-  }
-);
+
+    const final = await pollStatus();
+
+    expect([
+      "completed",
+      "skipped-disagreement",
+      "skipped-no-findings",
+      "disagreed",
+    ]).toContain(final.status);
+
+    if (final.status === "completed" && !DRY_RUN) {
+      expect(final.review_comment_url).toBeTruthy();
+      expect(final.review_comment_url).toMatch(
+        new RegExp(
+          `^https://github\\.com/${OWNER}/${REPO}/pull/${PR_NUMBER}`,
+          "i"
+        )
+      );
+    }
+  });
+});

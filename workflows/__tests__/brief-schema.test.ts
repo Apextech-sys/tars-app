@@ -7,12 +7,12 @@
  * from the validator in lib/tars/brief/schema.ts.
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   BriefComposeInputSchema,
+  type BriefOutput,
   BriefOutputSchema,
   renderBriefMarkdown,
-  type BriefOutput,
 } from "../../lib/tars/brief/schema";
 
 describe("BriefOutputSchema", () => {
@@ -53,8 +53,7 @@ describe("BriefOutputSchema", () => {
         {
           owner: "shaun",
           title: "Fill projects.yaml gaps for area42",
-          detail:
-            "Either populate the missing fields or mark them excluded.",
+          detail: "Either populate the missing fields or mark them excluded.",
           link: undefined,
         },
       ],
@@ -176,11 +175,14 @@ describe("renderBriefMarkdown", () => {
         },
       ],
       next_actions: [
-        { owner: "shaun", title: "Do thing", detail: "details", link: undefined },
+        {
+          owner: "shaun",
+          title: "Do thing",
+          detail: "details",
+          link: undefined,
+        },
       ],
-      questions: [
-        { question: "Q?", why: "because", reply_hint: undefined },
-      ],
+      questions: [{ question: "Q?", why: "because", reply_hint: undefined }],
     };
     const md = renderBriefMarkdown(out, {
       kind: "morning",
@@ -201,7 +203,7 @@ describe("renderBriefMarkdown", () => {
         next_actions: [],
         questions: [],
       },
-      { kind: "evening", date: "2026-05-26" },
+      { kind: "evening", date: "2026-05-26" }
     );
     expect(md).toMatch(/# TARS Evening Brief/);
   });

@@ -45,12 +45,12 @@ export const tarsJobs = pgTable(
   (table) => ({
     statusCreatedIdx: index("tars_jobs_status_created_idx").on(
       table.status,
-      table.createdAt,
+      table.createdAt
     ),
     idempotencyKeyIdx: uniqueIndex("tars_jobs_idempotency_key_uidx")
       .on(table.idempotencyKey)
       .where(sql`${table.idempotencyKey} IS NOT NULL`),
-  }),
+  })
 );
 
 export const workerHeartbeats = pgTable("worker_heartbeats", {

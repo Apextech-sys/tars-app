@@ -7,10 +7,10 @@ import {
   getIntegration as getPluginFromRegistry,
 } from "@/plugins";
 
-export type TestConnectionResult = {
+export interface TestConnectionResult {
   status: "success" | "error";
   message: string;
-};
+}
 
 export async function POST(
   request: Request,

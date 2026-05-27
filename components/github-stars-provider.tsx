@@ -4,10 +4,10 @@ import { createContext, type ReactNode, useContext } from "react";
 
 const GitHubStarsContext = createContext<number | null>(null);
 
-type GitHubStarsProviderProps = {
+interface GitHubStarsProviderProps {
   children: ReactNode;
   stars: number | null;
-};
+}
 
 export function GitHubStarsProvider({
   children,

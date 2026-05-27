@@ -1,14 +1,5 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   AlertCircle,
   AlertTriangle,
@@ -21,30 +12,34 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { NotificationPermissionBanner } from "@/components/tars/notification-permission-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useNotifications } from "@/hooks/use-notifications";
 import { cn } from "@/lib/utils";
 import {
-  type InboxItem,
   deferEscalation,
   fetchInboxItems,
+  type InboxItem,
   resolveEscalation,
   snoozeEscalation,
 } from "./actions";
-import { NotificationPermissionBanner } from "@/components/tars/notification-permission-banner";
-import { useNotifications } from "@/hooks/use-notifications";
 
 function severityBadge(severity: string) {
   const map: Record<
@@ -63,23 +58,34 @@ function severityBadge(severity: string) {
 }
 
 function itemKindIcon(kind: InboxItem["kind"]) {
-  if (kind === "escalation")
+  if (kind === "escalation") {
     return <AlertCircle className="size-4 text-orange-500" />;
-  if (kind === "workflow_stall")
+  }
+  if (kind === "workflow_stall") {
     return <Timer className="size-4 text-yellow-500" />;
-  if (kind === "worker_failure") return <Zap className="size-4 text-red-500" />;
-  if (kind === "pr_disagreement")
+  }
+  if (kind === "worker_failure") {
+    return <Zap className="size-4 text-red-500" />;
+  }
+  if (kind === "pr_disagreement") {
     return <Scale className="size-4 text-purple-500" />;
+  }
   return <AlertTriangle className="size-4 text-red-500" />;
 }
 
 function relativeTime(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) {
+    return "just now";
+  }
+  if (mins < 60) {
+    return `${mins}m ago`;
+  }
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
+  if (hrs < 24) {
+    return `${hrs}h ago`;
+  }
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
@@ -95,7 +101,9 @@ function InboxCard({
   const [isPending, startTransition] = useTransition();
 
   const handleResolve = () => {
-    if (item.kind !== "escalation") return;
+    if (item.kind !== "escalation") {
+      return;
+    }
     startTransition(async () => {
       await resolveEscalation(item.id, resolveNote);
       setResolveOpen(false);
@@ -104,7 +112,9 @@ function InboxCard({
   };
 
   const handleSnooze = (hours: number) => {
-    if (item.kind !== "escalation") return;
+    if (item.kind !== "escalation") {
+      return;
+    }
     startTransition(async () => {
       await snoozeEscalation(item.id, hours);
       onAction();
@@ -112,7 +122,9 @@ function InboxCard({
   };
 
   const handleDefer = () => {
-    if (item.kind !== "escalation") return;
+    if (item.kind !== "escalation") {
+      return;
+    }
     startTransition(async () => {
       await deferEscalation(item.id);
       onAction();
@@ -120,44 +132,49 @@ function InboxCard({
   };
 
   const isEscalation = item.kind === "escalation";
-  const isDisagreement = item.kind === "pr_disagreement";
+  const _isDisagreement = item.kind === "pr_disagreement";
 
   // For pr_disagreement: navigate to run detail page instead of showing modal
   const handleInspect = () => {
-    if (item.kind !== "pr_disagreement") return;
+    if (item.kind !== "pr_disagreement") {
+      return;
+    }
     window.location.href = `/pr-runs/${encodeURIComponent(item.runId)}#disagreement`;
   };
 
   let title = "";
-  if (item.kind === "escalation") title = item.title;
-  else if (item.kind === "workflow_stall")
+  if (item.kind === "escalation") {
+    title = item.title;
+  } else if (item.kind === "workflow_stall") {
     title = `Stalled workflow: ${item.repo} #${item.prNumber}`;
-  else if (item.kind === "worker_failure")
+  } else if (item.kind === "worker_failure") {
     title = `Worker failure: ${item.jobKind}`;
-  else if (item.kind === "pr_disagreement")
+  } else if (item.kind === "pr_disagreement") {
     title = `Reviewer disagreement: ${item.repo} #${item.prNumber}`;
-  else title = `PR review failed: ${item.repo} #${item.prNumber}`;
+  } else {
+    title = `PR review failed: ${item.repo} #${item.prNumber}`;
+  }
 
   return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
+    <div className="space-y-3 rounded-lg border bg-card p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           {itemKindIcon(item.kind)}
-          <span className="font-medium text-sm truncate">{title}</span>
+          <span className="truncate font-medium text-sm">{title}</span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex shrink-0 items-center gap-1.5">
           {isEscalation &&
             severityBadge(
-              (item as Extract<InboxItem, { kind: "escalation" }>).severity,
+              (item as Extract<InboxItem, { kind: "escalation" }>).severity
             )}
-          <span className="text-xs text-muted-foreground">
+          <span className="text-muted-foreground text-xs">
             {relativeTime(item.createdAt)}
           </span>
         </div>
       </div>
 
       {item.kind === "escalation" && item.bodyMarkdown && (
-        <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+        <p className="whitespace-pre-wrap text-muted-foreground text-xs leading-relaxed">
           {item.bodyMarkdown.length > 300
             ? `${item.bodyMarkdown.slice(0, 300)}...`
             : item.bodyMarkdown}
@@ -165,20 +182,20 @@ function InboxCard({
       )}
 
       {item.kind === "worker_failure" && item.errorText && (
-        <p className="text-xs text-red-500 font-mono bg-muted rounded px-2 py-1 truncate">
+        <p className="truncate rounded bg-muted px-2 py-1 font-mono text-red-500 text-xs">
           {item.errorText}
         </p>
       )}
 
       {item.kind === "pr_failure" && (
-        <p className="text-xs text-red-500 font-mono bg-muted rounded px-2 py-1 truncate">
+        <p className="truncate rounded bg-muted px-2 py-1 font-mono text-red-500 text-xs">
           {item.error}
         </p>
       )}
 
       {item.kind === "pr_disagreement" && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground leading-relaxed">
+          <p className="text-muted-foreground text-xs leading-relaxed">
             Codex and Claude produced divergent findings on this PR. No public
             comment was posted. Compare both raw outputs to decide.
           </p>
@@ -191,7 +208,8 @@ function InboxCard({
             </span>
             {item.overlapRatio !== null && (
               <span className="rounded bg-muted px-2 py-1">
-                Overlap: <strong>{(item.overlapRatio * 100).toFixed(0)}%</strong>
+                Overlap:{" "}
+                <strong>{(item.overlapRatio * 100).toFixed(0)}%</strong>
               </span>
             )}
             {item.prSha && (
@@ -201,11 +219,11 @@ function InboxCard({
             )}
           </div>
           <Button
+            className="min-h-[44px]"
+            disabled={isPending}
+            onClick={handleInspect}
             size="sm"
             variant="outline"
-            disabled={isPending}
-            className="min-h-[44px]"
-            onClick={handleInspect}
           >
             <Scale className="size-3.5" />
             Compare reviewers
@@ -216,13 +234,13 @@ function InboxCard({
       {/* Disagreement modal replaced: "Compare reviewers" now navigates to /pr-runs/[runId]#disagreement */}
 
       {isEscalation && (
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex flex-wrap gap-2">
           <Button
+            className="min-h-[44px]"
+            disabled={isPending}
+            onClick={() => setResolveOpen(true)}
             size="sm"
             variant="outline"
-            disabled={isPending}
-            className="min-h-[44px]"
-            onClick={() => setResolveOpen(true)}
           >
             <CheckCircle2 className="size-3.5" />
             Resolve
@@ -231,10 +249,10 @@ function InboxCard({
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  size="sm"
-                  variant="ghost"
                   disabled={isPending}
                   onClick={() => handleSnooze(1)}
+                  size="sm"
+                  variant="ghost"
                 >
                   <Clock className="size-3.5" />
                   Snooze 1h
@@ -244,20 +262,20 @@ function InboxCard({
             </Tooltip>
           </TooltipProvider>
           <Button
-            size="sm"
-            variant="ghost"
             disabled={isPending}
             onClick={() => handleSnooze(24)}
+            size="sm"
+            variant="ghost"
           >
             <Clock className="size-3.5" />
             Snooze 24h
           </Button>
           <Button
+            className="min-h-[44px]"
+            disabled={isPending}
+            onClick={handleDefer}
             size="sm"
             variant="ghost"
-            disabled={isPending}
-            className="min-h-[44px]"
-            onClick={handleDefer}
           >
             <X className="size-3.5" />
             Defer
@@ -265,7 +283,7 @@ function InboxCard({
         </div>
       )}
 
-      <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
+      <Dialog onOpenChange={setResolveOpen} open={resolveOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Resolve escalation</DialogTitle>
@@ -274,13 +292,13 @@ function InboxCard({
             </DialogDescription>
           </DialogHeader>
           <textarea
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm min-h-[80px] focus:outline-none focus:ring-2 focus:ring-ring"
+            className="min-h-[80px] w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            onChange={(e) => setResolveNote(e.target.value)}
             placeholder="Resolution note (optional)"
             value={resolveNote}
-            onChange={(e) => setResolveNote(e.target.value)}
           />
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResolveOpen(false)}>
+            <Button onClick={() => setResolveOpen(false)} variant="outline">
               Cancel
             </Button>
             <Button disabled={isPending} onClick={handleResolve}>
@@ -357,36 +375,36 @@ export default function InboxPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 py-6 md:py-8 space-y-5 md:space-y-6">
+      <div className="mx-auto max-w-4xl space-y-5 px-4 py-6 md:space-y-6 md:py-8">
         <NotificationPermissionBanner onRequest={promptPermission} />
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Inbox</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              {items.length} item{items.length !== 1 ? "s" : ""} needing
+            <h1 className="font-bold text-2xl">Inbox</h1>
+            <p className="mt-1 text-muted-foreground text-sm">
+              {items.length} item{items.length === 1 ? "" : "s"} needing
               attention
             </p>
           </div>
           <Button
-            variant="outline"
-            size="sm"
-            onClick={refresh}
-            disabled={isPending || loading}
             className="min-h-[44px]"
+            disabled={isPending || loading}
+            onClick={refresh}
+            size="sm"
+            variant="outline"
           >
             <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
             Refresh
           </Button>
         </div>
 
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="flex-wrap h-auto gap-1">
+        <Tabs onValueChange={setTab} value={tab}>
+          <TabsList className="h-auto flex-wrap gap-1">
             <TabsTrigger value="all">
               All
               {items.length > 0 && (
                 <Badge
-                  variant="secondary"
                   className="ml-1.5 h-5 px-1.5 text-xs"
+                  variant="secondary"
                 >
                   {items.length}
                 </Badge>
@@ -396,8 +414,8 @@ export default function InboxPage() {
               Workflow stalls
               {stalls.length > 0 && (
                 <Badge
-                  variant="secondary"
                   className="ml-1.5 h-5 px-1.5 text-xs"
+                  variant="secondary"
                 >
                   {stalls.length}
                 </Badge>
@@ -407,8 +425,8 @@ export default function InboxPage() {
               Worker failures
               {workerFails.length > 0 && (
                 <Badge
-                  variant="secondary"
                   className="ml-1.5 h-5 px-1.5 text-xs"
+                  variant="secondary"
                 >
                   {workerFails.length}
                 </Badge>
@@ -418,8 +436,8 @@ export default function InboxPage() {
               Escalations
               {escalationItems.length > 0 && (
                 <Badge
-                  variant="secondary"
                   className="ml-1.5 h-5 px-1.5 text-xs"
+                  variant="secondary"
                 >
                   {escalationItems.length}
                 </Badge>
@@ -429,8 +447,8 @@ export default function InboxPage() {
               Disagreements
               {disagreements.length > 0 && (
                 <Badge
-                  variant="secondary"
                   className="ml-1.5 h-5 px-1.5 text-xs"
+                  variant="secondary"
                 >
                   {disagreements.length}
                 </Badge>
@@ -438,25 +456,27 @@ export default function InboxPage() {
             </TabsTrigger>
           </TabsList>
 
-          {["all", "stalls", "workers", "escalations", "disagreements"].map((t) => (
-            <TabsContent key={t} value={t} className="space-y-3 mt-4">
-              {loading ? (
-                <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-                  <RefreshCw className="size-4 animate-spin" />
-                  Loading...
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-                  <Info className="size-8" />
-                  <p className="text-sm">No items here - all clear.</p>
-                </div>
-              ) : (
-                filtered.map((item) => (
-                  <InboxCard key={item.id} item={item} onAction={refresh} />
-                ))
-              )}
-            </TabsContent>
-          ))}
+          {["all", "stalls", "workers", "escalations", "disagreements"].map(
+            (t) => (
+              <TabsContent className="mt-4 space-y-3" key={t} value={t}>
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                    <RefreshCw className="size-4 animate-spin" />
+                    Loading...
+                  </div>
+                ) : filtered.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                    <Info className="size-8" />
+                    <p className="text-sm">No items here - all clear.</p>
+                  </div>
+                ) : (
+                  filtered.map((item) => (
+                    <InboxCard item={item} key={item.id} onAction={refresh} />
+                  ))
+                )}
+              </TabsContent>
+            )
+          )}
         </Tabs>
       </div>
     </div>

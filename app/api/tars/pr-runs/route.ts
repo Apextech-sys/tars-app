@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, gte, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { auditLog, prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
+import { prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
 
 const querySchema = z.object({
   status: z.string().optional(),
@@ -25,9 +25,7 @@ export async function GET(req: NextRequest) {
       if (statuses.length === 1) {
         conditions.push(eq(prReviewRuns.status, statuses[0]));
       } else {
-        conditions.push(
-          or(...statuses.map((s) => eq(prReviewRuns.status, s)))
-        );
+        conditions.push(or(...statuses.map((s) => eq(prReviewRuns.status, s))));
       }
     }
 
@@ -35,8 +33,12 @@ export async function GET(req: NextRequest) {
       const [owner, repo] = params.repo.includes("/")
         ? params.repo.split("/", 2)
         : [undefined, params.repo];
-      if (owner) conditions.push(eq(prReviewRuns.owner, owner));
-      if (repo) conditions.push(eq(prReviewRuns.repo, repo));
+      if (owner) {
+        conditions.push(eq(prReviewRuns.owner, owner));
+      }
+      if (repo) {
+        conditions.push(eq(prReviewRuns.repo, repo));
+      }
     }
 
     if (params.from) {
@@ -94,6 +96,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("GET /api/tars/pr-runs error", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

@@ -4,25 +4,25 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { accounts } from "@/lib/db/schema";
 
-export type VercelTeam = {
+export interface VercelTeam {
   id: string;
   name: string;
   slug: string;
   avatar?: string;
   isPersonal: boolean;
-};
+}
 
-type VercelTeamApiResponse = {
+interface VercelTeamApiResponse {
   id: string;
   name: string;
   slug: string;
   avatar?: string;
   limited?: boolean;
-};
+}
 
-type VercelUserResponse = {
+interface VercelUserResponse {
   defaultTeamId: string | null;
-};
+}
 
 /**
  * Fetch user's default team ID from Vercel API
@@ -32,7 +32,9 @@ async function fetchDefaultTeamId(accessToken: string): Promise<string | null> {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    return null;
+  }
 
   const data = (await response.json()) as { user?: VercelUserResponse };
   return data.user?.defaultTeamId ?? null;
@@ -46,13 +48,17 @@ async function fetchTeams(accessToken: string): Promise<VercelTeam[]> {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
-  if (!response.ok) return [];
+  if (!response.ok) {
+    return [];
+  }
 
   const data = (await response.json()) as { teams?: VercelTeamApiResponse[] };
   const teams: VercelTeam[] = [];
 
   for (const team of data.teams || []) {
-    if (team.limited) continue;
+    if (team.limited) {
+      continue;
+    }
     teams.push({
       id: team.id,
       name: team.name,
@@ -106,8 +112,12 @@ export async function GET(request: Request) {
 
     // Sort: personal/default team first, then alphabetically by name
     const sortedTeams = teamsWithPersonal.sort((a, b) => {
-      if (a.isPersonal) return -1;
-      if (b.isPersonal) return 1;
+      if (a.isPersonal) {
+        return -1;
+      }
+      if (b.isPersonal) {
+        return 1;
+      }
       return a.name.localeCompare(b.name);
     });
 

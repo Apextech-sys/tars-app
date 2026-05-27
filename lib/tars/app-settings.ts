@@ -13,7 +13,7 @@ export type AppSettingKey =
   | "notifications";
 
 export async function getAppSetting<T = unknown>(
-  key: AppSettingKey,
+  key: AppSettingKey
 ): Promise<T | null> {
   const row = await db.query.appSettings.findFirst({
     where: eq(appSettings.key, key),
@@ -23,7 +23,7 @@ export async function getAppSetting<T = unknown>(
 
 export async function setAppSetting<T>(
   key: AppSettingKey,
-  value: T,
+  value: T
 ): Promise<void> {
   await db
     .insert(appSettings)

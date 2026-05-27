@@ -5,7 +5,8 @@
  */
 
 const BLAST_SCRIPT =
-  process.env.TARS_BLAST_SCRIPT ?? "/home/shaun/.tars-state/tars_graph/blast.py";
+  process.env.TARS_BLAST_SCRIPT ??
+  "/home/shaun/.tars-state/tars_graph/blast.py";
 const PYTHON_BIN = process.env.TARS_PYTHON_BIN ?? "/usr/bin/python3";
 const BLAST_TIMEOUT_MS = 15_000;
 
@@ -43,7 +44,9 @@ export async function getBlastRadius(
       [BLAST_SCRIPT, "--repo", repo, "--file", filePath],
       { timeout: BLAST_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }
     );
-    const parsed = JSON.parse(stdout.trim() || "{}") as Partial<BlastRadiusResult>;
+    const parsed = JSON.parse(
+      stdout.trim() || "{}"
+    ) as Partial<BlastRadiusResult>;
     return {
       available: true,
       file: filePath,

@@ -17,7 +17,7 @@ describe("verifyLinearSignature", () => {
         webhookSecret: SECRET,
         signatureHeader: sig,
         rawBody: body,
-      }),
+      })
     ).toBe(true);
   });
 
@@ -28,7 +28,7 @@ describe("verifyLinearSignature", () => {
         webhookSecret: SECRET,
         signatureHeader: "deadbeef",
         rawBody: body,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -42,7 +42,7 @@ describe("verifyLinearSignature", () => {
         webhookSecret: SECRET,
         signatureHeader: sig,
         rawBody: body,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -52,7 +52,7 @@ describe("verifyLinearSignature", () => {
         webhookSecret: SECRET,
         signatureHeader: null,
         rawBody: "{}",
-      }),
+      })
     ).toBe(false);
   });
 
@@ -65,7 +65,7 @@ describe("verifyLinearSignature", () => {
         webhookSecret: SECRET,
         signatureHeader: sig,
         rawBody: tampered,
-      }),
+      })
     ).toBe(false);
   });
 });

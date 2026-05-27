@@ -26,13 +26,21 @@ export function verifySlackSignature(args: VerifySlackArgs): boolean {
     rawBody,
     maxAgeSeconds = 300,
   } = args;
-  if (!signatureHeader || !timestampHeader) return false;
-  if (!signingSecret) return false;
+  if (!(signatureHeader && timestampHeader)) {
+    return false;
+  }
+  if (!signingSecret) {
+    return false;
+  }
 
   const nowSec = Math.floor((args.now ? args.now() : Date.now()) / 1000);
   const ts = Number.parseInt(timestampHeader, 10);
-  if (!Number.isFinite(ts)) return false;
-  if (Math.abs(nowSec - ts) > maxAgeSeconds) return false;
+  if (!Number.isFinite(ts)) {
+    return false;
+  }
+  if (Math.abs(nowSec - ts) > maxAgeSeconds) {
+    return false;
+  }
 
   const baseString = `v0:${timestampHeader}:${rawBody}`;
   const expected = `v0=${createHmac("sha256", signingSecret)
@@ -41,7 +49,9 @@ export function verifySlackSignature(args: VerifySlackArgs): boolean {
 
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(signatureHeader, "utf8");
-  if (a.length !== b.length) return false;
+  if (a.length !== b.length) {
+    return false;
+  }
   try {
     return timingSafeEqual(a, b);
   } catch {
@@ -66,7 +76,7 @@ export interface SlackPostResult {
 }
 
 export async function postSlackMessage(
-  args: PostSlackArgs,
+  args: PostSlackArgs
 ): Promise<SlackPostResult> {
   const f = args.fetchImpl ?? fetch;
   const res = await f("https://slack.com/api/chat.postMessage", {
@@ -96,13 +106,15 @@ export async function getSlackChannelInfo(args: {
       `https://slack.com/api/conversations.info?channel=${encodeURIComponent(args.channelId)}`,
       {
         headers: { Authorization: `Bearer ${args.botToken}` },
-      },
+      }
     );
     const json = (await res.json()) as {
       ok: boolean;
       channel?: { id: string; name?: string; is_im?: boolean };
     };
-    if (!json.ok || !json.channel) return null;
+    if (!(json.ok && json.channel)) {
+      return null;
+    }
     return {
       id: json.channel.id,
       name: json.channel.name,

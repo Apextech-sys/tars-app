@@ -39,9 +39,9 @@ import {
 } from "@/lib/workflow-store";
 import { findActionById } from "@/plugins";
 
-type WorkflowPageProps = {
+interface WorkflowPageProps {
   params: Promise<{ workflowId: string }>;
-};
+}
 
 // System actions that need integrations (not in plugin registry)
 const SYSTEM_ACTION_INTEGRATIONS: Record<string, IntegrationType> = {
@@ -60,10 +60,10 @@ function getRequiredIntegrationType(
 }
 
 // Helper to check and fix a single node's integration
-type IntegrationFixResult = {
+interface IntegrationFixResult {
   nodeId: string;
   newIntegrationId: string | undefined;
-};
+}
 
 function checkNodeIntegration(
   node: WorkflowNode,

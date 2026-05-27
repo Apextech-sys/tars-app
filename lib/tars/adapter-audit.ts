@@ -22,7 +22,7 @@ export interface AdapterAuditEntry {
 }
 
 export async function writeAdapterAudit(
-  entry: AdapterAuditEntry,
+  entry: AdapterAuditEntry
 ): Promise<void> {
   try {
     const fs = await import("node:fs/promises");
@@ -34,7 +34,7 @@ export async function writeAdapterAudit(
     if (process.env.TARS_DEBUG_AUDIT) {
       console.warn(
         "[adapter-audit] file write failed:",
-        (err as Error).message,
+        (err as Error).message
       );
     }
   }
@@ -51,10 +51,7 @@ export async function writeAdapterAudit(
     });
   } catch (err) {
     if (process.env.TARS_DEBUG_AUDIT) {
-      console.warn(
-        "[adapter-audit] db write failed:",
-        (err as Error).message,
-      );
+      console.warn("[adapter-audit] db write failed:", (err as Error).message);
     }
   }
 }

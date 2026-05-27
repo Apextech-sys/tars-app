@@ -20,7 +20,7 @@ export interface CallbackBody {
 
 export function signCallback(
   body: CallbackBody,
-  secret: string,
+  secret: string
 ): { payload: string; signature: string } {
   const payload = JSON.stringify(body);
   const signature = createHmac("sha256", secret).update(payload).digest("hex");
@@ -30,10 +30,13 @@ export function signCallback(
 export async function postCallback(
   cfg: Config,
   job: JobRow,
-  body: CallbackBody,
+  body: CallbackBody
 ): Promise<boolean> {
   const url = job.callbackUrl ?? callbackUrl(cfg);
-  const { payload, signature } = signCallback(body, cfg.TARS_WORKER_CALLBACK_SECRET);
+  const { payload, signature } = signCallback(
+    body,
+    cfg.TARS_WORKER_CALLBACK_SECRET
+  );
   const headers: Record<string, string> = {
     "content-type": "application/json",
     "x-tars-worker-id": cfg.TARS_WORKER_ID,
@@ -56,14 +59,14 @@ export async function postCallback(
       if (res.status >= 200 && res.status < 300) {
         logger().info(
           { jobId: job.id, attempt, status: res.status },
-          "callback delivered",
+          "callback delivered"
         );
         return true;
       }
       lastErr = new Error(`callback ${res.status}: ${await res.text()}`);
       logger().warn(
         { jobId: job.id, attempt, status: res.status },
-        "callback non-2xx",
+        "callback non-2xx"
       );
     } catch (err) {
       lastErr = err;
@@ -74,9 +77,6 @@ export async function postCallback(
       await sleep(backoff);
     }
   }
-  logger().error(
-    { jobId: job.id, lastErr },
-    "callback failed after retries",
-  );
+  logger().error({ jobId: job.id, lastErr }, "callback failed after retries");
   return false;
 }

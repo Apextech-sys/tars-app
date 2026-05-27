@@ -39,7 +39,11 @@ export const NextActionSchema = z.object({
   title: z.string().min(1).max(240),
   detail: z.string().min(1).max(2000),
   /** Best-effort link to the underlying thing (PR, issue, doc). */
-  link: z.string().url().nullish().transform((v) => v ?? undefined),
+  link: z
+    .string()
+    .url()
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 export type NextAction = z.infer<typeof NextActionSchema>;
 
@@ -47,7 +51,12 @@ export const BriefQuestionSchema = z.object({
   question: z.string().min(1).max(500),
   why: z.string().min(1).max(1000),
   /** Suggested reply hint Shaun can paste back in chat. */
-  reply_hint: z.string().min(1).max(500).nullish().transform((v) => v ?? undefined),
+  reply_hint: z
+    .string()
+    .min(1)
+    .max(500)
+    .nullish()
+    .transform((v) => v ?? undefined),
 });
 export type BriefQuestion = z.infer<typeof BriefQuestionSchema>;
 
@@ -83,7 +92,7 @@ export const BriefComposeInputSchema = z.object({
       z.object({
         key: z.string(),
         reason: z.string().optional(),
-      }),
+      })
     ),
   }),
   projects_yaml_summary: z.object({
@@ -93,7 +102,7 @@ export const BriefComposeInputSchema = z.object({
       z.object({
         project: z.string(),
         missing_fields: z.array(z.string()),
-      }),
+      })
     ),
   }),
   audit_window: z.object({
@@ -109,7 +118,7 @@ export const BriefComposeInputSchema = z.object({
         latest_sha: z.string().optional(),
         latest_title: z.string().optional(),
         author: z.string().optional(),
-      }),
+      })
     )
     .max(50),
   open_prs: z
@@ -121,7 +130,7 @@ export const BriefComposeInputSchema = z.object({
         url: z.string(),
         author: z.string().optional(),
         draft: z.boolean().optional(),
-      }),
+      })
     )
     .max(50),
   recent_issues: z
@@ -132,7 +141,7 @@ export const BriefComposeInputSchema = z.object({
         title: z.string(),
         url: z.string(),
         state: z.string(),
-      }),
+      })
     )
     .max(30),
 });
@@ -148,7 +157,7 @@ export type BriefComposeInput = z.infer<typeof BriefComposeInputSchema>;
  */
 export function renderBriefMarkdown(
   out: BriefOutput,
-  meta: { kind: BriefKind; date: string },
+  meta: { kind: BriefKind; date: string }
 ): string {
   const lines: string[] = [];
   const heading =

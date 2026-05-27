@@ -30,9 +30,9 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-type RootLayoutProps = {
+interface RootLayoutProps {
   children: ReactNode;
-};
+}
 
 // Inner content wrapped by GitHubStarsProvider (used for both loading and loaded states)
 function LayoutContent({ children }: { children: ReactNode }) {

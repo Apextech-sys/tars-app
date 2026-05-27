@@ -13,9 +13,9 @@ export type ConditionInput = StepInput & {
   values?: Record<string, unknown>;
 };
 
-type ConditionResult = {
+interface ConditionResult {
   condition: boolean;
-};
+}
 
 function evaluateCondition(input: ConditionInput): ConditionResult {
   return { condition: input.condition };

@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { db } from "@/lib/db";
 import { workflows } from "@/lib/db/schema";
 
-type WorkflowLayoutProps = {
+interface WorkflowLayoutProps {
   children: ReactNode;
   params: Promise<{ workflowId: string }>;
-};
+}
 
 export async function generateMetadata({
   params,

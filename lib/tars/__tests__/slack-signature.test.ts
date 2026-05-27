@@ -24,7 +24,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: ts,
         rawBody,
         now: fixedNow,
-      }),
+      })
     ).toBe(true);
   });
 
@@ -39,7 +39,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: ts,
         rawBody,
         now: fixedNow,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -56,7 +56,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: ts,
         rawBody,
         now: fixedNow,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -71,7 +71,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: oldTs,
         rawBody,
         now: fixedNow,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -83,7 +83,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: "1700000000",
         rawBody: "{}",
         now: fixedNow,
-      }),
+      })
     ).toBe(false);
 
     expect(
@@ -93,7 +93,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: null,
         rawBody: "{}",
         now: fixedNow,
-      }),
+      })
     ).toBe(false);
   });
 
@@ -109,7 +109,7 @@ describe("verifySlackSignature", () => {
         timestampHeader: ts,
         rawBody: tampered,
         now: fixedNow,
-      }),
+      })
     ).toBe(false);
   });
 });

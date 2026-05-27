@@ -200,8 +200,10 @@ export async function fetchPRDiff(
   let truncated = false;
   for (const f of files) {
     const header = `diff --git a/${f.filename} b/${f.filename}\n--- a/${f.filename}\n+++ b/${f.filename}\n`;
-    const body = f.patch ?? `# (no patch available — status=${f.status}, +${f.additions}/-${f.deletions})\n`;
-    const section = header + body + "\n";
+    const body =
+      f.patch ??
+      `# (no patch available — status=${f.status}, +${f.additions}/-${f.deletions})\n`;
+    const section = `${header + body}\n`;
     if (bytesUsed + section.length > MAX_DIFF_BYTES) {
       truncated = true;
       break;
@@ -360,11 +362,9 @@ export async function applyAndPushPatch(args: {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "tars-fix-"));
   const cloneUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
   try {
-    await execFileAsync(
-      "git",
-      ["clone", "--depth", "50", cloneUrl, tmp],
-      { timeout: 120_000 }
-    );
+    await execFileAsync("git", ["clone", "--depth", "50", cloneUrl, tmp], {
+      timeout: 120_000,
+    });
     await execFileAsync("git", ["-C", tmp, "checkout", baseSha], {
       timeout: 30_000,
     });

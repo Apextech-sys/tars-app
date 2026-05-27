@@ -31,7 +31,7 @@ export interface AuditEntry {
 }
 
 async function ensureSchema(sql: any) {
-  await sql/* sql */`
+  await sql /* sql */`
     create table if not exists audit_log (
       id            bigserial primary key,
       run_id        text not null,
@@ -46,10 +46,10 @@ async function ensureSchema(sql: any) {
       created_at    timestamptz not null default now()
     );
   `;
-  await sql/* sql */`
+  await sql /* sql */`
     create index if not exists audit_log_run_id_idx on audit_log(run_id);
   `;
-  await sql/* sql */`
+  await sql /* sql */`
     create table if not exists pr_review_runs (
       run_id            text primary key,
       owner             text not null,
@@ -67,16 +67,16 @@ async function ensureSchema(sql: any) {
   `;
   // Idempotent migration of older deployments that pre-date the
   // `disagreed_payload` column (see drizzle/0008_pr_review_disagreed.sql).
-  await sql/* sql */`
+  await sql /* sql */`
     alter table pr_review_runs
       add column if not exists disagreed_payload jsonb;
   `;
-  await sql/* sql */`
+  await sql /* sql */`
     create index if not exists pr_review_runs_disagreed_idx
       on pr_review_runs (created_at desc)
       where status = 'disagreed';
   `;
-  await sql/* sql */`
+  await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
       kind              text not null,
@@ -109,7 +109,7 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
   const sql = await makeSql();
   try {
     await ensureSchema(sql);
-    await sql/* sql */`
+    await sql /* sql */`
       insert into audit_log (run_id, workflow, step, status, owner, repo, pr_number, message, data)
       values (
         ${entry.runId},
@@ -185,7 +185,7 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
     await ensureSchema(sql);
     // `disagreed_payload` is passed as NULL when not provided so the COALESCE
     // in the ON CONFLICT clause preserves any earlier-written payload.
-    await sql/* sql */`
+    await sql /* sql */`
       insert into pr_review_runs (
         run_id, owner, repo, pr_number, pr_sha, policy, status,
         findings_count, review_comment_url, error, disagreed_payload, updated_at

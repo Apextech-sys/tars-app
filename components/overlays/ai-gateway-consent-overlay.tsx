@@ -22,7 +22,7 @@ import { Overlay } from "./overlay";
 import { useOverlay } from "./overlay-provider";
 import type { OverlayAction } from "./types";
 
-type AiGatewayConsentOverlayProps = {
+interface AiGatewayConsentOverlayProps {
   overlayId: string;
   /** Callback when consent is given, receives the integration ID */
   onConsent?: (integrationId: string) => void;
@@ -30,7 +30,7 @@ type AiGatewayConsentOverlayProps = {
   onManualEntry?: () => void;
   /** Callback when user declines */
   onDecline?: () => void;
-};
+}
 
 /**
  * AI Gateway consent overlay.

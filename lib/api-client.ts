@@ -9,14 +9,14 @@ import type { WorkflowEdge, WorkflowNode } from "./workflow-store";
 // Workflow data types
 export type WorkflowVisibility = "private" | "public";
 
-export type WorkflowData = {
+export interface WorkflowData {
   id?: string;
   name?: string;
   description?: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   visibility?: WorkflowVisibility;
-};
+}
 
 export type SavedWorkflow = WorkflowData & {
   id: string;
@@ -60,7 +60,7 @@ async function apiCall<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
 // AI API
 
-type StreamMessage = {
+interface StreamMessage {
   type: "operation" | "complete" | "error";
   operation?: {
     op:
@@ -83,12 +83,12 @@ type StreamMessage = {
     };
   };
   error?: string;
-};
+}
 
-type StreamState = {
+interface StreamState {
   buffer: string;
   currentData: WorkflowData;
-};
+}
 
 type OperationHandler = (
   op: StreamMessage["operation"],
@@ -316,46 +316,46 @@ export const aiApi = {
   },
 };
 
-export type Integration = {
+export interface Integration {
   id: string;
   name: string;
   type: IntegrationType;
   isManaged?: boolean;
   createdAt: string;
   updatedAt: string;
-};
+}
 
 export type IntegrationWithConfig = Integration & {
   config: IntegrationConfig;
 };
 
 // AI Gateway types
-export type AiGatewayStatusResponse = {
+export interface AiGatewayStatusResponse {
   enabled: boolean;
   signedIn: boolean;
   isVercelUser: boolean;
   hasManagedKey: boolean;
   managedIntegrationId?: string;
-};
+}
 
-export type AiGatewayConsentResponse = {
+export interface AiGatewayConsentResponse {
   success: boolean;
   hasManagedKey: boolean;
   managedIntegrationId?: string;
   error?: string;
-};
+}
 
-export type VercelTeam = {
+export interface VercelTeam {
   id: string;
   name: string;
   slug: string;
   avatar?: string;
   isPersonal: boolean;
-};
+}
 
-export type AiGatewayTeamsResponse = {
+export interface AiGatewayTeamsResponse {
   teams: VercelTeam[];
-};
+}
 
 // Integration API
 export const integrationApi = {

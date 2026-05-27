@@ -22,9 +22,9 @@ export const dynamic = "force-dynamic";
 
 import { randomUUID } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
-import { runChatTurn } from "@/lib/tars/chat-runner";
 import { writeAdapterAudit } from "@/lib/tars/adapter-audit";
 import { getAppSetting, setAppSetting } from "@/lib/tars/app-settings";
+import { runChatTurn } from "@/lib/tars/chat-runner";
 import {
   fetchLinearIssueContext,
   loadProjectsByLinearTeam,
@@ -55,7 +55,7 @@ const TARS_TRIGGER_RE = /(^|\s)@tars(\b|\s|:|,)/i;
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const webhookSecret = process.env.LINEAR_WEBHOOK_SECRET;
   const apiKey = process.env.LINEAR_API_KEY;
-  if (!webhookSecret || !apiKey) {
+  if (!(webhookSecret && apiKey)) {
     await writeAdapterAudit({
       runId: randomUUID(),
       workflow: "linear-adapter",
@@ -65,7 +65,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
     return NextResponse.json(
       { error: "linear adapter not configured" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 
@@ -189,13 +189,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!cachedLinearBotUserId && process.env.LINEAR_BOT_USER_ID) {
         await setAppSetting(
           "linear_bot_user_id",
-          process.env.LINEAR_BOT_USER_ID,
+          process.env.LINEAR_BOT_USER_ID
         );
       }
 
       const tarsUserId = await mapLinearUserToTars(
         authorUserId ?? "unknown",
-        payload.data.user?.name,
+        payload.data.user?.name
       );
 
       const contextLines = [
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       ];
       if (issueCtx.description) {
         contextLines.push(
-          `Issue description (truncated): ${issueCtx.description.slice(0, 800)}`,
+          `Issue description (truncated): ${issueCtx.description.slice(0, 800)}`
         );
       }
       if (issueCtx.projectName) {
@@ -213,12 +213,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       contextLines.push(`Team: ${issueCtx.teamKey}`);
       if (visibility === "personal") {
         contextLines.push(
-          "[firewall] This issue is on a PERSONAL project — do not share context with other workspaces; treat this as a private conversation.",
+          "[firewall] This issue is on a PERSONAL project — do not share context with other workspaces; treat this as a private conversation."
         );
       }
       if (protectMode) {
         contextLines.push(
-          `[protect-mode] Project ${projectMeta?.business} is in protect mode (${projectMeta?.protectReason ?? "read-only"}). Provide review/guidance only; do not propose direct writes or claim fixes.`,
+          `[protect-mode] Project ${projectMeta?.business} is in protect mode (${projectMeta?.protectReason ?? "read-only"}). Provide review/guidance only; do not propose direct writes or claim fixes.`
         );
       }
 

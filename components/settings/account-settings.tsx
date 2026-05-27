@@ -2,12 +2,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type AccountSettingsProps = {
+interface AccountSettingsProps {
   accountName: string;
   accountEmail: string;
   onNameChange: (name: string) => void;
   onEmailChange: (email: string) => void;
-};
+}
 
 export function AccountSettings({
   accountName,

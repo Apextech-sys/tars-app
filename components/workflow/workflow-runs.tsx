@@ -31,7 +31,7 @@ import { findActionById } from "@/plugins";
 import { Button } from "../ui/button";
 import { Spinner } from "../ui/spinner";
 
-type ExecutionLog = {
+interface ExecutionLog {
   id: string;
   nodeId: string;
   nodeName: string;
@@ -43,9 +43,9 @@ type ExecutionLog = {
   input?: unknown;
   output?: unknown;
   error: string | null;
-};
+}
 
-type WorkflowExecution = {
+interface WorkflowExecution {
   id: string;
   workflowId: string;
   status: "pending" | "running" | "success" | "error" | "cancelled";
@@ -53,13 +53,13 @@ type WorkflowExecution = {
   completedAt: Date | null;
   duration: string | null;
   error: string | null;
-};
+}
 
-type WorkflowRunsProps = {
+interface WorkflowRunsProps {
   isActive?: boolean;
   onRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   onStartRun?: (executionId: string) => void;
-};
+}
 
 // Helper to get the output display config for a node type
 function getOutputConfig(nodeType: string): OutputDisplayConfig | undefined {
@@ -281,7 +281,7 @@ function OutputDisplay({
 
   // Get the effective built-in config (plugin config if not component, else auto-generated)
   const effectiveBuiltInConfig =
-    pluginConfig?.type !== "component" ? pluginConfig : builtInConfig;
+    pluginConfig?.type === "component" ? builtInConfig : pluginConfig;
 
   // Get display value for built-in types (image/video/url)
   const displayValue = effectiveBuiltInConfig

@@ -23,7 +23,7 @@
  * tag in the brief cannot inject script execution.
  */
 
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 interface MdProps {
   text: string;
@@ -49,37 +49,33 @@ function renderInline(escaped: string): string {
   // Inline code first so its contents are not further transformed.
   out = out.replace(
     /`([^`]+)`/g,
-    (_m, code) => `<code class="brief-code-inline">${code}</code>`,
+    (_m, code) => `<code class="brief-code-inline">${code}</code>`
   );
   // Links [text](url). Only allow http(s) and mailto schemes.
   out = out.replace(
     /\[([^\]]+)\]\(((?:https?|mailto):[^\s)]+)\)/g,
     (_m, text, url) =>
-      `<a href="${url}" target="_blank" rel="noreferrer noopener" class="brief-link">${text}</a>`,
+      `<a href="${url}" target="_blank" rel="noreferrer noopener" class="brief-link">${text}</a>`
   );
   // Bold (**...**)
   out = out.replace(
     /\*\*([^*]+)\*\*/g,
-    (_m, inner) => `<strong>${inner}</strong>`,
+    (_m, inner) => `<strong>${inner}</strong>`
   );
   // Italic (*...* and _..._)
   out = out.replace(
     /(?<![*\w])\*([^*\n]+)\*(?!\*)/g,
-    (_m, inner) => `<em>${inner}</em>`,
+    (_m, inner) => `<em>${inner}</em>`
   );
-  out = out.replace(/(?<!\w)_([^_\n]+)_(?!\w)/g, (_m, inner) => `<em>${inner}</em>`);
+  out = out.replace(
+    /(?<!\w)_([^_\n]+)_(?!\w)/g,
+    (_m, inner) => `<em>${inner}</em>`
+  );
   return out;
 }
 
 interface Block {
-  type:
-    | "heading"
-    | "paragraph"
-    | "ul"
-    | "ol"
-    | "code"
-    | "rule"
-    | "blockquote";
+  type: "heading" | "paragraph" | "ul" | "ol" | "code" | "rule" | "blockquote";
   level?: number;
   items?: Array<{ depth: number; text: string }>;
   text?: string;
@@ -104,7 +100,9 @@ function parseBlocks(raw: string): Block[] {
         i++;
       }
       // skip the closing fence
-      if (i < lines.length) i++;
+      if (i < lines.length) {
+        i++;
+      }
       blocks.push({ type: "code", text: buf.join("\n"), lang });
       continue;
     }
@@ -147,7 +145,9 @@ function parseBlocks(raw: string): Block[] {
       const items: Array<{ depth: number; text: string }> = [];
       while (i < lines.length && /^\s*([-*]|\d+\.)\s+/.test(lines[i])) {
         const m = lines[i].match(/^(\s*)([-*]|\d+\.)\s+(.*)$/);
-        if (!m) break;
+        if (!m) {
+          break;
+        }
         const indent = m[1].length;
         items.push({
           depth: indent >= 4 ? 2 : indent >= 2 ? 1 : 0,
@@ -182,50 +182,50 @@ function renderBlock(block: Block, key: number): ReactNode {
   switch (block.type) {
     case "heading": {
       const level = block.level ?? 2;
-      const Tag = (
-        ["h1", "h2", "h3", "h4", "h5"] as const
-      )[Math.min(level - 1, 4)];
+      const Tag = (["h1", "h2", "h3", "h4", "h5"] as const)[
+        Math.min(level - 1, 4)
+      ];
       return (
         <Tag
-          key={key}
           className={`brief-h${level}`}
           // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
           dangerouslySetInnerHTML={{
             __html: renderInline(escapeHtml(block.text ?? "")),
           }}
+          key={key}
         />
       );
     }
     case "paragraph": {
       return (
         <p
-          key={key}
           className="brief-p"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
           dangerouslySetInnerHTML={{
             __html: renderInline(escapeHtml(block.text ?? "")),
           }}
+          key={key}
         />
       );
     }
     case "code": {
       return (
-        <pre key={key} className="brief-pre" data-lang={block.lang ?? ""}>
+        <pre className="brief-pre" data-lang={block.lang ?? ""} key={key}>
           <code>{block.text}</code>
         </pre>
       );
     }
     case "rule":
-      return <hr key={key} className="brief-hr" />;
+      return <hr className="brief-hr" key={key} />;
     case "blockquote":
       return (
         <blockquote
-          key={key}
           className="brief-quote"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
           dangerouslySetInnerHTML={{
             __html: renderInline(escapeHtml(block.text ?? "")),
           }}
+          key={key}
         />
       );
     case "ul":
@@ -247,10 +247,12 @@ function renderBlock(block: Block, key: number): ReactNode {
       });
       let topIdx = 0;
       items.forEach((it) => {
-        if (it.depth !== 0) return;
+        if (it.depth !== 0) {
+          return;
+        }
         const subItems = nested[topIdx] ?? [];
         nodes.push(
-          <li key={`${key}-${topIdx}`} className="brief-li">
+          <li className="brief-li" key={`${key}-${topIdx}`}>
             <span
               // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
               dangerouslySetInnerHTML={{
@@ -261,21 +263,21 @@ function renderBlock(block: Block, key: number): ReactNode {
               <ul className="brief-li-nested">
                 {subItems.map((s, j) => (
                   <li
-                    key={`${key}-${topIdx}-${j}`}
                     // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
                     dangerouslySetInnerHTML={{
                       __html: renderInline(escapeHtml(s.text)),
                     }}
+                    key={`${key}-${topIdx}-${j}`}
                   />
                 ))}
               </ul>
             )}
-          </li>,
+          </li>
         );
         topIdx++;
       });
       return (
-        <Tag key={key} className="brief-list">
+        <Tag className="brief-list" key={key}>
           {nodes}
         </Tag>
       );

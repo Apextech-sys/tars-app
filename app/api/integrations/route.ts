@@ -16,19 +16,19 @@ export type GetIntegrationsResponse = {
   // Config is intentionally excluded for security
 }[];
 
-export type CreateIntegrationRequest = {
+export interface CreateIntegrationRequest {
   name?: string;
   type: IntegrationType;
   config: IntegrationConfig;
-};
+}
 
-export type CreateIntegrationResponse = {
+export interface CreateIntegrationResponse {
   id: string;
   name: string;
   type: IntegrationType;
   createdAt: string;
   updatedAt: string;
-};
+}
 
 /**
  * GET /api/integrations

@@ -28,8 +28,8 @@ import { auditLog, prReviewRuns } from "@/lib/db/tars-schema";
 import { postPRCommentDirect } from "@/lib/pr-review/github-client";
 import {
   dedupeFindings,
-  renderAdjudicatedComment,
   type RawReviewerFinding,
+  renderAdjudicatedComment,
 } from "@/lib/pr-review/renderer";
 
 export const runtime = "nodejs";
@@ -61,9 +61,13 @@ function pickFindings(
   payload: DisagreedPayloadShape | null | undefined,
   reviewer: "codex" | "claude"
 ): RawReviewerFinding[] {
-  if (!payload) return [];
+  if (!payload) {
+    return [];
+  }
   const set = payload[reviewer];
-  if (!set || !Array.isArray(set.findings)) return [];
+  if (!(set && Array.isArray(set.findings))) {
+    return [];
+  }
   return set.findings;
 }
 
@@ -221,7 +225,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Posting actions — render then post via Octokit.
-  const payload = (run.disagreedPayload as DisagreedPayloadShape | null) ?? null;
+  const payload =
+    (run.disagreedPayload as DisagreedPayloadShape | null) ?? null;
   if (!payload) {
     return NextResponse.json(
       { error: "Run is disagreed but has no disagreed_payload" },

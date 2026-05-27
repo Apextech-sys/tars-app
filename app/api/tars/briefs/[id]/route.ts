@@ -10,7 +10,9 @@ export const dynamic = "force-dynamic";
 
 let sqlClient: ReturnType<typeof postgres> | null = null;
 function getSql() {
-  if (sqlClient) return sqlClient;
+  if (sqlClient) {
+    return sqlClient;
+  }
   const url =
     process.env.WORKFLOW_POSTGRES_URL ??
     process.env.DATABASE_URL ??
@@ -21,7 +23,7 @@ function getSql() {
 
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ id: string }> },
+  ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) {
@@ -29,7 +31,7 @@ export async function GET(
   }
   try {
     const sql = getSql();
-    const rows = await sql/* sql */`
+    const rows = await sql /* sql */`
       select id, date, kind, status, summary, body_markdown, insights,
              source_context, run_id, job_id, error_text,
              created_at, updated_at, completed_at
@@ -44,7 +46,7 @@ export async function GET(
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "query failed" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

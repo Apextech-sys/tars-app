@@ -8,18 +8,18 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { workflowExecutionLogs, workflowExecutions } from "@/lib/db/schema";
 
-export type LogStepStartParams = {
+export interface LogStepStartParams {
   executionId: string;
   nodeId: string;
   nodeName: string;
   nodeType: string;
   input?: unknown;
-};
+}
 
-export type LogStepStartResult = {
+export interface LogStepStartResult {
   logId: string;
   startTime: number;
-};
+}
 
 /**
  * Log the start of a step execution
@@ -46,13 +46,13 @@ export async function logStepStartDb(
   };
 }
 
-export type LogStepCompleteParams = {
+export interface LogStepCompleteParams {
   logId: string;
   startTime: number;
   status: "success" | "error";
   output?: unknown;
   error?: string;
-};
+}
 
 /**
  * Log the completion of a step execution
@@ -74,13 +74,13 @@ export async function logStepCompleteDb(
     .where(eq(workflowExecutionLogs.id, params.logId));
 }
 
-export type LogWorkflowCompleteParams = {
+export interface LogWorkflowCompleteParams {
   executionId: string;
   status: "success" | "error";
   output?: unknown;
   error?: string;
   startTime: number;
-};
+}
 
 /**
  * Log the completion of a workflow execution

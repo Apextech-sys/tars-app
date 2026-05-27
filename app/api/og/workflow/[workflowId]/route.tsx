@@ -3,29 +3,29 @@ import { ImageResponse } from "@vercel/og";
 export const runtime = "edge";
 
 // Node and edge types for the workflow
-type WorkflowNode = {
+interface WorkflowNode {
   id: string;
   position: { x: number; y: number };
   data: {
     type: "trigger" | "action" | "add";
     label?: string;
   };
-};
+}
 
-type WorkflowEdge = {
+interface WorkflowEdge {
   id: string;
   source: string;
   target: string;
-};
+}
 
-type WorkflowResponse = {
+interface WorkflowResponse {
   id: string;
   name: string;
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   visibility: "private" | "public";
   isOwner?: boolean;
-};
+}
 
 // Calculate bounds and scale to fit in viewport
 function calculateViewport(

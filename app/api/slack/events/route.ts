@@ -6,9 +6,9 @@
  * Verifies the Slack signing-secret HMAC, then dispatches the event:
  *   - url_verification: echo challenge (one-time app setup)
  *   - event_callback:
- *       * app_mention                                 → respond in channel
- *       * message with channel_type=im                → respond in DM
- *       * everything else                              → silently ack
+ * app_mention                                 → respond in channel
+ * message with channel_type=im                → respond in DM
+ * everything else                              → silently ack
  *
  * Channel allowlist: only respond in DMs or in channels listed under
  * app_settings['slack_allowed_channels'] (jsonb string[]).
@@ -24,9 +24,9 @@ export const dynamic = "force-dynamic";
 
 import { randomUUID } from "node:crypto";
 import { type NextRequest, NextResponse } from "next/server";
-import { runChatTurn } from "@/lib/tars/chat-runner";
 import { writeAdapterAudit } from "@/lib/tars/adapter-audit";
 import { getAppSetting, setAppSetting } from "@/lib/tars/app-settings";
+import { runChatTurn } from "@/lib/tars/chat-runner";
 import { postSlackMessage, verifySlackSignature } from "@/lib/tars/slack";
 import { mapSlackUserToTars } from "@/lib/tars/user-mapper";
 
@@ -53,7 +53,9 @@ const KONVERGE_REVIEW_PREFIX =
   "[Konverge protect mode is active — this is a review-only comment, not a fix or action.]";
 
 function looksLikeKonvergeChannelName(channelName?: string): boolean {
-  if (!channelName) return false;
+  if (!channelName) {
+    return false;
+  }
   return (
     channelName === "reflex-connect-p45" ||
     channelName === "#reflex-connect-p45" ||
@@ -63,7 +65,9 @@ function looksLikeKonvergeChannelName(channelName?: string): boolean {
 }
 
 function stripBotMention(text: string, botUserId?: string | null): string {
-  if (!text) return "";
+  if (!text) {
+    return "";
+  }
   if (botUserId) {
     const re = new RegExp(`<@${botUserId}>`, "g");
     return text.replace(re, "").trim();
@@ -74,7 +78,7 @@ function stripBotMention(text: string, botUserId?: string | null): string {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   const botToken = process.env.SLACK_BOT_TOKEN;
-  if (!signingSecret || !botToken) {
+  if (!(signingSecret && botToken)) {
     await writeAdapterAudit({
       runId: randomUUID(),
       workflow: "slack-adapter",
@@ -84,7 +88,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
     return NextResponse.json(
       { error: "slack adapter not configured" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 
@@ -151,11 +155,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const isDm = ev.type === "message" && ev.channel_type === "im";
   const isMention = ev.type === "app_mention";
 
-  if (!isDm && !isMention) {
+  if (!(isDm || isMention)) {
     return NextResponse.json({ ok: true, ignored: `type:${ev.type}` });
   }
 
-  if (!ev.user || !ev.channel || !ev.text) {
+  if (!(ev.user && ev.channel && ev.text)) {
     await writeAdapterAudit({
       runId,
       workflow: "slack-adapter",
@@ -168,7 +172,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const allowed =
     (await getAppSetting<string[]>("slack_allowed_channels")) ?? [];
-  if (!isDm && !allowed.includes(ev.channel)) {
+  if (!(isDm || allowed.includes(ev.channel))) {
     await writeAdapterAudit({
       runId,
       workflow: "slack-adapter",
@@ -231,7 +235,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const konvergeChannelIds =
         (await getAppSetting<string[]>("slack_allowed_channels")) ?? [];
       const konvergeBusinessChannels = konvergeChannelIds.filter((c) =>
-        looksLikeKonvergeChannelName(c),
+        looksLikeKonvergeChannelName(c)
       );
       const evChannel = ev.channel as string;
       if (

@@ -16,11 +16,13 @@ import { chatMessages, chatSessions } from "@/lib/db/chat-schema";
 let cachedSoulPrompt: string | undefined;
 
 function getSoulPrompt(): string {
-  if (cachedSoulPrompt !== undefined) return cachedSoulPrompt;
+  if (cachedSoulPrompt !== undefined) {
+    return cachedSoulPrompt;
+  }
   try {
     cachedSoulPrompt = readFileSync(
       join(process.cwd(), "lib/tars/SOUL.md"),
-      "utf-8",
+      "utf-8"
     );
   } catch {
     cachedSoulPrompt = "You are TARS, a helpful AI assistant.";
@@ -67,7 +69,7 @@ export interface RunChatTurnResult {
  * the full assistant text once generation completes.
  */
 export async function runChatTurn(
-  input: RunChatTurnInput,
+  input: RunChatTurnInput
 ): Promise<RunChatTurnResult> {
   const { userId, message, contextPrefix, titleHint } = input;
   if (!message?.trim()) {
@@ -84,7 +86,7 @@ export async function runChatTurn(
     const existing = await db.query.chatSessions.findFirst({
       where: and(
         eq(chatSessions.id, dbSessionId),
-        eq(chatSessions.userId, userId),
+        eq(chatSessions.userId, userId)
       ),
     });
     if (existing) {
@@ -138,7 +140,7 @@ export async function runChatTurn(
 
   let fullText = "";
   let finishReason = "stop";
-  const assistantParts: Array<Record<string, unknown>> = [];
+  const assistantParts: Record<string, unknown>[] = [];
 
   const q = query({
     prompt,

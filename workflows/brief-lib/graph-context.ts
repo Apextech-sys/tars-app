@@ -81,41 +81,41 @@ export async function buildGraphSnapshot(): Promise<GraphSnapshot> {
   // and avoid quote-escaping problems. Indentation matters for Python.
   const py = [
     "import sys, json, asyncio",
-    "sys.path.insert(0, \"/home/shaun/.tars-state\")",
+    'sys.path.insert(0, "/home/shaun/.tars-state")',
     "from tars_graph import TarsGraph",
     "",
-    "GID = \"discovered\"",
+    'GID = "discovered"',
     "",
     "async def main():",
     "    out = {",
-    "        \"node_counts\": {},",
-    "        \"edge_counts\": {},",
-    "        \"project_count\": 0,",
-    "        \"protected_projects\": [],",
+    '        "node_counts": {},',
+    '        "edge_counts": {},',
+    '        "project_count": 0,',
+    '        "protected_projects": [],',
     "    }",
     "    try:",
     "        async with TarsGraph() as g:",
     "            rows, _, _ = await g.driver.execute_query(",
-    "                \"MATCH (n:Entity) WHERE n.group_id = $gid RETURN n.labels AS labels, count(n) AS c\",",
+    '                "MATCH (n:Entity) WHERE n.group_id = $gid RETURN n.labels AS labels, count(n) AS c",',
     "                gid=GID,",
     "            )",
     "            for r in rows:",
-    "                lbls = [l for l in r[\"labels\"] if l != \"Entity\"]",
-    "                kind = lbls[0] if lbls else \"Entity\"",
-    "                out[\"node_counts\"][kind] = out[\"node_counts\"].get(kind, 0) + r[\"c\"]",
+    '                lbls = [l for l in r["labels"] if l != "Entity"]',
+    '                kind = lbls[0] if lbls else "Entity"',
+    '                out["node_counts"][kind] = out["node_counts"].get(kind, 0) + r["c"]',
     "",
     "            rows, _, _ = await g.driver.execute_query(",
-    "                \"MATCH (e:RelatesToNode_) WHERE e.group_id = $gid RETURN e.name AS name, count(e) AS c\",",
+    '                "MATCH (e:RelatesToNode_) WHERE e.group_id = $gid RETURN e.name AS name, count(e) AS c",',
     "                gid=GID,",
     "            )",
     "            for r in rows:",
-    "                out[\"edge_counts\"][r[\"name\"]] = r[\"c\"]",
+    '                out["edge_counts"][r["name"]] = r["c"]',
     "",
     "            rows, _, _ = await g.driver.execute_query(",
     "                \"MATCH (p:Entity) WHERE 'Project' IN p.labels AND p.group_id = $gid RETURN count(p) AS c\",",
     "                gid=GID,",
     "            )",
-    "            out[\"project_count\"] = rows[0][\"c\"] if rows else 0",
+    '            out["project_count"] = rows[0]["c"] if rows else 0',
     "",
     "            try:",
     "                rows, _, _ = await g.driver.execute_query(",
@@ -123,14 +123,14 @@ export async function buildGraphSnapshot(): Promise<GraphSnapshot> {
     "                    gid=GID,",
     "                )",
     "                for r in rows:",
-    "                    out[\"protected_projects\"].append({",
-    "                        \"key\": r[\"name\"],",
-    "                        \"reason\": (r.get(\"description\") or \"\")[:240],",
+    '                    out["protected_projects"].append({',
+    '                        "key": r["name"],',
+    '                        "reason": (r.get("description") or "")[:240],',
     "                    })",
     "            except Exception:",
     "                pass",
     "    except Exception as e:",
-    "        print(json.dumps({\"__error__\": str(e)}), flush=True)",
+    '        print(json.dumps({"__error__": str(e)}), flush=True)',
     "        return",
     "    print(json.dumps(out), flush=True)",
     "",
@@ -259,11 +259,15 @@ export async function buildProjectsYamlSummary(): Promise<ProjectsYamlSummary> {
 
   let total = 0;
   for (const [key, proj] of Object.entries(parsed)) {
-    if (typeof proj !== "object" || proj === null) continue;
-    if ((proj as Record<string, unknown>).kind === "skip") continue;
+    if (typeof proj !== "object" || proj === null) {
+      continue;
+    }
+    if ((proj as Record<string, unknown>).kind === "skip") {
+      continue;
+    }
     total++;
     const visibility = String(
-      (proj as Record<string, unknown>).visibility ?? "unknown",
+      (proj as Record<string, unknown>).visibility ?? "unknown"
     );
     byVisibility[visibility] = (byVisibility[visibility] ?? 0) + 1;
 
@@ -304,7 +308,7 @@ export async function buildAuditWindow(args: {
     "postgres://tars_app:5bb16db4a6db588a087139b7225537595c0140791c0a037a@127.0.0.1:5433/tars_app";
   const sql = postgres(url, { max: 2, idle_timeout: 20, prepare: false });
   try {
-    const totals = await sql/* sql */`
+    const totals = await sql /* sql */`
       select status, workflow, count(*)::int as c
       from audit_log
       where created_at >= ${args.windowStart}::timestamptz

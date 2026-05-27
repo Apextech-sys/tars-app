@@ -1,13 +1,12 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanJobs, getTestPool } from "../setup.js";
-
 import { loadConfig } from "../../src/config.js";
 import { closeDb, initDb } from "../../src/db.js";
 import { initLogger } from "../../src/logger.js";
 import { startNotifyListener } from "../../src/queue.js";
 import { JobRunner } from "../../src/runner.js";
+import { cleanJobs, getTestPool } from "../setup.js";
 
 interface CallbackCapture {
   body: unknown;
@@ -48,7 +47,9 @@ describe("no-op job round-trip", () => {
     await new Promise<void>((resolve) => {
       server.listen(0, "127.0.0.1", () => {
         const addr = server.address();
-        if (addr && typeof addr === "object") port = addr.port;
+        if (addr && typeof addr === "object") {
+          port = addr.port;
+        }
         resolve();
       });
     });
@@ -60,7 +61,7 @@ describe("no-op job round-trip", () => {
   });
 
   it("dispatches a no-op job, picks it up, fires HMAC-signed callback", async () => {
-    process.env.TARS_APP_BASE_URL = "http://127.0.0.1:" + port;
+    process.env.TARS_APP_BASE_URL = `http://127.0.0.1:${port}`;
     process.env.TARS_WORKER_POLL_INTERVAL_MS = "200";
     process.env.TARS_WORKER_CONCURRENCY = "1";
     process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? "warn";
@@ -76,22 +77,21 @@ describe("no-op job round-trip", () => {
     const id = randomUUID();
     await getTestPool().query(
       "INSERT INTO tars_jobs (id, kind, payload, status) VALUES ($1,'no-op',$2::jsonb,'queued')",
-      [id, JSON.stringify({ sleepMs: 200, message: "round-trip" })],
+      [id, JSON.stringify({ sleepMs: 200, message: "round-trip" })]
     );
 
     const deadline = Date.now() + 30_000;
     while (Date.now() < deadline) {
-      if (captured.find((c) => c.jobId === id)) break;
+      if (captured.find((c) => c.jobId === id)) {
+        break;
+      }
       await new Promise((r) => setTimeout(r, 100));
     }
 
     expect(captured.find((c) => c.jobId === id)).toBeDefined();
     const cb = captured.find((c) => c.jobId === id)!;
 
-    const expectedSig = createHmac(
-      "sha256",
-      cfg.TARS_WORKER_CALLBACK_SECRET,
-    )
+    const expectedSig = createHmac("sha256", cfg.TARS_WORKER_CALLBACK_SECRET)
       .update(cb.rawBody)
       .digest("hex");
     expect(cb.signature).toBe(expectedSig);
@@ -111,11 +111,11 @@ describe("no-op job round-trip", () => {
 
     const row = await getTestPool().query<{ status: string }>(
       "SELECT status FROM tars_jobs WHERE id = $1",
-      [id],
+      [id]
     );
     expect(row.rows[0].status).toBe("done");
 
-    await runner.stop(5_000);
+    await runner.stop(5000);
     await stopListener();
   });
 });

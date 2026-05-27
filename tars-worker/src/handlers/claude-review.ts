@@ -96,7 +96,9 @@ export const claudeReviewHandler: JobHandler = async (ctx) => {
     }
     if (msg.type === "system" && msg.subtype === "init") {
       sessionId = msg.session_id;
-      if (sessionId) await ctx.updateSessionId(sessionId);
+      if (sessionId) {
+        await ctx.updateSessionId(sessionId);
+      }
       ctx.log("claude-review: session", { sessionId });
     } else if (msg.type === "result") {
       sessionId = msg.session_id ?? sessionId;
@@ -105,7 +107,7 @@ export const claudeReviewHandler: JobHandler = async (ctx) => {
       } else {
         throw new Error(
           `claude-review failed: ${msg.subtype}` +
-            (msg.errors?.length ? ` — ${msg.errors.join("; ")}` : ""),
+            (msg.errors?.length ? ` — ${msg.errors.join("; ")}` : "")
         );
       }
     }
@@ -130,12 +132,16 @@ function parseReviewJson(text: string): ClaudeReviewOutput {
   };
 
   const direct = tryParse(text.trim());
-  if (direct) return direct;
+  if (direct) {
+    return direct;
+  }
 
   const fenced = text.match(/```(?:json)?\s*([\s\S]+?)```/);
   if (fenced) {
     const inner = tryParse(fenced[1].trim());
-    if (inner) return inner;
+    if (inner) {
+      return inner;
+    }
   }
 
   const first = text.indexOf("{");
@@ -143,10 +149,12 @@ function parseReviewJson(text: string): ClaudeReviewOutput {
   if (first >= 0 && last > first) {
     const candidate = text.slice(first, last + 1);
     const recovered = tryParse(candidate);
-    if (recovered) return recovered;
+    if (recovered) {
+      return recovered;
+    }
   }
 
   throw new Error(
-    `claude-review output did not contain valid review JSON. First 300 chars: ${text.slice(0, 300)}`,
+    `claude-review output did not contain valid review JSON. First 300 chars: ${text.slice(0, 300)}`
   );
 }

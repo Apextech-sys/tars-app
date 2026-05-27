@@ -20,9 +20,10 @@ vi.mock("@/lib/tars/chat-runner", () => ({
   runChatTurn: runChatTurnMock,
 }));
 vi.mock("@/lib/tars/linear", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/tars/linear")>(
-    "@/lib/tars/linear",
-  );
+  const actual =
+    await vi.importActual<typeof import("@/lib/tars/linear")>(
+      "@/lib/tars/linear"
+    );
   return {
     ...actual,
     fetchLinearIssueContext: fetchIssueMock,
@@ -47,7 +48,9 @@ const API_KEY = "lin_api_test";
 
 function buildSignedRequest(payload: object) {
   const rawBody = JSON.stringify(payload);
-  const sig = createHmac("sha256", SECRET).update(rawBody, "utf8").digest("hex");
+  const sig = createHmac("sha256", SECRET)
+    .update(rawBody, "utf8")
+    .digest("hex");
   return new Request("http://localhost/api/linear/webhook", {
     method: "POST",
     headers: {
@@ -189,7 +192,7 @@ describe("POST /api/linear/webhook", () => {
             protectMode: false,
           },
         ],
-      ]),
+      ])
     );
 
     const { POST } = await import("@/app/api/linear/webhook/route");
@@ -226,7 +229,7 @@ describe("POST /api/linear/webhook", () => {
             protectReason: "External P45 contractors",
           },
         ],
-      ]),
+      ])
     );
 
     const { POST } = await import("@/app/api/linear/webhook/route");

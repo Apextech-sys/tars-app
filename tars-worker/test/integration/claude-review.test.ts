@@ -6,7 +6,7 @@ describe("claude-review handler (real Claude Agent SDK)", () => {
   it("returns a valid review for a tiny diff fixture", async () => {
     if (!process.env.ANTHROPIC_API_KEY) {
       console.warn(
-        "ANTHROPIC_API_KEY not set — skipping live Claude review test",
+        "ANTHROPIC_API_KEY not set — skipping live Claude review test"
       );
       return;
     }
@@ -63,7 +63,7 @@ describe("claude-review handler (real Claude Agent SDK)", () => {
     expect(result.summary.length).toBeGreaterThan(0);
     expect(Array.isArray(result.findings)).toBe(true);
     expect(["approve", "request-changes", "comment", "block"]).toContain(
-      result.verdict,
+      result.verdict
     );
   }, 180_000);
 });

@@ -40,7 +40,9 @@ const WorkflowCanvas = () => {
   const setEdges = useSetAtom(edgesAtom);
   const setCurrentWorkflowName = useSetAtom(currentWorkflowNameAtom);
   const setHasSidebarBeenShown = useSetAtom(hasSidebarBeenShownAtom);
-  const setIsTransitioningFromHomepage = useSetAtom(isTransitioningFromHomepageAtom);
+  const setIsTransitioningFromHomepage = useSetAtom(
+    isTransitioningFromHomepageAtom
+  );
   const hasCreatedWorkflowRef = useRef(false);
   const currentWorkflowName = useAtomValue(currentWorkflowNameAtom);
 
@@ -86,7 +88,9 @@ const WorkflowCanvas = () => {
   useEffect(() => {
     const createWorkflowAndRedirect = async () => {
       const realNodes = nodes.filter((node) => node.type !== "add");
-      if (realNodes.length === 0 || hasCreatedWorkflowRef.current) return;
+      if (realNodes.length === 0 || hasCreatedWorkflowRef.current) {
+        return;
+      }
       hasCreatedWorkflowRef.current = true;
 
       try {

@@ -5,7 +5,7 @@ export const noOpHandler: JobHandler = async (ctx) => {
   const sleepMs =
     typeof (ctx.job.payload as { sleepMs?: unknown })?.sleepMs === "number"
       ? ((ctx.job.payload as { sleepMs: number }).sleepMs as number)
-      : 5_000;
+      : 5000;
 
   ctx.log("no-op sleeping", { sleepMs });
   await sleep(sleepMs, undefined, { signal: ctx.signal });

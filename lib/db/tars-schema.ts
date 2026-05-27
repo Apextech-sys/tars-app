@@ -36,7 +36,7 @@ export const auditLog = pgTable(
   },
   (t) => ({
     runIdIdx: index("audit_log_run_id_idx").on(t.runId),
-  }),
+  })
 );
 
 /**
@@ -63,7 +63,9 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   error: text("error"),
   disagreedPayload: jsonb("disagreed_payload"),
   adjudicationAction: text("adjudication_action"),
-  adjudicationActionAt: timestamp("adjudication_action_at", { withTimezone: true }),
+  adjudicationActionAt: timestamp("adjudication_action_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -81,20 +83,13 @@ type EscalationStatus = "open" | "snoozed" | "resolved" | "deferred";
 export const escalations = pgTable(
   "escalations",
   {
-    id: text("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()::text`),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     source: text("source").notNull(),
-    severity: text("severity")
-      .notNull()
-      .$type<EscalationSeverity>(),
+    severity: text("severity").notNull().$type<EscalationSeverity>(),
     title: text("title").notNull(),
     bodyMarkdown: text("body_markdown"),
     payload: jsonb("payload"),
-    status: text("status")
-      .notNull()
-      .default("open")
-      .$type<EscalationStatus>(),
+    status: text("status").notNull().default("open").$type<EscalationStatus>(),
     snoozedUntil: timestamp("snoozed_until", { withTimezone: true }),
     resolvedAt: timestamp("resolved_at", { withTimezone: true }),
     resolvedBy: text("resolved_by"),
@@ -109,9 +104,9 @@ export const escalations = pgTable(
   (t) => ({
     statusCreatedIdx: index("escalations_status_created_idx").on(
       t.status,
-      t.createdAt,
+      t.createdAt
     ),
-  }),
+  })
 );
 
 /**
@@ -143,8 +138,12 @@ export const repoSettings = pgTable("repo_settings", {
   autoFix: boolean("auto_fix").notNull().default(true),
   githubHookId: bigint("github_hook_id", { mode: "number" }),
   notes: text("notes"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
 });
 
 export const webhookEvents = pgTable(
@@ -161,12 +160,19 @@ export const webhookEvents = pgTable(
     senderLogin: text("sender_login"),
     rawPayload: jsonb("raw_payload").notNull(),
     triggeredRun: text("triggered_run"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (t) => ({
-    repoKeyCreatedIdx: index("webhook_events_repo_key_idx").on(t.repoKey, t.createdAt),
-    deliveryIdIdx: uniqueIndex("webhook_events_delivery_id_uidx").on(t.deliveryId),
-  }),
+    repoKeyCreatedIdx: index("webhook_events_repo_key_idx").on(
+      t.repoKey,
+      t.createdAt
+    ),
+    deliveryIdIdx: uniqueIndex("webhook_events_delivery_id_uidx").on(
+      t.deliveryId
+    ),
+  })
 );
 
 export type RepoSetting = typeof repoSettings.$inferSelect;
@@ -181,9 +187,7 @@ export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
 export const briefs = pgTable(
   "briefs",
   {
-    id: text("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()::text`),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     date: timestamp("date", { withTimezone: false }).notNull(),
     kind: text("kind").notNull(),
     status: text("status").notNull().default("pending"),
@@ -205,7 +209,7 @@ export const briefs = pgTable(
   (t) => ({
     dateKindIdx: index("briefs_date_kind_idx").on(t.date, t.kind),
     runIdIdx: index("briefs_run_id_uidx").on(t.runId),
-  }),
+  })
 );
 
 /**
@@ -214,9 +218,7 @@ export const briefs = pgTable(
 export const briefReplies = pgTable(
   "brief_replies",
   {
-    id: text("id")
-      .primaryKey()
-      .default(sql`gen_random_uuid()::text`),
+    id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
     briefId: text("brief_id").notNull(),
     chatSessionId: text("chat_session_id"),
     userId: text("user_id"),
@@ -228,9 +230,9 @@ export const briefReplies = pgTable(
   (t) => ({
     briefCreatedIdx: index("brief_replies_brief_idx").on(
       t.briefId,
-      t.createdAt,
+      t.createdAt
     ),
-  }),
+  })
 );
 
 export type Brief = typeof briefs.$inferSelect;

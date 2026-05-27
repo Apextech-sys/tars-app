@@ -35,7 +35,9 @@ const cache = new Map<
   { mtime: number; data: Record<string, Record<string, unknown>> }
 >();
 
-async function loadProjects(): Promise<Record<string, Record<string, unknown>>> {
+async function loadProjects(): Promise<
+  Record<string, Record<string, unknown>>
+> {
   const fs = await import("node:fs");
   const YAML = await import("yaml");
   const yamlPath = projectsYamlPath();
@@ -169,6 +171,9 @@ const SEVERITY_ORDER: Record<Severity, number> = {
 };
 
 // Pure helper, safe to call from workflow code (no I/O).
-export function severityAtLeast(actual: Severity, threshold: Severity): boolean {
+export function severityAtLeast(
+  actual: Severity,
+  threshold: Severity
+): boolean {
   return SEVERITY_ORDER[actual] <= SEVERITY_ORDER[threshold];
 }

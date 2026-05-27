@@ -6,7 +6,7 @@
 
 export type CredentialSource = "user" | "system";
 
-export type EnvVarConfig = {
+export interface EnvVarConfig {
   LINEAR_API_KEY?: string;
   LINEAR_TEAM_ID?: string;
   RESEND_API_KEY?: string;
@@ -16,7 +16,7 @@ export type EnvVarConfig = {
   AI_GATEWAY_API_KEY?: string;
   DATABASE_URL?: string;
   FIRECRAWL_API_KEY?: string;
-};
+}
 
 /**
  * Get credentials based on source
