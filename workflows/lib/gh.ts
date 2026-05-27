@@ -150,14 +150,20 @@ export async function fetchPRDiff(
       message?: string;
       response?: { data?: { errors?: Array<{ code?: string }> } };
     };
+    const msg = String(e?.message ?? err);
     const isTooLarge =
-      e?.status === 422 &&
-      (e?.message?.includes("too_large") ||
-        e?.message?.includes("maximum number of files") ||
-        e?.response?.data?.errors?.some((x) => x?.code === "too_large"));
+      // Any 4xx with the canonical too_large signal.
+      msg.includes("too_large") ||
+      msg.includes("maximum number of files") ||
+      msg.includes("diff exceeded") ||
+      e?.response?.data?.errors?.some((x) => x?.code === "too_large") === true;
     if (!isTooLarge) {
       throw err;
     }
+    console.warn(
+      `[fetchPRDiff] ${owner}/${repo}#${prNumber}: native diff failed ` +
+        `(status=${e?.status ?? "?"}); falling back to synthesized diff from per-file patches`
+    );
     // Fall through to synthesized diff.
   }
 
