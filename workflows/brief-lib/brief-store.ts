@@ -56,6 +56,7 @@ export async function insertPendingBrief(
     const id = (rows[0] as { id: string }).id;
     return { briefId: id };
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
@@ -82,6 +83,7 @@ export async function updateBriefStatus(
       where run_id = ${args.runId}
     `;
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
@@ -109,6 +111,7 @@ export async function finalizeBrief(args: FinalizeBriefArgs): Promise<void> {
       where run_id = ${args.runId}
     `;
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }

@@ -56,7 +56,9 @@ freshbark:
 afterAll(() => {
   try {
     fs.unlinkSync(tmpYamlPath);
-  } catch {}
+  } catch {
+    // best-effort cleanup of test fixture; ignore missing-file / EBUSY
+  }
 });
 
 describe("resolvePolicy", () => {

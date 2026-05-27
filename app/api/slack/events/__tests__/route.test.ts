@@ -22,8 +22,12 @@ const runChatTurnMock = vi.fn();
 const postSlackMessageMock = vi.fn();
 const mapSlackUserToTarsMock = vi.fn(async (id: string) => `slack:${id}`);
 const getAppSettingMock = vi.fn();
-const setAppSettingMock = vi.fn(async () => {});
-const writeAdapterAuditMock = vi.fn(async () => {});
+const setAppSettingMock = vi
+  .fn<() => Promise<void>>()
+  .mockResolvedValue(undefined);
+const writeAdapterAuditMock = vi
+  .fn<() => Promise<void>>()
+  .mockResolvedValue(undefined);
 
 vi.mock("@/lib/tars/chat-runner", () => ({
   runChatTurn: runChatTurnMock,

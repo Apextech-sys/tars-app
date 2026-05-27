@@ -72,6 +72,7 @@ export async function dispatchJob(
       )
     `;
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
   return { jobId };
@@ -131,6 +132,7 @@ export async function waitForJob(
       `waitForJob: timeout after ${timeoutMs}ms for job ${jobId}`
     );
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
@@ -184,6 +186,7 @@ export async function pollJobOnce(jobId: string): Promise<JobResultRow | null> {
           : (row.completed_at ?? null),
     };
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }

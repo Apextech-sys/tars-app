@@ -12,8 +12,12 @@ const fetchIssueMock = vi.fn();
 const postCommentMock = vi.fn();
 const mapLinearUserToTarsMock = vi.fn(async (id: string) => `linear:${id}`);
 const getAppSettingMock = vi.fn();
-const setAppSettingMock = vi.fn(async () => {});
-const writeAdapterAuditMock = vi.fn(async () => {});
+const setAppSettingMock = vi
+  .fn<() => Promise<void>>()
+  .mockResolvedValue(undefined);
+const writeAdapterAuditMock = vi
+  .fn<() => Promise<void>>()
+  .mockResolvedValue(undefined);
 const loadProjectsByLinearTeamMock = vi.fn(async () => new Map());
 
 vi.mock("@/lib/tars/chat-runner", () => ({

@@ -63,6 +63,7 @@ async function pollBriefStatus(runId: string): Promise<BriefRow> {
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown in test teardown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
@@ -111,6 +112,7 @@ describe.skipIf(!RUN)("brief workflow — live (tars-app HTTP)", () => {
         await new Promise((r) => setTimeout(r, 1000));
       }
     } finally {
+      // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown in test teardown
       await sql.end({ timeout: 5 }).catch(() => {});
     }
     expect(runId, "no adhoc brief row appeared").toBeTruthy();

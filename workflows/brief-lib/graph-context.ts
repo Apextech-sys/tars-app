@@ -342,6 +342,7 @@ export async function buildAuditWindow(args: {
       error: (err as Error).message,
     };
   } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
     await sql.end({ timeout: 5 }).catch(() => {});
   }
 }
