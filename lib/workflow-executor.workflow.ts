@@ -55,7 +55,6 @@ export interface WorkflowExecutionInput {
 /**
  * Helper to replace template variables in conditions
  */
-// biome-ignore lint/nursery/useMaxParams: Helper function needs all parameters for template replacement
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Template variable replacement requires nested logic for standardized outputs
 function replaceTemplateVariable(
   match: string,
