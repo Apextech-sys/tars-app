@@ -25,16 +25,16 @@ export function findNodeReferences(template: string): Set<string> {
 
     // Handle @nodeId:DisplayName.field format
     if (expression.startsWith("@")) {
-      const withoutAt = expression.substring(1);
+      const withoutAt = expression.slice(1);
       const colonIndex = withoutAt.indexOf(":");
       if (colonIndex !== -1) {
-        const nodeId = withoutAt.substring(0, colonIndex);
+        const nodeId = withoutAt.slice(0, colonIndex);
         refs.add(nodeId);
       }
     }
     // Handle $nodeId.field format
     else if (expression.startsWith("$")) {
-      const withoutDollar = expression.substring(1);
+      const withoutDollar = expression.slice(1);
       const parts = withoutDollar.split(".");
       if (parts.length > 0) {
         refs.add(parts[0]);

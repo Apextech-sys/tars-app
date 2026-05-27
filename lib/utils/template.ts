@@ -21,17 +21,17 @@ function processNewFormatReference(
   nodeOutputs: NodeOutputs,
   match: string
 ): string {
-  const withoutAt = trimmed.substring(1);
+  const withoutAt = trimmed.slice(1);
   const colonIndex = withoutAt.indexOf(":");
 
   if (colonIndex === -1) {
     return match;
   }
 
-  const nodeId = withoutAt.substring(0, colonIndex);
-  const rest = withoutAt.substring(colonIndex + 1);
+  const nodeId = withoutAt.slice(0, colonIndex);
+  const rest = withoutAt.slice(colonIndex + 1);
   const dotIndex = rest.indexOf(".");
-  const fieldPath = dotIndex === -1 ? "" : rest.substring(dotIndex + 1);
+  const fieldPath = dotIndex === -1 ? "" : rest.slice(dotIndex + 1);
 
   if (!fieldPath) {
     const nodeOutput = nodeOutputs[nodeId];
@@ -55,7 +55,7 @@ function processLegacyDollarReference(
   nodeOutputs: NodeOutputs,
   match: string
 ): string {
-  const withoutDollar = trimmed.substring(1);
+  const withoutDollar = trimmed.slice(1);
 
   if (!(withoutDollar.includes(".") || withoutDollar.includes("["))) {
     const nodeOutput = nodeOutputs[withoutDollar];

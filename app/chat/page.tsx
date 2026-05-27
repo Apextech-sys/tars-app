@@ -535,8 +535,8 @@ export default function ChatPage() {
             continue;
           }
 
-          const code = line.substring(0, colonIdx);
-          const jsonStr = line.substring(colonIdx + 1);
+          const code = line.slice(0, colonIdx);
+          const jsonStr = line.slice(colonIdx + 1);
 
           let parsed: unknown;
           try {

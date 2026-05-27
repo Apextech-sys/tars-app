@@ -103,16 +103,16 @@ export function generateWorkflowCode(
 
   // Helper to process @nodeId:DisplayName.field format for template strings
   function processAtFormat(trimmed: string, match: string): string {
-    const withoutAt = trimmed.substring(1);
+    const withoutAt = trimmed.slice(1);
     const colonIndex = withoutAt.indexOf(":");
     if (colonIndex === -1) {
       return match;
     }
 
-    const nodeId = withoutAt.substring(0, colonIndex);
-    const rest = withoutAt.substring(colonIndex + 1);
+    const nodeId = withoutAt.slice(0, colonIndex);
+    const rest = withoutAt.slice(colonIndex + 1);
     const dotIndex = rest.indexOf(".");
-    const fieldPath = dotIndex === -1 ? "" : rest.substring(dotIndex + 1);
+    const fieldPath = dotIndex === -1 ? "" : rest.slice(dotIndex + 1);
 
     const varName = nodeIdToVarName.get(nodeId);
     if (!varName) {
@@ -129,7 +129,7 @@ export function generateWorkflowCode(
 
   // Helper to process $nodeId.field format for template strings
   function processDollarFormat(trimmed: string, match: string): string {
-    const withoutDollar = trimmed.substring(1);
+    const withoutDollar = trimmed.slice(1);
     const parts = withoutDollar.split(".");
     const nodeId = parts[0];
     const fieldPath = parts.slice(1).join(".");
@@ -152,16 +152,16 @@ export function generateWorkflowCode(
     trimmed: string,
     match: string
   ): string {
-    const withoutAt = trimmed.substring(1);
+    const withoutAt = trimmed.slice(1);
     const colonIndex = withoutAt.indexOf(":");
     if (colonIndex === -1) {
       return match;
     }
 
-    const nodeId = withoutAt.substring(0, colonIndex);
-    const rest = withoutAt.substring(colonIndex + 1);
+    const nodeId = withoutAt.slice(0, colonIndex);
+    const rest = withoutAt.slice(colonIndex + 1);
     const dotIndex = rest.indexOf(".");
-    const fieldPath = dotIndex === -1 ? "" : rest.substring(dotIndex + 1);
+    const fieldPath = dotIndex === -1 ? "" : rest.slice(dotIndex + 1);
 
     const varName = nodeIdToVarName.get(nodeId);
     if (!varName) {
@@ -181,7 +181,7 @@ export function generateWorkflowCode(
     trimmed: string,
     match: string
   ): string {
-    const withoutDollar = trimmed.substring(1);
+    const withoutDollar = trimmed.slice(1);
     const parts = withoutDollar.split(".");
     const nodeId = parts[0];
     const fieldPath = parts.slice(1).join(".");

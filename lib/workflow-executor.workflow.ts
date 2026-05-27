@@ -80,7 +80,7 @@ function replaceTemplateVariable(
   } else if (output.data === null || output.data === undefined) {
     value = undefined;
   } else {
-    const fieldPath = rest.substring(dotIndex + 1);
+    const fieldPath = rest.slice(dotIndex + 1);
     const fields = fieldPath.split(".");
     // biome-ignore lint/suspicious/noExplicitAny: Dynamic data traversal
     let current: any = output.data;
@@ -320,7 +320,7 @@ function processTemplates(
             return "";
           }
 
-          const fieldPath = rest.substring(dotIndex + 1);
+          const fieldPath = rest.slice(dotIndex + 1);
           const fields = fieldPath.split(".");
           // biome-ignore lint/suspicious/noExplicitAny: Dynamic output data traversal
           let current: any = output.data;

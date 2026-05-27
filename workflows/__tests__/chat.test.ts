@@ -84,7 +84,7 @@ describe("AI SDK v5 data stream encoding", () => {
       args: { file_path: "/etc/hostname" },
     };
     const line = `9:${JSON.stringify(toolCall)}\n`;
-    const parsed = JSON.parse(line.substring(2, line.length - 1));
+    const parsed = JSON.parse(line.slice(2, line.length - 1));
     expect(parsed.toolName).toBe("Read");
     expect(parsed.toolCallId).toBe("tc_1");
   });
@@ -92,14 +92,14 @@ describe("AI SDK v5 data stream encoding", () => {
   it("tool result uses code a", () => {
     const result = { toolCallId: "tc_1", result: "vm102" };
     const line = `a:${JSON.stringify(result)}\n`;
-    const parsed = JSON.parse(line.substring(2, line.length - 1));
+    const parsed = JSON.parse(line.slice(2, line.length - 1));
     expect(parsed.result).toBe("vm102");
   });
 
   it("metadata uses code d", () => {
     const meta = { sessionId: "abc-123", claudeSessionId: "sess-456" };
     const line = `d:${JSON.stringify(meta)}\n`;
-    const parsed = JSON.parse(line.substring(2, line.length - 1));
+    const parsed = JSON.parse(line.slice(2, line.length - 1));
     expect(parsed.sessionId).toBe("abc-123");
   });
 });

@@ -61,7 +61,7 @@ function tryParseAndEnqueueOperation(
 
     return newCount;
   } catch {
-    console.warn("[API] Skipping invalid JSON line:", trimmed.substring(0, 50));
+    console.warn("[API] Skipping invalid JSON line:", trimmed.slice(0, 50));
     return operationCount;
   }
 }

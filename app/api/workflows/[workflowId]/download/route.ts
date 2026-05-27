@@ -41,7 +41,7 @@ async function readDirectoryRecursive(
       // Read file content
       const content = await readFile(fullPath, "utf-8");
       // Use relative path from base directory
-      const relativePath = fullPath.substring(baseDir.length + 1);
+      const relativePath = fullPath.slice(baseDir.length + 1);
       files[relativePath] = content;
     }
   }

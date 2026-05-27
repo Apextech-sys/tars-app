@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
                         : String(block.content ?? "");
                   send("a", {
                     toolCallId: block.tool_use_id,
-                    result: resultText.substring(0, 4000),
+                    result: resultText.slice(0, 4000),
                   });
                   assistantParts.push({
                     type: "tool-result",
@@ -316,7 +316,7 @@ export async function POST(req: NextRequest) {
         };
         if (isNewSession && message) {
           updateData.title =
-            message.length > 60 ? `${message.substring(0, 57)}...` : message;
+            message.length > 60 ? `${message.slice(0, 57)}...` : message;
         }
         await db
           .update(chatSessions)

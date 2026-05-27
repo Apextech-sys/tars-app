@@ -223,7 +223,7 @@ export async function runChatTurn(
   const updateData: Record<string, unknown> = { lastActiveAt: new Date() };
   if (isNewSession && (titleHint ?? message)) {
     const t = titleHint ?? message;
-    updateData.title = t.length > 60 ? `${t.substring(0, 57)}...` : t;
+    updateData.title = t.length > 60 ? `${t.slice(0, 57)}...` : t;
   }
   await db
     .update(chatSessions)
