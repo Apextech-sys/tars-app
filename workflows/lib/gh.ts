@@ -104,23 +104,111 @@ export async function fetchPRFiles(
   return files;
 }
 
+/**
+ * Fetch the unified diff for a PR.
+ *
+ * GitHub's diff endpoint returns 422 with code "too_large" when the PR
+ * touches > ~300 files. In that case we fall back to synthesizing a
+ * diff from per-file patches obtained from `listFiles`. The synthesized
+ * diff is functionally equivalent for code-review purposes (per-hunk
+ * patches are preserved); only the unified-diff envelope changes.
+ *
+ * Also caps the result at ~1.5 MB to avoid OOM'ing the AI reviewers.
+ */
 export async function fetchPRDiff(
   owner: string,
   repo: string,
   prNumber: number
 ): Promise<string> {
   "use step";
+  const MAX_DIFF_BYTES = 1_500_000; // ~1.5 MB cap (Anthropic ~200k token ceiling for context)
   const octo = await getOctokit();
-  const resp = await octo.request(
-    "GET /repos/{owner}/{repo}/pulls/{pull_number}",
-    {
-      owner,
-      repo,
-      pull_number: prNumber,
-      mediaType: { format: "diff" },
+
+  // Try the native diff endpoint first.
+  try {
+    const resp = await octo.request(
+      "GET /repos/{owner}/{repo}/pulls/{pull_number}",
+      {
+        owner,
+        repo,
+        pull_number: prNumber,
+        mediaType: { format: "diff" },
+      }
+    );
+    const diff =
+      typeof resp.data === "string" ? resp.data : String(resp.data ?? "");
+    if (diff.length > MAX_DIFF_BYTES) {
+      return (
+        diff.slice(0, MAX_DIFF_BYTES) +
+        `\n\n[diff truncated — original ${diff.length} bytes, kept first ${MAX_DIFF_BYTES} bytes]`
+      );
     }
+    return diff;
+  } catch (err: unknown) {
+    const e = err as {
+      status?: number;
+      message?: string;
+      response?: { data?: { errors?: Array<{ code?: string }> } };
+    };
+    const isTooLarge =
+      e?.status === 422 &&
+      (e?.message?.includes("too_large") ||
+        e?.message?.includes("maximum number of files") ||
+        e?.response?.data?.errors?.some((x) => x?.code === "too_large"));
+    if (!isTooLarge) {
+      throw err;
+    }
+    // Fall through to synthesized diff.
+  }
+
+  // Synthesize a unified diff from per-file patches.
+  const files: Array<{
+    filename: string;
+    status: string;
+    patch?: string;
+    additions: number;
+    deletions: number;
+  }> = [];
+  for await (const resp of octo.paginate.iterator(octo.pulls.listFiles, {
+    owner,
+    repo,
+    pull_number: prNumber,
+    per_page: 100,
+  })) {
+    for (const f of resp.data) {
+      files.push({
+        filename: f.filename,
+        status: f.status,
+        patch: f.patch,
+        additions: f.additions,
+        deletions: f.deletions,
+      });
+    }
+  }
+
+  const sections: string[] = [];
+  sections.push(
+    `# Synthesized diff — original diff exceeded GitHub's 300-file limit.\n# ${files.length} files changed.\n`
   );
-  return typeof resp.data === "string" ? resp.data : String(resp.data ?? "");
+  let bytesUsed = sections[0].length;
+  let truncated = false;
+  for (const f of files) {
+    const header = `diff --git a/${f.filename} b/${f.filename}\n--- a/${f.filename}\n+++ b/${f.filename}\n`;
+    const body = f.patch ?? `# (no patch available — status=${f.status}, +${f.additions}/-${f.deletions})\n`;
+    const section = header + body + "\n";
+    if (bytesUsed + section.length > MAX_DIFF_BYTES) {
+      truncated = true;
+      break;
+    }
+    sections.push(section);
+    bytesUsed += section.length;
+  }
+  if (truncated) {
+    sections.push(
+      `\n[synthesized diff truncated at ~${MAX_DIFF_BYTES} bytes — ${files.length} total files in PR]\n`
+    );
+  }
+  return sections.join("");
 }
 
 export interface PostPrCommentResult {

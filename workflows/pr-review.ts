@@ -310,6 +310,21 @@ export async function prReviewWorkflow(
 
   await audit("start", "start", { input });
 
+  // Insert a baseline `started` row immediately so that even an early step
+  // failure (before routing finishes) leaves a row we can mark `error` on
+  // in the catch block below.
+  await upsertPrReviewRun({
+    runId,
+    owner: input.owner,
+    repo: input.repo,
+    prNumber: input.prNumber,
+    status: "started",
+  });
+
+  // Wrap the entire pipeline so any step failure is recorded against the
+  // pr_review_runs row instead of silently leaving it at status=started.
+  try {
+
   // ---------- Step 1: routing ----------
   let policy = await resolvePolicy(input.owner, input.repo);
   if (input.policyOverride) {
@@ -573,4 +588,23 @@ export async function prReviewWorkflow(
     agreement,
     prSha: pr.headSha,
   };
+
+  } catch (err) {
+    // Catch-all: surface the failure on the pr_review_runs row so we never
+    // leave a row stuck at `started`. The workflow still re-throws so the
+    // WDK marks the run as failed and retries semantics behave as expected.
+    const message =
+      err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    const truncated = message.length > 1000 ? `${message.slice(0, 1000)}...` : message;
+    await audit("error", "error", { message: truncated });
+    await upsertPrReviewRun({
+      runId,
+      owner: input.owner,
+      repo: input.repo,
+      prNumber: input.prNumber,
+      status: "error",
+      error: truncated,
+    });
+    throw err;
+  }
 }
