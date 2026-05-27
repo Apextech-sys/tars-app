@@ -5,7 +5,8 @@ export default defineConfig({
     include: [
       "workflows/__tests__/**/*.test.ts",
       "lib/tars/__tests__/**/*.test.ts",
-      "app/api/**/__tests__/**/*.test.ts",
+      "app/api/slack/**/__tests__/**/*.test.ts",
+      "app/api/linear/**/__tests__/**/*.test.ts",
     ],
     environment: "node",
     testTimeout: 30_000,
