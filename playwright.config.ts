@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: "html",
   timeout: 60_000,
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: "http://localhost:3001",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     navigationTimeout: 60_000,
@@ -19,10 +19,22 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
+    {
+      name: "mobile-galaxy",
+      testDir: "./tests/mobile",
+      use: {
+        ...devices["Desktop Chrome"],
+        viewport: { width: 384, height: 854 },
+        userAgent:
+          "Mozilla/5.0 (Linux; Android 14; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
   ],
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3000",
+    command: "pnpm dev --port 3001",
+    url: "http://localhost:3001",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

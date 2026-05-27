@@ -2,6 +2,7 @@
 
 import {
   ConnectionMode,
+  PanOnScrollMode,
   MiniMap,
   type Node,
   type NodeMouseHandler,
@@ -14,6 +15,7 @@ import {
 import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@/components/ai-elements/canvas";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Connection } from "@/components/ai-elements/connection";
 import { Controls } from "@/components/ai-elements/controls";
 import { AIPrompt } from "@/components/ai-elements/prompt";
@@ -105,6 +107,7 @@ export function WorkflowCanvas() {
   const justCreatedNodeFromConnection = useRef(false);
   const viewportInitialized = useRef(false);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
+  const isMobile = useIsMobile();
   const [contextMenuState, setContextMenuState] =
     useState<ContextMenuState>(null);
 
@@ -548,7 +551,11 @@ export function WorkflowCanvas() {
         isValidConnection={isValidConnection}
         nodes={nodes}
         nodesConnectable={!isGenerating}
-        nodesDraggable={!isGenerating}
+        nodesDraggable={!isGenerating && !isMobile}
+        panOnScroll={isMobile}
+        panOnScrollMode={PanOnScrollMode.Free}
+        zoomOnPinch={true}
+        selectionOnDrag={!isMobile}
         nodeTypes={nodeTypes}
         onConnect={isGenerating ? undefined : onConnect}
         onConnectEnd={isGenerating ? undefined : onConnectEnd}

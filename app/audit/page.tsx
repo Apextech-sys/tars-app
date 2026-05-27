@@ -159,14 +159,14 @@ export default function AuditPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Audit Log</h1>
             <p className="text-muted-foreground text-sm mt-1">
               {total.toLocaleString()} total records
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -188,7 +188,7 @@ export default function AuditPage() {
         {/* Filters */}
         <div className="rounded-lg border bg-card p-4 space-y-4">
           <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-0 w-full sm:min-w-[200px]">
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input
                 placeholder="Search run_id..."
@@ -200,14 +200,14 @@ export default function AuditPage() {
             </div>
             <Input
               type="date"
-              className="w-auto"
+              className="w-full sm:w-auto"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               title="From date"
             />
             <Input
               type="date"
-              className="w-auto"
+              className="w-full sm:w-auto"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               title="To date"
@@ -278,6 +278,7 @@ export default function AuditPage() {
 
         {/* Table */}
         <div className="rounded-lg border bg-card overflow-hidden">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -408,6 +409,7 @@ export default function AuditPage() {
               )}
             </TableBody>
           </Table>
+          </div>
         </div>
 
         {/* Pagination */}

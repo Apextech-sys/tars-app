@@ -82,10 +82,10 @@ function kindEmoji(kind: BriefRow["kind"]): string {
 export default async function BriefsPage() {
   const briefs = await loadBriefs();
   return (
-    <div className="pointer-events-auto min-h-screen w-full text-zinc-100 px-6 py-10">
+    <div className="pointer-events-auto min-h-screen w-full text-zinc-100 px-4 md:px-6 py-6 md:py-10">
       <div className="max-w-3xl mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight">TARS Briefs</h1>
+          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">TARS Briefs</h1>
           <p className="text-sm text-zinc-400 mt-2">
             Twice-daily situation reports composed from the TARS graph,
             projects.yaml, audit log, and recent repo activity.
@@ -111,7 +111,7 @@ export default async function BriefsPage() {
                   href={`/briefs/${b.id}`}
                   className="block p-4 focus:outline-none focus:ring-2 focus:ring-zinc-700 rounded-lg"
                 >
-                  <div className="flex items-start justify-between gap-3 mb-2">
+                  <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium text-zinc-200">
                         {kindEmoji(b.kind)} — {b.date}

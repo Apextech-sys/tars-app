@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Menu, X as CloseIcon } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   MessageSquare,
@@ -355,13 +356,13 @@ function PromptInput({
         disabled={disabled}
         placeholder="Message TARS... (Enter to send, Shift+Enter for newline)"
         rows={1}
-        className="w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/30 focus:outline-none disabled:opacity-50 max-h-[200px]"
+        className="w-full resize-none bg-transparent px-4 py-3 pr-12 text-sm text-white placeholder:text-white/30 focus:outline-none disabled:opacity-50 max-h-[200px]" style={{ fontSize: "16px" }}
       />
       <button
         type="button"
         onClick={handleSend}
         disabled={disabled || !value.trim()}
-        className="absolute right-3 bottom-3 p-1.5 rounded-lg bg-[#00d4a0]/20 hover:bg-[#00d4a0]/40 text-[#00d4a0] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        className="absolute right-3 bottom-3 p-2 min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg bg-[#00d4a0]/20 hover:bg-[#00d4a0]/40 text-[#00d4a0] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
       >
         {disabled ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -378,6 +379,7 @@ function PromptInput({
 // ──────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -635,36 +637,60 @@ export default function ChatPage() {
 
   return (
     <div className="flex h-screen bg-[#0a0f0d] text-white overflow-hidden">
-      {/* Sidebar */}
-      <SessionSidebar
-        sessions={sessions}
-        activeId={activeSessionId}
-        onSelect={loadSession}
-        onNew={startNewChat}
-        onDelete={deleteSession}
-        loading={sessionsLoading}
-      />
+      {/* Mobile overlay backdrop */}
+      {sidebarOpen && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      {/* Sidebar — drawer on mobile, static on desktop */}
+      <div
+        className={[
+          "fixed md:static z-50 inset-y-0 left-0 transition-transform duration-200 md:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+        ].join(" ")}
+      >
+        <SessionSidebar
+          sessions={sessions}
+          activeId={activeSessionId}
+          onSelect={(id) => { loadSession(id); setSidebarOpen(false); }}
+          onNew={() => { startNewChat(); setSidebarOpen(false); }}
+          onDelete={deleteSession}
+          loading={sessionsLoading}
+        />
+      </div>
 
       {/* Main chat area */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Header */}
-        <div className="flex items-center px-6 py-3 border-b border-white/10 bg-black/20 backdrop-blur-sm flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[#00d4a0] animate-pulse" />
-            <span className="text-sm font-medium text-white/80">
+        <div className="flex items-center px-4 md:px-6 py-3 border-b border-white/10 bg-black/20 backdrop-blur-sm flex-shrink-0 gap-2">
+          {/* Hamburger — mobile only */}
+          <button
+            type="button"
+            aria-label="Open chat sessions"
+            onClick={() => setSidebarOpen((v) => !v)}
+            className="md:hidden min-h-[44px] min-w-[44px] flex items-center justify-center rounded-lg hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+          >
+            {sidebarOpen ? <CloseIcon className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-2 h-2 rounded-full bg-[#00d4a0] animate-pulse shrink-0" />
+            <span className="text-sm font-medium text-white/80 truncate">
               {activeSessionId
                 ? sessions.find((s) => s.id === activeSessionId)?.title ??
                   "Conversation"
                 : "New conversation"}
             </span>
           </div>
-          <div className="ml-auto text-xs text-white/30 font-mono">
+          <div className="ml-auto text-xs text-white/30 font-mono shrink-0">
             claude-sonnet-4-6 via SDK
           </div>
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4">
           {allMessages.length === 0 && !streaming && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -711,7 +737,7 @@ export default function ChatPage() {
         </div>
 
         {/* Input */}
-        <div className="px-6 pb-6 pt-3 flex-shrink-0 border-t border-white/5">
+        <div className="px-4 md:px-6 pb-4 md:pb-6 pt-3 flex-shrink-0 border-t border-white/5">
           <PromptInput onSend={sendMessage} disabled={isLoading} />
           <div className="mt-2 text-center text-[10px] text-white/20">
             TARS has access to Read, Write, Bash, Glob, Grep, WebFetch, Task

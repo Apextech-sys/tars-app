@@ -19,6 +19,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { NotificationsSettingsSection } from "@/components/tars/notifications-settings-section";
 import {
   type ProjectPolicy,
   type ProjectsMap,
@@ -56,11 +57,11 @@ function Section({
 }) {
   return (
     <section className="rounded-lg border bg-card">
-      <div className="p-5 border-b">
+      <div className="p-4 md:p-5 border-b">
         <h2 className="font-semibold text-base">{title}</h2>
         <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
       </div>
-      <div className="p-5">{children}</div>
+      <div className="p-4 md:p-5">{children}</div>
     </section>
   );
 }
@@ -111,7 +112,7 @@ function YamlEditorSection() {
         </div>
 
         <textarea
-          className="w-full rounded-md border bg-background font-mono text-xs px-3 py-2.5 min-h-[480px] focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+          className="w-full rounded-md border bg-background font-mono text-xs px-3 py-2.5 min-h-[200px] md:min-h-[480px] focus:outline-none focus:ring-2 focus:ring-ring resize-y" style={{ fontSize: "16px" }}
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           spellCheck={false}
@@ -253,7 +254,7 @@ function KillSwitchesSection() {
                               onChange={() =>
                                 toggle(key, "auto_review", autoReview)
                               }
-                              className="size-4 accent-primary"
+                              className="size-5 accent-primary cursor-pointer"
                             />
                             Auto-review
                           </label>
@@ -277,7 +278,7 @@ function KillSwitchesSection() {
                               onChange={() =>
                                 toggle(key, "auto_fix", autoFix)
                               }
-                              className="size-4 accent-primary"
+                              className="size-5 accent-primary cursor-pointer"
                             />
                             Auto-fix
                           </label>
@@ -401,7 +402,7 @@ function ModelPickerSection() {
 export default function SettingsPage() {
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-4xl mx-auto px-4 py-6 md:py-8 space-y-6 md:space-y-8">
         <div>
           <h1 className="text-2xl font-bold">Settings</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -412,6 +413,7 @@ export default function SettingsPage() {
         <YamlEditorSection />
         <KillSwitchesSection />
         <ModelPickerSection />
+        <NotificationsSettingsSection />
       </div>
     </div>
   );

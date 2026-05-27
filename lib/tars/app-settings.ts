@@ -9,7 +9,8 @@ import { appSettings } from "@/lib/db/tars-schema";
 export type AppSettingKey =
   | "slack_allowed_channels"
   | "slack_bot_user_id"
-  | "linear_bot_user_id";
+  | "linear_bot_user_id"
+  | "notifications";
 
 export async function getAppSetting<T = unknown>(
   key: AppSettingKey,

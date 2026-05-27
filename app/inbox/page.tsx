@@ -42,6 +42,8 @@ import {
   resolveEscalation,
   snoozeEscalation,
 } from "./actions";
+import { NotificationPermissionBanner } from "@/components/tars/notification-permission-banner";
+import { useNotifications } from "@/hooks/use-notifications";
 
 function severityBadge(severity: string) {
   const map: Record<
@@ -126,7 +128,7 @@ function InboxCard({
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           {itemKindIcon(item.kind)}
           <span className="font-medium text-sm truncate">{title}</span>
@@ -168,6 +170,7 @@ function InboxCard({
             size="sm"
             variant="outline"
             disabled={isPending}
+            className="min-h-[44px]"
             onClick={() => setResolveOpen(true)}
           >
             <CheckCircle2 className="size-3.5" />
@@ -202,6 +205,7 @@ function InboxCard({
             size="sm"
             variant="ghost"
             disabled={isPending}
+            className="min-h-[44px]"
             onClick={handleDefer}
           >
             <X className="size-3.5" />
@@ -243,6 +247,7 @@ export default function InboxPage() {
   const [items, setItems] = useState<InboxItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
+  const { notify, promptPermission } = useNotifications();
   const eventSourceRef = useRef<EventSource | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -264,9 +269,17 @@ export default function InboxPage() {
     eventSourceRef.current = es;
     es.onmessage = (event: MessageEvent<string>) => {
       try {
-        const msg = JSON.parse(event.data) as { type: string };
+        const msg = JSON.parse(event.data) as {
+          type: string;
+          payload?: { id?: string; title?: string; severity?: string };
+        };
         if (msg.type === "escalation_changed") {
           refresh();
+          const id = msg.payload?.id ?? "unknown";
+          const title = msg.payload?.title ?? "New escalation";
+          const severity =
+            (msg.payload?.severity as "info" | "warn" | "blocker") ?? "warn";
+          notify(id, `TARS — ${title}`, `Severity: ${severity}`, severity);
         }
       } catch {
         // ignore parse errors
@@ -291,7 +304,8 @@ export default function InboxPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 py-6 md:py-8 space-y-5 md:space-y-6">
+        <NotificationPermissionBanner onRequest={promptPermission} />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Inbox</h1>
@@ -305,6 +319,7 @@ export default function InboxPage() {
             size="sm"
             onClick={refresh}
             disabled={isPending || loading}
+            className="min-h-[44px]"
           >
             <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
             Refresh
@@ -312,7 +327,7 @@ export default function InboxPage() {
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
+          <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="all">
               All
               {items.length > 0 && (

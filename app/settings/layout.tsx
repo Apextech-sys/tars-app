@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
-export default function Layout({ children }: { children: ReactNode }) {
-  return <>{children}</>;
+import { DashboardShell } from "@/components/tars/mobile-nav";
+
+export default function SettingsLayout({ children }: { children: ReactNode }) {
+  return <DashboardShell title="Settings">{children}</DashboardShell>;
 }

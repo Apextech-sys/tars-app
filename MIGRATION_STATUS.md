@@ -157,3 +157,68 @@ Both `slack-adapter` and `linear-adapter` write entries with steps: `verify-sign
    INSERT INTO app_settings (key, value) VALUES ('linear_bot_user_id', '"VIEWER_ID_HERE"'::jsonb)
    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
    ```
+
+---
+
+## M6 — Mobile-responsive polish + Browser Notification API
+
+**Status: ✅ Complete**
+
+### Supported viewports
+
+| Device | CSS width | Orientation | Tested via |
+|---|---|---|---|
+| Samsung Galaxy S22+ Ultra | 384px | Portrait | Playwright `mobile-galaxy` project |
+| Desktop (all routes) | ≥ 768px | — | Playwright `chromium` project |
+
+**Minimum supported width: 384px** (Samsung Galaxy S22+ Ultra portrait). All routes verified to have no horizontal scrollbar at this width.
+
+### Responsive architecture
+
+- **Navigation**: All TARS dashboard routes (`/inbox`, `/settings`, `/audit`, `/briefs`, `/workflows`) wrapped in `DashboardShell` (see `components/tars/mobile-nav.tsx`)
+  - `< 768px`: hamburger button in top bar → slide-in drawer (`MobileDrawer`)
+  - `≥ 768px`: persistent `DesktopSidebar` (256px / 256px)
+- **Chat (`/chat`)**: own internal session sidebar becomes a mobile drawer triggered by hamburger in the chat header. Sidebar does not render in the DOM flow on mobile — overlay drawer only.
+- **Audit table (`/audit`)**: wrapped in `overflow-x-auto` div; full table preserved at all widths (no card stack — density preserved).
+- **Settings YAML editor (`/settings`)**: uses `<textarea>` (not Monaco) at all sizes. `min-h` responsive: 200px on mobile, 480px on desktop. `font-size: 16px` set to prevent mobile browser auto-zoom.
+- **Workflow canvas (`/workflows/[id]`)**: `panOnScroll` enabled on mobile (touch pan), `zoomOnPinch` always enabled, `nodesDraggable` disabled on mobile (pan-only read mode). `PanOnScrollMode.Free` set.
+- **Hit targets**: all interactive elements ≥ 44×44px (`min-h-[44px] min-w-[44px]`).
+- **Input font sizes**: `font-size: 16px` on all `<textarea>` inputs to prevent Chrome Mobile / Safari auto-zoom.
+- **Dark mode**: all routes use Tailwind CSS variables via `next-themes` — dark mode is inherited from the `ThemeProvider` in root layout; no overrides needed at narrow widths.
+
+### Browser Notification API
+
+**Permission model:**
+
+1. No automatic browser popup on visit
+2. On first visit to `/inbox`, a dismissible toast-style banner (`NotificationPermissionBanner`) appears if `Notification.permission === "default"` and the user has not dismissed it this session
+3. Dismissal is tracked in `sessionStorage` under `tars:notif-banner-dismissed` — one dismissal survives the session (not cross-session: fresh session re-prompts)
+4. Toggle in `/settings` → "Notifications" section (`NotificationsSettingsSection`) to enable/disable and fire a test notification
+
+**Settings storage:**
+
+- `localStorage` key `tars:notification-settings` for immediate persistence (survives reload without server round-trip)
+- Debounced `POST /api/settings/notifications` syncs to `app_settings` table under key `notifications` (jsonb `{ enabled: boolean, severity_threshold: "info"|"warn"|"blocker" }`)
+- `GET /api/settings/notifications` reads back from DB (server-side setting reference)
+
+**Notification firing:**
+
+- Hook: `useNotifications` (`hooks/use-notifications.ts`)
+- Library: `lib/notifications/index.ts` — pure logic, no React dependency
+- Triggered by SSE `escalation_changed` events in `/inbox` via `useNotifications().notify()`
+- Tag pattern: `escalation-<id>` — duplicate events replace prior notification
+- Click handler: `window.focus()` + `router.push('/inbox/<id>')` or `/inbox` if no id
+- Severity gating: `meetsThreshold(severity, settings.severity_threshold)` must pass before firing
+
+**New files added:**
+
+| File | Purpose |
+|---|---|
+| `lib/notifications/index.ts` | Pure notification logic (permission, fire, threshold) |
+| `lib/notifications/__tests__/notifications.test.ts` | Vitest unit tests (6 suites, 15 cases) |
+| `hooks/use-notifications.ts` | React hook for permission + settings + fire |
+| `components/tars/mobile-nav.tsx` | `DashboardShell`, `DesktopSidebar`, `MobileDrawer`, `MobileTopBar` |
+| `components/tars/notification-permission-banner.tsx` | Session-dismissible permission prompt banner |
+| `components/tars/notifications-settings-section.tsx` | Settings section with toggle + threshold + test fire |
+| `app/api/settings/notifications/route.ts` | GET/POST API for server-side notification settings |
+| `tests/mobile/mobile.spec.ts` | Playwright mobile tests (384×854 Galaxy viewport) |
