@@ -132,9 +132,8 @@ export type Escalation = typeof escalations.$inferSelect;
 export type NewEscalation = typeof escalations.$inferInsert;
 export type AppSetting = typeof appSettings.$inferSelect;
 
-// ── M8 stubs ─────────────────────────────────────────────────────────────────
-// These tables are scaffolded for M8 (GitHub webhook integration).
-// Migration will be added in M8.
+// ── M8 tables (shipped): repo_settings + webhook_events ─────────────────────
+// Applied in M8 (GitHub webhook integration). Migration: lib/db/migrations.legacy/0003_webhook_repos.sql.
 
 export const repoSettings = pgTable("repo_settings", {
   repoKey: text("repo_key").primaryKey(),
