@@ -222,6 +222,6 @@ export const briefReplies = pgTable(
   }),
 );
 
-export type Brief = typeof briefs.;
-export type NewBrief = typeof briefs.;
-export type BriefReply = typeof briefReplies.;
+export type Brief = typeof briefs.$inferSelect;
+export type NewBrief = typeof briefs.$inferInsert;
+export type BriefReply = typeof briefReplies.$inferSelect;
