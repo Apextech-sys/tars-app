@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import postgres from "postgres";
 import { start } from "workflow/api";
 
+import { timingSafeAuthTokenEqual } from "@/lib/auth/internal-secret";
 import { type BriefWorkflowInput, briefWorkflow } from "@/workflows/brief";
 
 export const runtime = "nodejs";
@@ -38,7 +39,7 @@ function authCheck(authToken: string | undefined | null): boolean {
   if (!expected) {
     return true; // dev convenience; deploy sets it
   }
-  return authToken === expected;
+  return timingSafeAuthTokenEqual(authToken, expected);
 }
 
 export async function POST(request: Request) {

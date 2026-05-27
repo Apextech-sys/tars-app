@@ -13,7 +13,7 @@
 
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
-
+import { timingSafeAuthTokenEqual } from "@/lib/auth/internal-secret";
 import { type PRReviewInput, prReviewWorkflow } from "@/workflows/pr-review";
 
 export async function POST(request: Request) {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // for internal callers (the webhook handler, the dashboard dryRun, and
     // the integration test) — never exposed to the public tunnel ingress.
     const expected = process.env.TARS_INTERNAL_SECRET;
-    if (expected && body.authToken !== expected) {
+    if (expected && !timingSafeAuthTokenEqual(body.authToken, expected)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 

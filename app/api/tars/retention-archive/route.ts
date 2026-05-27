@@ -8,10 +8,10 @@
  * See workflows/retention-archive.ts for what the run does.
  */
 
-import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { start } from "workflow/api";
 
+import { timingSafeAuthTokenEqual } from "@/lib/auth/internal-secret";
 import {
   type RetentionInput,
   retentionArchiveWorkflow,
@@ -29,14 +29,7 @@ function authCheck(authToken: string | undefined | null): boolean {
   if (!expected) {
     return true; // dev convenience; deploy sets it
   }
-  if (!authToken) {
-    return false;
-  }
-  // Compare hashes to side-step the length-mismatch constraint of
-  // timingSafeEqual on the raw secret strings.
-  const a = createHash("sha256").update(authToken).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
+  return timingSafeAuthTokenEqual(authToken, expected);
 }
 
 export async function POST(request: Request) {
