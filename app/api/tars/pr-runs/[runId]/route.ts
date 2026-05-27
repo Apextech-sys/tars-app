@@ -27,6 +27,7 @@ export async function GET(
           disagreedPayload: prReviewRuns.disagreedPayload,
           adjudicationAction: prReviewRuns.adjudicationAction,
           adjudicationActionAt: prReviewRuns.adjudicationActionAt,
+          archivedAt: prReviewRuns.archivedAt,
           createdAt: prReviewRuns.createdAt,
           updatedAt: prReviewRuns.updatedAt,
         })
@@ -63,6 +64,7 @@ export async function GET(
         createdAt: run.createdAt.toISOString(),
         updatedAt: run.updatedAt.toISOString(),
         adjudicationActionAt: run.adjudicationActionAt?.toISOString() ?? null,
+        archivedAt: run.archivedAt?.toISOString() ?? null,
       },
       auditLog: auditRows.map((a) => ({
         ...a,

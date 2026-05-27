@@ -1,4 +1,5 @@
 import {
+  Archive,
   Clock,
   ExternalLink,
   GitPullRequest,
@@ -89,7 +90,18 @@ export function RunHeader({
             {run.prNumber}
           </p>
         </div>
-        <RunStatusBadge status={run.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          {run.archivedAt && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full border border-zinc-700 bg-zinc-800/50 px-2.5 py-0.5 font-medium text-xs text-zinc-400"
+              title={`Archived on ${new Date(run.archivedAt).toLocaleString()}`}
+            >
+              <Archive className="size-3" />
+              Archived
+            </span>
+          )}
+          <RunStatusBadge status={run.status} />
+        </div>
       </div>
 
       {/* Meta grid */}

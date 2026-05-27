@@ -50,7 +50,23 @@ function shortTime(iso: string | null): string {
   return new Date(iso).toLocaleTimeString();
 }
 
-export function WorkerJobsTable({ jobs }: { jobs: TarsJobRow[] }) {
+export function WorkerJobsTable({
+  jobs,
+  archivedAt = null,
+}: {
+  jobs: TarsJobRow[];
+  archivedAt?: string | null;
+}) {
+  if (archivedAt) {
+    return (
+      <p className="py-8 text-center text-muted-foreground text-sm">
+        Worker job rows archived with the run on{" "}
+        {new Date(archivedAt).toLocaleDateString()}. Slim summary preserved on
+        the run itself.
+      </p>
+    );
+  }
+
   if (jobs.length === 0) {
     return (
       <p className="py-8 text-center text-muted-foreground text-sm">

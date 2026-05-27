@@ -49,6 +49,11 @@ export const auditLog = pgTable(
  * `disagreed_payload` is populated only when Codex and Claude disagree on
  * findings. It carries both raw reviewer outputs so Shaun can adjudicate
  * the disagreement from /inbox. Migration: drizzle/0008_pr_review_disagreed.sql.
+ *
+ * `archived_at` is set by the retention workflow once a terminal-state row
+ * is older than 30 days; heavy fields (disagreed_payload) are NULLed and
+ * `error` is truncated. Slim summary fields are kept forever.
+ * Migration: drizzle/0011_pr_review_runs_archive.sql.
  */
 export const prReviewRuns = pgTable("pr_review_runs", {
   runId: text("run_id").primaryKey(),
@@ -66,6 +71,7 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   adjudicationActionAt: timestamp("adjudication_action_at", {
     withTimezone: true,
   }),
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

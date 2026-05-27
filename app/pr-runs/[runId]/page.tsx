@@ -128,7 +128,7 @@ export default async function PrRunDetailPage({
         {/* Worker Jobs */}
         <section className="rounded-lg border border-border bg-card/30 p-5">
           <SectionHeader icon={Bot} title="Worker Jobs" />
-          <WorkerJobsTable jobs={jobs} />
+          <WorkerJobsTable archivedAt={run.archivedAt} jobs={jobs} />
         </section>
 
         {/* Webhook Event */}

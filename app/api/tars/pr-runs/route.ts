@@ -1,4 +1,14 @@
-import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -9,6 +19,8 @@ const querySchema = z.object({
   repo: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
+  /** "true" = only archived; "false" = only non-archived; omitted = all. */
+  archived: z.enum(["true", "false"]).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   offset: z.coerce.number().int().min(0).default(0),
 });
@@ -47,6 +59,11 @@ export async function GET(req: NextRequest) {
     if (params.to) {
       conditions.push(lte(prReviewRuns.createdAt, new Date(params.to)));
     }
+    if (params.archived === "true") {
+      conditions.push(isNotNull(prReviewRuns.archivedAt));
+    } else if (params.archived === "false") {
+      conditions.push(isNull(prReviewRuns.archivedAt));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -63,6 +80,7 @@ export async function GET(req: NextRequest) {
           reviewCommentUrl: prReviewRuns.reviewCommentUrl,
           error: prReviewRuns.error,
           adjudicationAction: prReviewRuns.adjudicationAction,
+          archivedAt: prReviewRuns.archivedAt,
           createdAt: prReviewRuns.createdAt,
           updatedAt: prReviewRuns.updatedAt,
           // Join webhook event for pr_title
@@ -89,6 +107,7 @@ export async function GET(req: NextRequest) {
         ...r,
         createdAt: r.createdAt.toISOString(),
         updatedAt: r.updatedAt.toISOString(),
+        archivedAt: r.archivedAt?.toISOString() ?? null,
       })),
       total: countResult[0]?.count ?? 0,
       limit: params.limit,

@@ -30,6 +30,7 @@ export interface PrRun {
   disagreedPayload: unknown;
   adjudicationAction: string | null;
   adjudicationActionAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -129,6 +129,21 @@ export function FindingsSummary({
   }
 
   if (run.status === "disagreed") {
+    if (
+      run.archivedAt &&
+      (run.disagreedPayload === null || run.disagreedPayload === undefined)
+    ) {
+      return (
+        <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
+          <div className="flex items-center gap-2 text-purple-400">
+            <AlertCircle className="size-4" />
+            <span className="font-medium text-sm">
+              Disagreement details archived; summary preserved
+            </span>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
         <div className="flex items-center gap-2 text-purple-400">

@@ -121,6 +121,20 @@ function AuditDataExpander({ data }: { data: unknown }) {
   return <JsonTree data={data} />;
 }
 
+function isArchivedSummaryRow(row: AuditLogRow): boolean {
+  return (
+    row.workflow === "retention" &&
+    row.step === "archived" &&
+    row.status === "info"
+  );
+}
+
+interface ArchivedSummaryData {
+  steps?: number;
+  last_step?: string | null;
+  last_status?: string | null;
+}
+
 export function AuditTimeline({ rows }: { rows: AuditLogRow[] }) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
@@ -129,6 +143,23 @@ export function AuditTimeline({ rows }: { rows: AuditLogRow[] }) {
       <p className="py-8 text-center text-muted-foreground text-sm">
         No audit log entries for this run.
       </p>
+    );
+  }
+
+  if (rows.length === 1 && isArchivedSummaryRow(rows[0])) {
+    const row = rows[0];
+    const data = (row.data ?? {}) as ArchivedSummaryData;
+    const archivedDate = new Date(row.createdAt).toLocaleDateString();
+    const steps = data.steps ?? 0;
+    const lastStep = data.last_step ?? "unknown";
+    const lastStatus = data.last_status ?? "unknown";
+    return (
+      <div className="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4 text-sm text-zinc-400">
+        Detailed audit trail archived on {archivedDate}. Summary: {steps} step
+        {steps === 1 ? "" : "s"}, last status:{" "}
+        <span className="font-mono text-zinc-300">{lastStatus}</span> (
+        <span className="font-mono text-zinc-300">{lastStep}</span>).
+      </div>
     );
   }
 
