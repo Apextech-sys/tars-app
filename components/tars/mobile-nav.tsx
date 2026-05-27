@@ -5,9 +5,12 @@ import {
   BookOpen,
   Cog,
   GitBranch,
+  GitPullRequest,
   Inbox,
+  LayoutDashboard,
   MessageSquare,
   ShieldCheck,
+  Webhook,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -18,9 +21,12 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/pr-runs", label: "PR Runs", icon: GitPullRequest },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/briefs", label: "Briefs", icon: BookOpen },
   { href: "/audit", label: "Audit", icon: ShieldCheck },
+  { href: "/webhooks", label: "Webhooks", icon: Webhook },
   { href: "/workflows", label: "Workflows", icon: GitBranch },
   { href: "/settings", label: "Settings", icon: Cog },
 ];

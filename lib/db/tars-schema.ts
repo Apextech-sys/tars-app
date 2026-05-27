@@ -62,6 +62,8 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   reviewCommentUrl: text("review_comment_url"),
   error: text("error"),
   disagreedPayload: jsonb("disagreed_payload"),
+  adjudicationAction: text("adjudication_action"),
+  adjudicationActionAt: timestamp("adjudication_action_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

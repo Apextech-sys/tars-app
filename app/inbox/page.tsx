@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   AlertCircle,
   AlertTriangle,
   CheckCircle2,
@@ -15,14 +23,6 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Tabs,
   TabsContent,
@@ -40,7 +40,6 @@ import {
   type InboxItem,
   deferEscalation,
   fetchInboxItems,
-  fetchPrDisagreement,
   resolveEscalation,
   snoozeEscalation,
 } from "./actions";
@@ -123,27 +122,10 @@ function InboxCard({
   const isEscalation = item.kind === "escalation";
   const isDisagreement = item.kind === "pr_disagreement";
 
-  // Inspector modal state for the pr_disagreement card.
-  const [inspectOpen, setInspectOpen] = useState(false);
-  const [disagreement, setDisagreement] = useState<{
-    runId: string;
-    owner: string;
-    repo: string;
-    prNumber: number;
-    prSha: string | null;
-    createdAt: string;
-    payload: unknown;
-  } | null>(null);
-
+  // For pr_disagreement: navigate to run detail page instead of showing modal
   const handleInspect = () => {
     if (item.kind !== "pr_disagreement") return;
-    startTransition(async () => {
-      const data = await fetchPrDisagreement(item.runId);
-      if (data) {
-        setDisagreement(data);
-        setInspectOpen(true);
-      }
-    });
+    window.location.href = `/pr-runs/${encodeURIComponent(item.runId)}#disagreement`;
   };
 
   let title = "";
@@ -231,32 +213,7 @@ function InboxCard({
         </div>
       )}
 
-      {isDisagreement && (
-        <Dialog open={inspectOpen} onOpenChange={setInspectOpen}>
-          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                Reviewer disagreement — {item.kind === "pr_disagreement" ? `${item.repo} #${item.prNumber}` : ""}
-              </DialogTitle>
-              <DialogDescription>
-                Raw per-reviewer payloads. No public PR comment was posted.
-              </DialogDescription>
-            </DialogHeader>
-            {disagreement ? (
-              <pre className="text-xs bg-muted rounded-md p-3 overflow-auto whitespace-pre-wrap break-all">
-                {JSON.stringify(disagreement.payload, null, 2)}
-              </pre>
-            ) : (
-              <p className="text-sm text-muted-foreground">Loading...</p>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setInspectOpen(false)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* Disagreement modal replaced: "Compare reviewers" now navigates to /pr-runs/[runId]#disagreement */}
 
       {isEscalation && (
         <div className="flex gap-2 flex-wrap">
