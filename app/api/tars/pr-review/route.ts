@@ -22,9 +22,12 @@ export async function POST(request: Request) {
       authToken?: string;
     };
 
-    // Lightweight shared-secret guard — the integration test sets
-    // TARS_INTERNAL_SECRET and passes it as authToken. In production this
-    // route will be replaced with the GitHub webhook handler.
+    // This is the canonical internal entry point for the PR review workflow.
+    // Public ingress flows through `app/api/webhooks/github/route.ts`, which
+    // validates the X-Hub-Signature-256 HMAC and then calls into this route.
+    // The `authToken` shared-secret check below is the Tailscale-only guard
+    // for internal callers (the webhook handler, the dashboard dryRun, and
+    // the integration test) — never exposed to the public tunnel ingress.
     const expected = process.env.TARS_INTERNAL_SECRET;
     if (expected && body.authToken !== expected) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
