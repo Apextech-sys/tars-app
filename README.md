@@ -193,6 +193,14 @@ pnpm db:push      # Push schema to database
 pnpm db:studio    # Open Drizzle Studio
 ```
 
+## Operations
+
+This repo is deployed to VM 102 as a pair of systemd units (`tars-app`,
+`tars-worker`) plus a fleet of oneshot timer units that trigger workflows
+over HTTP. See `docs/systemd-units.md` for the unit topology, the
+user-scope vs. system-scope split (matters for `journalctl` invocations),
+and operational cheat sheets.
+
 ## Integrations
 
 ### Resend (Email)
