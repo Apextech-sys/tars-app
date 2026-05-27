@@ -176,16 +176,38 @@ export function DisagreementPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ runId, action }),
         });
-        const data = await res.json() as { ok?: boolean; error?: string };
+        const data = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          commentUrl?: string;
+          findingsPosted?: number;
+        };
         if (!res.ok) {
           toast.error(data.error ?? "Action failed");
           return;
         }
+        // Only flip the local disabled state once the backend confirms the
+        // action landed (Octokit post succeeded OR dismiss recorded).
         setLocalAction(action);
-        toast.success(
-          "Action recorded — backend posting wiring is the next slice.",
-          { duration: 4000 }
-        );
+        if (action === "dismiss") {
+          toast.success("Dismissed as noise.", { duration: 4000 });
+        } else if (data.commentUrl) {
+          const url = data.commentUrl;
+          toast.success(
+            `Posted ${data.findingsPosted ?? 0} finding${
+              data.findingsPosted === 1 ? "" : "s"
+            } to PR.`,
+            {
+              duration: 5000,
+              action: {
+                label: "View comment",
+                onClick: () => window.open(url, "_blank"),
+              },
+            }
+          );
+        } else {
+          toast.success("Action recorded.", { duration: 4000 });
+        }
       } catch {
         toast.error("Network error — try again");
       }
@@ -347,7 +369,8 @@ export function DisagreementPanel({
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            Action &quot;{localAction}&quot; was recorded. GitHub posting is wired in the next slice.
+            Action &quot;{localAction}&quot; was recorded. This run has been
+            adjudicated and the buttons are disabled to prevent double-posting.
           </p>
         )}
       </div>

@@ -39,6 +39,7 @@ import { getBlastRadiusForFiles } from "./lib/graph-client";
 import { dispatchJob, waitForJob } from "./lib/worker-dispatch";
 import { writeAudit, upsertPrReviewRun } from "./lib/audit";
 import { postSlackMessage } from "./lib/slack";
+import { renderFindingMarkdown } from "@/lib/pr-review/renderer";
 
 export interface PRReviewInput {
   owner: string;
@@ -191,21 +192,6 @@ function uniqStr(values: string[]): string[] {
   return Array.from(new Set(values));
 }
 
-function severityLabel(s: Severity): string {
-  switch (s) {
-    case "critical":
-      return "**[CRITICAL]**";
-    case "major":
-      return "**[major]**";
-    case "minor":
-      return "[minor]";
-    case "nit":
-      return "[nit]";
-    default:
-      return `[${s}]`;
-  }
-}
-
 function formatReviewBody(args: {
   prSha: string;
   prUrl: string;
@@ -236,11 +222,10 @@ function formatReviewBody(args: {
     lines.push(`### ${args.findings.length} finding${args.findings.length === 1 ? "" : "s"}`);
     lines.push("");
     for (const f of args.findings) {
-      const loc = f.line ? `:${f.line}` : "";
-      lines.push(`- ${severityLabel(f.severity)} \`${f.file}${loc}\` — ${f.message}`);
-      if (f.suggestion) {
-        lines.push(`  - _Suggestion:_ ${f.suggestion}`);
-      }
+      // Centralised renderer — keeps byte-identical output across the agree
+      // path (here) and the manual-adjudication route in
+      // app/api/tars/pr-review/disagreement-action/route.ts.
+      lines.push(renderFindingMarkdown(f));
     }
   }
 
