@@ -14,6 +14,9 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").notNull(),
   // Anonymous user tracking
   isAnonymous: boolean("is_anonymous").default(false),
+  // M5.5: external chat adapter user ids — populated by Slack/Linear adapters.
+  slackUserId: text("slack_user_id").unique(),
+  linearUserId: text("linear_user_id").unique(),
 });
 
 export const sessions = pgTable("sessions", {

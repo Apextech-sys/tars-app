@@ -85,3 +85,75 @@ ae77e74 docs: correct M2 status — AI Elements components did not install, only
 ```
 
 Also M4 commit `8eb63e4` on workflows directory (landed before the Codex fixes).
+
+## M5.5 — Slack + Linear chat adapters (code complete, awaiting M8 public tunnel)
+
+Status: code-complete + 23 tests passing + manual webhook smoke tests green. Both endpoints live on `http://tars-vm102:3001`. **Public URL registration deferred to M8** (Cloudflare Tunnel).
+
+### Routes shipped
+
+| Endpoint | Verb | Purpose |
+|---|---|---|
+| `/api/slack/events` | POST | Slack Events API receiver. Verifies signing-secret HMAC, handles `url_verification` + `app_mention` + DM `message`, routes through `runChatTurn` → posts back via `chat.postMessage`. |
+| `/api/linear/webhook` | POST | Linear webhook receiver. Verifies `Linear-Signature` HMAC, filters `Comment.create` with `@tars` trigger, fetches issue context, routes through `runChatTurn` → posts back via `commentCreate` GraphQL. |
+
+### Shared helpers (`lib/tars/`)
+
+- `chat-runner.ts` — non-streaming chat turn that reuses SOUL.md + chat-sessions/messages tables (same backend as `/api/chat`).
+- `slack.ts` — `verifySlackSignature`, `postSlackMessage`, `getSlackChannelInfo`.
+- `linear.ts` — `verifyLinearSignature`, `fetchLinearIssueContext`, `postLinearComment`, `loadProjectsByLinearTeam` (reads `/home/shaun/.tars-state/knowledge/projects.yaml`).
+- `user-mapper.ts` — maps Slack/Linear user IDs to tars user rows (auto-create anonymous user with platform ID stamped).
+- `adapter-audit.ts` — writes inbound + outbound + skip + error events to both `audit_log` table and `/home/shaun/.tars-state/audit.jsonl`.
+- `app-settings.ts` — typed accessor over `app_settings` kv table (`slack_allowed_channels`, `slack_bot_user_id`, `linear_bot_user_id`).
+
+### Schema changes (migration `drizzle/0007_m55_chat_adapters.sql` — applied)
+
+- `users.slack_user_id TEXT` (unique partial index where NOT NULL)
+- `users.linear_user_id TEXT` (unique partial index where NOT NULL)
+- `app_settings` table already existed (M7) — reused for kv settings.
+
+### Secrets wired
+
+- `SLACK_BOT_TOKEN`, `SLACK_USER_TOKEN`, `SLACK_SIGNING_SECRET` — already in Infisical; copied to `.env.local`.
+- `LINEAR_API_KEY` — already in Infisical; copied to `.env.local`.
+- `LINEAR_WEBHOOK_SECRET` — **freshly generated** (`openssl rand -hex 32`), stored in Infisical `prod` env, copied to `.env.local`.
+
+### Tests (23 passing)
+
+- `lib/tars/__tests__/slack-signature.test.ts` — 6 cases (valid, invalid sig, wrong secret, stale ts, missing headers, body tampering)
+- `lib/tars/__tests__/linear-signature.test.ts` — 5 cases
+- `app/api/slack/events/__tests__/route.test.ts` — 6 cases (url_verification, 401 bad sig, mention→handler→post, DM bypass allowlist, allowlist block, bot self-echo ignored)
+- `app/api/linear/webhook/__tests__/route.test.ts` — 6 cases (401 bad sig, @tars→handler→post, no trigger ignored, non-Comment ignored, personal firewall in context, protect-mode prefix)
+
+### Manual smoke tests (curl against running service, all passing)
+
+- POST `/api/slack/events` with valid HMAC, `url_verification` body → `{"challenge":"abc123"}` 200
+- POST `/api/slack/events` with `v0=deadbeef` → `{"error":"invalid signature"}` 401
+- POST `/api/slack/events` with valid HMAC, DM event → 200 + chat session row + 2 chat_messages + slack-adapter audit chain (inbound→outbound with channel_not_found for fake channel)
+- POST `/api/slack/events` with valid HMAC, mention in `CBLOCKED` channel → 200 + allowlist skip audit
+- POST `/api/linear/webhook` with valid HMAC, non-Comment event → 200 ignored
+- POST `/api/linear/webhook` with `linear-signature: badbeef` → 401
+
+### Audit chain (verified in DB and `audit.jsonl`)
+
+Both `slack-adapter` and `linear-adapter` write entries with steps: `verify-signature`, `config`, `allowlist`, `inbound`, `outbound`, `handler`, `issue-fetch`, `validate`, `empty-text`. Statuses: `start`, `ok`, `skip`, `error`, `info`.
+
+### Konverge + personal/work firewall
+
+- Slack: channel-id lookup against `slack_allowed_channels` setting. When the channel name (or matched id) is the Konverge channel, the reply gets prefixed with `[Konverge protect mode is active — this is a review-only comment, not a fix or action.]`.
+- Linear: `loadProjectsByLinearTeam` reads `projects.yaml` and maps the issue's team key to its project. If `visibility === "personal"`, the prompt context gets a `[firewall]` note instructing TARS not to bleed context. If `protect_mode === true`, the prompt gets a `[protect-mode]` directive.
+
+### FOLLOW-UPS REQUIRED for activation (post-M8 public tunnel)
+
+1. **Slack app event subscription** — register `https://<tars-tunnel-host>/api/slack/events` at `https://api.slack.com/apps/<app-id>/event-subscriptions`. Subscribe to bot events: `app_mention`, `message.im`.
+2. **Slack channel allowlist** — once the Konverge channel exists, set its channel ID:
+   ```sql
+   INSERT INTO app_settings (key, value) VALUES ('slack_allowed_channels', '["C0XXXXXXXXX"]'::jsonb)
+   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+   ```
+3. **Linear webhook** — register `https://<tars-tunnel-host>/api/linear/webhook` at `https://linear.app/settings/api` with secret `LINEAR_WEBHOOK_SECRET` (already in Infisical). Subscribe to `Comment` event.
+4. **(Optional)** Stamp `linear_bot_user_id` so the route can detect self-comments:
+   ```sql
+   INSERT INTO app_settings (key, value) VALUES ('linear_bot_user_id', '"VIEWER_ID_HERE"'::jsonb)
+   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
+   ```
