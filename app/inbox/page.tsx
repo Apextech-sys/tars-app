@@ -5,14 +5,20 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock,
+  ExternalLink,
   Info,
+  Loader2,
   RefreshCw,
   Scale,
+  ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
   Timer,
   X,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { NotificationPermissionBanner } from "@/components/tars/notification-permission-banner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +40,7 @@ import {
 import { useNotifications } from "@/hooks/use-notifications";
 import { cn } from "@/lib/utils";
 import {
+  approvalActionFromInbox,
   deferEscalation,
   fetchInboxItems,
   type InboxItem,
@@ -70,6 +77,9 @@ function itemKindIcon(kind: InboxItem["kind"]) {
   if (kind === "pr_disagreement") {
     return <Scale className="size-4 text-purple-500" />;
   }
+  if (kind === "pr_pending_approval") {
+    return <ShieldCheck className="size-4 text-sky-500" />;
+  }
   return <AlertTriangle className="size-4 text-red-500" />;
 }
 
@@ -87,6 +97,95 @@ function relativeTime(iso: string) {
     return `${hrs}h ago`;
   }
   return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function inboxItemTitle(item: InboxItem): string {
+  switch (item.kind) {
+    case "escalation":
+      return item.title;
+    case "workflow_stall":
+      return `Stalled workflow: ${item.repo} #${item.prNumber}`;
+    case "worker_failure":
+      return `Worker failure: ${item.jobKind}`;
+    case "pr_disagreement":
+      return `Reviewer disagreement: ${item.repo} #${item.prNumber}`;
+    case "pr_pending_approval":
+      return `Pending approval: ${item.repo} #${item.prNumber}`;
+    default:
+      return `PR review failed: ${item.repo} #${item.prNumber}`;
+  }
+}
+
+function PendingApprovalBody({
+  item,
+  isPending,
+  onApproval,
+}: {
+  item: Extract<InboxItem, { kind: "pr_pending_approval" }>;
+  isPending: boolean;
+  onApproval: (action: "approve" | "reject") => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        Codex and Claude agreed on <strong>{item.findingsCount}</strong> finding
+        {item.findingsCount === 1 ? "" : "s"}. Nothing is posted or fixed until
+        you approve.
+      </p>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        {item.linearIssueIdentifier && item.linearIssueUrl && (
+          <a
+            className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-1 font-medium font-mono text-primary"
+            href={item.linearIssueUrl}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            {item.linearIssueIdentifier}
+            <ExternalLink className="size-3" />
+          </a>
+        )}
+        {item.prSha && (
+          <span className="rounded bg-muted px-2 py-1 font-mono">
+            {item.prSha.slice(0, 7)}
+          </span>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          aria-label="Approve findings"
+          className="min-h-[44px] bg-emerald-600 text-white hover:bg-emerald-700"
+          disabled={isPending}
+          onClick={() => onApproval("approve")}
+          size="sm"
+        >
+          {isPending ? (
+            <Loader2 className="size-3.5 animate-spin" />
+          ) : (
+            <ThumbsUp className="size-3.5" />
+          )}
+          Approve
+        </Button>
+        <Button
+          aria-label="Reject findings"
+          className="min-h-[44px]"
+          disabled={isPending}
+          onClick={() => onApproval("reject")}
+          size="sm"
+          variant="outline"
+        >
+          <ThumbsDown className="size-3.5" />
+          Reject
+        </Button>
+        <a
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-3 text-muted-foreground text-sm hover:bg-accent"
+          href={`/pr-runs/${encodeURIComponent(item.runId)}#approval`}
+        >
+          <ShieldCheck className="size-3.5" />
+          Review findings
+        </a>
+      </div>
+    </div>
+  );
 }
 
 function InboxCard({
@@ -132,7 +231,6 @@ function InboxCard({
   };
 
   const isEscalation = item.kind === "escalation";
-  const _isDisagreement = item.kind === "pr_disagreement";
 
   // For pr_disagreement: navigate to run detail page instead of showing modal
   const handleInspect = () => {
@@ -142,18 +240,24 @@ function InboxCard({
     window.location.href = `/pr-runs/${encodeURIComponent(item.runId)}#disagreement`;
   };
 
-  let title = "";
-  if (item.kind === "escalation") {
-    title = item.title;
-  } else if (item.kind === "workflow_stall") {
-    title = `Stalled workflow: ${item.repo} #${item.prNumber}`;
-  } else if (item.kind === "worker_failure") {
-    title = `Worker failure: ${item.jobKind}`;
-  } else if (item.kind === "pr_disagreement") {
-    title = `Reviewer disagreement: ${item.repo} #${item.prNumber}`;
-  } else {
-    title = `PR review failed: ${item.repo} #${item.prNumber}`;
-  }
+  const handleApproval = (action: "approve" | "reject") => {
+    if (item.kind !== "pr_pending_approval") {
+      return;
+    }
+    startTransition(async () => {
+      const result = await approvalActionFromInbox(item.runId, action);
+      if (result.ok) {
+        toast.success(action === "approve" ? "Approved" : "Rejected", {
+          duration: 4000,
+        });
+      } else {
+        toast.error(result.error ?? "Action failed");
+      }
+      onAction();
+    });
+  };
+
+  const title = inboxItemTitle(item);
 
   return (
     <div className="space-y-3 rounded-lg border bg-card p-4">
@@ -229,6 +333,14 @@ function InboxCard({
             Compare reviewers
           </Button>
         </div>
+      )}
+
+      {item.kind === "pr_pending_approval" && (
+        <PendingApprovalBody
+          isPending={isPending}
+          item={item}
+          onApproval={handleApproval}
+        />
       )}
 
       {/* Disagreement modal replaced: "Compare reviewers" now navigates to /pr-runs/[runId]#disagreement */}
@@ -363,9 +475,11 @@ export default function InboxPage() {
   const stalls = items.filter((i) => i.kind === "workflow_stall");
   const workerFails = items.filter((i) => i.kind === "worker_failure");
   const disagreements = items.filter((i) => i.kind === "pr_disagreement");
+  const approvals = items.filter((i) => i.kind === "pr_pending_approval");
 
   const tabItems: Record<string, InboxItem[]> = {
     all: items,
+    approvals,
     stalls,
     workers: workerFails,
     escalations: escalationItems,
@@ -407,6 +521,14 @@ export default function InboxPage() {
                   variant="secondary"
                 >
                   {items.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="approvals">
+              Approvals
+              {approvals.length > 0 && (
+                <Badge className="ml-1.5 h-5 px-1.5 text-xs" variant="warning">
+                  {approvals.length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -456,27 +578,32 @@ export default function InboxPage() {
             </TabsTrigger>
           </TabsList>
 
-          {["all", "stalls", "workers", "escalations", "disagreements"].map(
-            (t) => (
-              <TabsContent className="mt-4 space-y-3" key={t} value={t}>
-                {loading ? (
-                  <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
-                    <RefreshCw className="size-4 animate-spin" />
-                    Loading...
-                  </div>
-                ) : filtered.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
-                    <Info className="size-8" />
-                    <p className="text-sm">No items here - all clear.</p>
-                  </div>
-                ) : (
-                  filtered.map((item) => (
-                    <InboxCard item={item} key={item.id} onAction={refresh} />
-                  ))
-                )}
-              </TabsContent>
-            )
-          )}
+          {[
+            "all",
+            "approvals",
+            "stalls",
+            "workers",
+            "escalations",
+            "disagreements",
+          ].map((t) => (
+            <TabsContent className="mt-4 space-y-3" key={t} value={t}>
+              {loading ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-muted-foreground">
+                  <RefreshCw className="size-4 animate-spin" />
+                  Loading...
+                </div>
+              ) : filtered.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-16 text-muted-foreground">
+                  <Info className="size-8" />
+                  <p className="text-sm">No items here - all clear.</p>
+                </div>
+              ) : (
+                filtered.map((item) => (
+                  <InboxCard item={item} key={item.id} onAction={refresh} />
+                ))
+              )}
+            </TabsContent>
+          ))}
         </Tabs>
       </div>
     </div>

@@ -27,6 +27,19 @@ const STATUS_CONFIG: Record<RunStatus, { label: string; className: string }> = {
     label: "Disagreed",
     className: "bg-purple-500/10 text-purple-400 border border-purple-500/30",
   },
+  "pending-approval": {
+    label: "Pending Approval",
+    className: "bg-sky-500/10 text-sky-400 border border-sky-500/30",
+  },
+  approved: {
+    label: "Approved",
+    className:
+      "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
+  },
+  rejected: {
+    label: "Rejected",
+    className: "bg-rose-500/10 text-rose-400 border border-rose-500/30",
+  },
   error: {
     label: "Error",
     className: "bg-red-500/10 text-red-400 border border-red-500/30",

@@ -7,6 +7,7 @@ import {
   Clock,
   GitPullRequest,
   RefreshCw,
+  ShieldCheck,
   TrendingUp,
   Wifi,
   WifiOff,
@@ -67,6 +68,9 @@ const STATUS_COLORS: Record<string, string> = {
   "blocked-konverge":
     "bg-amber-500/10 text-amber-400 border border-amber-500/30",
   disagreed: "bg-purple-500/10 text-purple-400 border border-purple-500/30",
+  "pending-approval": "bg-sky-500/10 text-sky-400 border border-sky-500/30",
+  approved: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
+  rejected: "bg-rose-500/10 text-rose-400 border border-rose-500/30",
   error: "bg-red-500/10 text-red-400 border border-red-500/30",
 };
 
@@ -88,11 +92,26 @@ function StatusChip({ status }: { status: string }) {
 
 interface StatsData {
   inFlight: number;
+  pendingApproval: number;
   errorRate: number;
   disagreementRate: number;
   meanReviewMs: number;
   total: number;
   windowDays: number;
+}
+
+function pendingApprovalColor(stats: StatsData | null): string {
+  if (!stats) {
+    return "text-muted-foreground";
+  }
+  return stats.pendingApproval > 0 ? "text-sky-400" : "text-emerald-400";
+}
+
+function pendingApprovalCaption(stats: StatsData | null): string {
+  if (!stats) {
+    return "Loading...";
+  }
+  return stats.pendingApproval === 0 ? "Nothing waiting" : "Awaiting your call";
 }
 
 interface ActivityBucket {
@@ -330,7 +349,7 @@ export function DashboardHome() {
         </div>
 
         {/* KPI Grid */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
           {/* Runs in flight */}
           <div className="space-y-2 rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
@@ -364,6 +383,35 @@ export function DashboardHome() {
                 href="/pr-runs?status=started"
               >
                 View active →
+              </Link>
+            ) : null}
+          </div>
+
+          {/* Pending approval */}
+          <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+              <ShieldCheck className="size-3.5" />
+              Pending Approval
+            </div>
+            <div className="flex items-end gap-2">
+              <span
+                className={cn(
+                  "font-bold text-3xl",
+                  pendingApprovalColor(stats)
+                )}
+              >
+                {stats?.pendingApproval ?? "—"}
+              </span>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {pendingApprovalCaption(stats)}
+            </p>
+            {stats?.pendingApproval && stats.pendingApproval > 0 ? (
+              <Link
+                className="text-primary text-xs hover:underline"
+                href="/pr-runs?status=pending-approval"
+              >
+                Review now →
               </Link>
             ) : null}
           </div>

@@ -11,11 +11,15 @@ export async function GET(req: NextRequest) {
     const days = windowParam === "7d" ? 7 : windowParam === "30d" ? 30 : 7;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const [inFlight, recent] = await Promise.all([
+    const [inFlight, pendingApprovalRows, recent] = await Promise.all([
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(prReviewRuns)
         .where(eq(prReviewRuns.status, "started")),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(prReviewRuns)
+        .where(eq(prReviewRuns.status, "pending-approval")),
       db
         .select({
           status: prReviewRuns.status,
@@ -29,11 +33,17 @@ export async function GET(req: NextRequest) {
     const total = recent.length;
     const errors = recent.filter((r) => r.status === "error").length;
     const disagreed = recent.filter((r) => r.status === "disagreed").length;
+    // Runs that reached a terminal (review-finished) status. Used only for the
+    // mean review-duration metric. `pending-approval`/`approved`/`rejected`
+    // are included because the dual-AI review itself is complete by then.
     const completed = recent.filter((r) =>
       [
         "completed",
         "skipped-no-findings",
         "disagreed",
+        "pending-approval",
+        "approved",
+        "rejected",
         "error",
         "blocked-konverge",
         "skipped-policy",
@@ -54,6 +64,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       inFlight: inFlight[0]?.count ?? 0,
+      pendingApproval: pendingApprovalRows[0]?.count ?? 0,
       errorRate: Math.round(errorRate * 10) / 10,
       disagreementRate: Math.round(disagreementRate * 10) / 10,
       meanReviewMs,

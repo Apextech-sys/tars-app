@@ -62,6 +62,18 @@ export type InboxItem =
       claudeFindingsCount: number;
       overlapRatio: number | null;
       createdAt: string;
+    }
+  | {
+      kind: "pr_pending_approval";
+      id: string;
+      runId: string;
+      repo: string;
+      prNumber: number;
+      prSha: string | null;
+      findingsCount: number;
+      linearIssueIdentifier: string | null;
+      linearIssueUrl: string | null;
+      createdAt: string;
     };
 
 export async function fetchInboxItems(): Promise<InboxItem[]> {
@@ -193,7 +205,103 @@ export async function fetchInboxItems(): Promise<InboxItem[]> {
     });
   }
 
+  // 6. Pending-approval PR review runs — reviewers agreed; Shaun must approve
+  //    or reject before any fix work begins (Slice 1 approval gate).
+  const pendingApproval = await db
+    .select()
+    .from(prReviewRuns)
+    .where(eq(prReviewRuns.status, "pending-approval"))
+    .orderBy(sql`${prReviewRuns.createdAt} DESC`)
+    .limit(50);
+
+  for (const r of pendingApproval) {
+    const agreed = r.agreedFindings as unknown[] | null;
+    items.push({
+      kind: "pr_pending_approval",
+      id: `prapp-${r.runId}`,
+      runId: r.runId,
+      repo: `${r.owner}/${r.repo}`,
+      prNumber: r.prNumber,
+      prSha: r.prSha,
+      findingsCount: Array.isArray(agreed) ? agreed.length : r.findingsCount,
+      linearIssueIdentifier: r.linearIssueIdentifier,
+      linearIssueUrl: r.linearIssueUrl,
+      createdAt: r.createdAt.toISOString(),
+    });
+  }
+
   return items;
+}
+
+/**
+ * Approve or reject a pending-approval run directly from the inbox. Mirrors
+ * the approval-action route (status change + best-effort Linear transition)
+ * but as a server action so the inbox card can act inline.
+ */
+export async function approvalActionFromInbox(
+  runId: string,
+  action: "approve" | "reject",
+  reason?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { transitionPrReviewIssue } = await import(
+    "@/workflows/lib/linear-lifecycle"
+  );
+
+  const rows = await db
+    .select()
+    .from(prReviewRuns)
+    .where(eq(prReviewRuns.runId, runId))
+    .limit(1);
+  if (rows.length === 0) {
+    return { ok: false, error: "Run not found" };
+  }
+  const run = rows[0];
+  if (run.status !== "pending-approval") {
+    return { ok: false, error: `Run is "${run.status}", not pending-approval` };
+  }
+  if (run.approvalAction) {
+    return { ok: false, error: `Already ${run.approvalAction}` };
+  }
+
+  const newStatus = action === "approve" ? "approved" : "rejected";
+  await db
+    .update(prReviewRuns)
+    .set({
+      status: newStatus,
+      approvalAction: action,
+      approvalActionAt: new Date(),
+      approvalReason: reason ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(prReviewRuns.runId, runId));
+
+  const policy =
+    (run.policy as {
+      issueTracker?: string;
+      linearTeam?: string | null;
+    } | null) ?? null;
+  if (
+    run.linearIssueId &&
+    policy?.issueTracker === "linear" &&
+    policy.linearTeam
+  ) {
+    try {
+      await transitionPrReviewIssue({
+        teamKey: policy.linearTeam,
+        issueId: run.linearIssueId,
+        phase: action === "approve" ? "approved" : "rejected",
+      });
+    } catch {
+      // best-effort — status change already persisted
+    }
+  }
+
+  try {
+    revalidatePath("/inbox");
+  } catch {
+    /* no-op outside request context */
+  }
+  return { ok: true };
 }
 
 export async function fetchInboxBadgeCount(): Promise<number> {

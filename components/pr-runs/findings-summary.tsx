@@ -169,6 +169,34 @@ export function FindingsSummary({
     );
   }
 
+  if (
+    run.status === "pending-approval" ||
+    run.status === "approved" ||
+    run.status === "rejected"
+  ) {
+    const approvalLabels: Record<string, string> = {
+      "pending-approval": "Reviewers agreed — awaiting your approval",
+      approved: "Approved — fix stage authorized",
+      rejected: "Rejected",
+    };
+    const label = approvalLabels[run.status] ?? run.status;
+    return (
+      <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 p-4">
+        <div className="flex items-center gap-2 text-sky-400">
+          <CheckCircle2 className="size-4" />
+          <span className="font-medium text-sm">
+            {run.findingsCount} agreed finding
+            {run.findingsCount === 1 ? "" : "s"} — {label}
+          </span>
+        </div>
+        <p className="mt-1 text-muted-foreground text-xs">
+          See the Approval Gate panel below for the full findings and the
+          Approve / Reject controls.
+        </p>
+      </div>
+    );
+  }
+
   if (run.status === "skipped-policy") {
     return (
       <div className="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">

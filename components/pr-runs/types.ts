@@ -7,6 +7,9 @@ export type RunStatus =
   | "skipped-policy"
   | "blocked-konverge"
   | "disagreed"
+  | "pending-approval"
+  | "approved"
+  | "rejected"
   | "error";
 
 export interface PolicyConfig {
@@ -14,6 +17,18 @@ export interface PolicyConfig {
   dryRun?: boolean;
   protectedMode?: boolean | string | { enabled?: boolean; pattern?: string };
   agreementThreshold?: number;
+  issueTracker?: "linear" | "github" | "none";
+  linearTeam?: string | null;
+}
+
+/** A finding the two reviewers agreed on, persisted for the approval UI. */
+export interface AgreedFinding {
+  file?: string;
+  line?: number;
+  severity?: string;
+  category?: string;
+  message?: string;
+  suggestion?: string;
 }
 
 export interface PrRun {
@@ -30,6 +45,13 @@ export interface PrRun {
   disagreedPayload: unknown;
   adjudicationAction: string | null;
   adjudicationActionAt: string | null;
+  agreedFindings: AgreedFinding[] | null;
+  linearIssueId: string | null;
+  linearIssueIdentifier: string | null;
+  linearIssueUrl: string | null;
+  approvalAction: string | null;
+  approvalActionAt: string | null;
+  approvalReason: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;

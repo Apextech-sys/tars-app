@@ -1,13 +1,21 @@
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeft, Bot, FileText, GitPullRequest } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  FileText,
+  GitPullRequest,
+  ShieldCheck,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { JSX } from "react";
+import { ApprovalPanel } from "@/components/pr-runs/approval-panel";
 import { AuditTimeline } from "@/components/pr-runs/audit-timeline";
 import { DisagreementPanel } from "@/components/pr-runs/disagreement-panel";
 import { FindingsSummary } from "@/components/pr-runs/findings-summary";
 import { RunHeader } from "@/components/pr-runs/run-header";
 import type {
+  AgreedFinding,
   DisagreementPayload,
   PolicyConfig,
   PrRun,
@@ -100,6 +108,24 @@ export default async function PrRunDetailPage({
           <SectionHeader icon={FileText} title="Findings" />
           <FindingsSummary auditRows={auditLog} run={run} />
         </section>
+
+        {/* Approval panel — pending-approval (actionable) or terminal decision */}
+        {(run.status === "pending-approval" ||
+          run.status === "approved" ||
+          run.status === "rejected") && (
+          <section className="rounded-lg border border-sky-500/20 bg-card/30 p-5">
+            <SectionHeader icon={ShieldCheck} title="Approval Gate" />
+            <ApprovalPanel
+              approvalAction={run.approvalAction}
+              approvalReason={run.approvalReason}
+              findings={(run.agreedFindings as AgreedFinding[] | null) ?? []}
+              linearIssueIdentifier={run.linearIssueIdentifier}
+              linearIssueUrl={run.linearIssueUrl}
+              runId={run.runId}
+              status={run.status}
+            />
+          </section>
+        )}
 
         {/* Disagreement panel — only when disagreed */}
         {run.status === "disagreed" &&
