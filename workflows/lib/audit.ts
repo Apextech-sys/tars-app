@@ -76,6 +76,24 @@ async function ensureSchema(sql: any) {
       on pr_review_runs (created_at desc)
       where status = 'disagreed';
   `;
+  // Slice 1 (drizzle/0012): approval gate + Linear lifecycle columns. These
+  // ALTERs are idempotent so a deploy that hasn't run the Drizzle migration
+  // still self-heals on first workflow write.
+  await sql /* sql */`
+    alter table pr_review_runs
+      add column if not exists agreed_findings jsonb,
+      add column if not exists linear_issue_id text,
+      add column if not exists linear_issue_identifier text,
+      add column if not exists linear_issue_url text,
+      add column if not exists approval_action text,
+      add column if not exists approval_action_at timestamptz,
+      add column if not exists approval_reason text;
+  `;
+  await sql /* sql */`
+    create index if not exists pr_review_runs_pending_approval_idx
+      on pr_review_runs (created_at desc)
+      where status = 'pending-approval';
+  `;
   await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
@@ -157,6 +175,16 @@ export interface DisagreedPayload {
   capturedAt: string;
 }
 
+/** Slim finding shape persisted on the run for the approval UI. */
+export interface AgreedFinding {
+  file: string;
+  line?: number;
+  severity: string;
+  category?: string;
+  message: string;
+  suggestion?: string;
+}
+
 export interface PrReviewRunRecord {
   runId: string;
   owner: string;
@@ -170,13 +198,24 @@ export interface PrReviewRunRecord {
     | "skipped-disagreement"
     | "skipped-no-findings"
     | "skipped-policy"
+    // `blocked-konverge` is RETIRED (Slice 1) — kept in the union so historical
+    // rows still type-check, but the workflow no longer produces it.
     | "blocked-konverge"
     | "disagreed"
+    | "pending-approval"
+    | "approved"
+    | "rejected"
     | "error";
   findingsCount?: number;
   reviewCommentUrl?: string;
   error?: string;
   disagreedPayload?: DisagreedPayload;
+  /** Agreed findings persisted at pending-approval for the approval UI. */
+  agreedFindings?: AgreedFinding[];
+  /** Linear issue created when the run reaches pending-approval. */
+  linearIssueId?: string;
+  linearIssueIdentifier?: string;
+  linearIssueUrl?: string;
 }
 
 export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
@@ -189,7 +228,9 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
     await sql /* sql */`
       insert into pr_review_runs (
         run_id, owner, repo, pr_number, pr_sha, policy, status,
-        findings_count, review_comment_url, error, disagreed_payload, updated_at
+        findings_count, review_comment_url, error, disagreed_payload,
+        agreed_findings, linear_issue_id, linear_issue_identifier,
+        linear_issue_url, updated_at
       ) values (
         ${rec.runId}, ${rec.owner}, ${rec.repo}, ${rec.prNumber},
         ${rec.prSha ?? null},
@@ -199,6 +240,16 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
         ${rec.reviewCommentUrl ?? null},
         ${rec.error ?? null},
         ${rec.disagreedPayload ? sql.json(rec.disagreedPayload as any) : null},
+        ${
+          rec.agreedFindings
+            ? sql.json(
+                rec.agreedFindings as unknown as Parameters<typeof sql.json>[0]
+              )
+            : null
+        },
+        ${rec.linearIssueId ?? null},
+        ${rec.linearIssueIdentifier ?? null},
+        ${rec.linearIssueUrl ?? null},
         now()
       )
       on conflict (run_id) do update set
@@ -209,6 +260,10 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
         pr_sha = coalesce(pr_review_runs.pr_sha, excluded.pr_sha),
         policy = coalesce(pr_review_runs.policy, excluded.policy),
         disagreed_payload = coalesce(excluded.disagreed_payload, pr_review_runs.disagreed_payload),
+        agreed_findings = coalesce(excluded.agreed_findings, pr_review_runs.agreed_findings),
+        linear_issue_id = coalesce(excluded.linear_issue_id, pr_review_runs.linear_issue_id),
+        linear_issue_identifier = coalesce(excluded.linear_issue_identifier, pr_review_runs.linear_issue_identifier),
+        linear_issue_url = coalesce(excluded.linear_issue_url, pr_review_runs.linear_issue_url),
         updated_at = now()
     `;
   } catch (err) {

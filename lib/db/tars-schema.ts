@@ -43,12 +43,19 @@ export const auditLog = pgTable(
  * pr_review_runs — written by the PR review workflow.
  *
  * `status` values used in code (status is stored as text, not an enum):
- *   started | completed | skipped-no-findings | skipped-policy
- *   blocked-konverge | disagreed | error
+ *   started | skipped-no-findings | skipped-policy | disagreed
+ *   pending-approval | approved | rejected | error
+ *   (legacy/historical only: completed, blocked-konverge — protect_mode is
+ *    retired as of Slice 1, but old rows still carry these statuses.)
  *
  * `disagreed_payload` is populated only when Codex and Claude disagree on
  * findings. It carries both raw reviewer outputs so Shaun can adjudicate
  * the disagreement from /inbox. Migration: drizzle/0008_pr_review_disagreed.sql.
+ *
+ * `agreed_findings` + the `linear_issue_*` + `approval_*` columns are written
+ * when a run reaches `pending-approval`: the agreed findings drive the
+ * approval UI, the Linear issue links the REF ticket, and the approval fields
+ * record Shaun's Approve/Reject decision. Migration: drizzle/0012_*.sql.
  *
  * `archived_at` is set by the retention workflow once a terminal-state row
  * is older than 30 days; heavy fields (disagreed_payload) are NULLed and
@@ -71,6 +78,14 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   adjudicationActionAt: timestamp("adjudication_action_at", {
     withTimezone: true,
   }),
+  // Slice 1: approval gate + Linear lifecycle.
+  agreedFindings: jsonb("agreed_findings"),
+  linearIssueId: text("linear_issue_id"),
+  linearIssueIdentifier: text("linear_issue_identifier"),
+  linearIssueUrl: text("linear_issue_url"),
+  approvalAction: text("approval_action"),
+  approvalActionAt: timestamp("approval_action_at", { withTimezone: true }),
+  approvalReason: text("approval_reason"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
