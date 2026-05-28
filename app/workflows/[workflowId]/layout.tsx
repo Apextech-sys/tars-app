@@ -40,35 +40,17 @@ export async function generateMetadata({
   }
 
   const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL || "https://workflow-builder.dev";
-  const workflowUrl = `${baseUrl}/workflows/${workflowId}`;
-  const ogImageUrl = isPublic
-    ? `${baseUrl}/api/og/workflow/${workflowId}`
-    : `${baseUrl}/og-default.png`;
+    process.env.NEXT_PUBLIC_APP_URL || "https://tars.apextech.group";
 
   return {
-    title: `${title} | AI Workflow Builder`,
-    description: `View and explore the "${title}" workflow built with AI Workflow Builder.`,
+    title: `${title} | TARS`,
+    description: `Workflow: ${title}`,
     openGraph: {
-      title: `${title} | AI Workflow Builder`,
-      description: `View and explore the "${title}" workflow built with AI Workflow Builder.`,
+      title: `${title} | TARS`,
+      description: `Workflow: ${title}`,
       type: "website",
-      url: workflowUrl,
-      siteName: "AI Workflow Builder",
-      images: [
-        {
-          url: ogImageUrl,
-          width: 1200,
-          height: 630,
-          alt: `${title} workflow visualization`,
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: `${title} | AI Workflow Builder`,
-      description: `View and explore the "${title}" workflow built with AI Workflow Builder.`,
-      images: [ogImageUrl],
+      url: `${baseUrl}/workflows/${workflowId}`,
+      siteName: "TARS",
     },
   };
 }
