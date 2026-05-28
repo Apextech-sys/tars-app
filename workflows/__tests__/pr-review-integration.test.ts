@@ -52,11 +52,12 @@ async function pollStatus(): Promise<StatusRow> {
     if (resp.ok) {
       const row = (await resp.json()) as StatusRow;
       const terminal = [
-        "completed",
+        "pending-approval",
+        "approved",
+        "rejected",
         "skipped-disagreement",
         "skipped-no-findings",
         "skipped-policy",
-        "blocked-konverge",
         "disagreed",
         "error",
       ].includes(row.status);
@@ -90,8 +91,8 @@ describe.skipIf(!RUN)("PR review workflow — live PR (tars-app HTTP)", () => {
           autoFix: false,
           autoReview: true,
           issueTracker: "none",
+          linearTeam: null,
           slackNotify: false,
-          protectMode: false,
           severityThreshold: "minor",
         },
       }),
@@ -104,20 +105,15 @@ describe.skipIf(!RUN)("PR review workflow — live PR (tars-app HTTP)", () => {
     const final = await pollStatus();
 
     expect([
-      "completed",
+      "pending-approval",
       "skipped-disagreement",
       "skipped-no-findings",
       "disagreed",
     ]).toContain(final.status);
 
-    if (final.status === "completed" && !DRY_RUN) {
-      expect(final.review_comment_url).toBeTruthy();
-      expect(final.review_comment_url).toMatch(
-        new RegExp(
-          `^https://github\\.com/${OWNER}/${REPO}/pull/${PR_NUMBER}`,
-          "i"
-        )
-      );
-    }
+    // Slice 1: the agree path no longer auto-posts a GitHub comment. When the
+    // run reaches pending-approval it parks for Shaun's approval and (for a
+    // Linear-tracked repo) creates a REF issue — the GitHub comment happens in
+    // Slice 2 after approval. So we no longer assert review_comment_url here.
   });
 });

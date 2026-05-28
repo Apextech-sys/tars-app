@@ -3,7 +3,23 @@
  *
  * Marked `"use step"`; `fs` + `yaml` are lazy-imported inside the step.
  *
- * Konverge protect mode is hard-coded business rule (see konverge-guard.ts).
+ * Slice 1 (2026-05-28): protect_mode is RETIRED. Review now runs on ALL
+ * `auto_review: true` repos — including the Konverge / Reflex-Connect repos
+ * that were previously short-circuited to `blocked-konverge`. The human
+ * approval gate (status `pending-approval` + the dashboard Approve/Reject
+ * panel) replaces protect_mode as the safety boundary: nothing is written to
+ * an external system (GitHub / a fix branch) until Shaun approves. As a
+ * result `ResolvedPolicy` no longer carries a `protectMode` field and this
+ * resolver no longer derives one from `business`/`partners`/`projectKey`.
+ *
+ * `issueTracker` + `linearTeam` are now read straight from the matched
+ * project's `issue_tracker` / `linear_team` fields (previously hard-coded to
+ * `"none"`), so Konverge/REF repos correctly resolve `issueTracker: "linear"`
+ * + `linearTeam: "REF"` and the Linear lifecycle can run.
+ *
+ * `autoFix` + `severityThreshold` are likewise read from the per-project
+ * `auto_fix` / `severity_threshold` fields rather than special-casing
+ * individual project keys, so projects.yaml is the single source of truth.
  */
 
 import type { Severity } from "./schemas";
@@ -15,9 +31,10 @@ export interface ResolvedPolicy {
   autoFix: boolean;
   severityThreshold: Severity;
   issueTracker: "linear" | "github" | "none";
+  /** Linear team key (e.g. "REF") when issueTracker === "linear"; else null. */
+  linearTeam: string | null;
   slackNotify: boolean;
   slackChannel: string | null;
-  protectMode: boolean;
   rawProject: Record<string, unknown> | null;
 }
 
@@ -64,6 +81,34 @@ async function loadProjects(): Promise<
   }
 }
 
+const VALID_SEVERITIES: ReadonlySet<string> = new Set([
+  "critical",
+  "major",
+  "minor",
+  "nit",
+]);
+
+function normalizeSeverity(value: unknown, fallback: Severity): Severity {
+  if (typeof value === "string" && VALID_SEVERITIES.has(value)) {
+    return value as Severity;
+  }
+  return fallback;
+}
+
+function normalizeIssueTracker(value: unknown): "linear" | "github" | "none" {
+  if (typeof value !== "string") {
+    return "none";
+  }
+  const v = value.toLowerCase();
+  if (v === "linear") {
+    return "linear";
+  }
+  if (v === "github" || v === "github_issues") {
+    return "github";
+  }
+  return "none";
+}
+
 /**
  * Resolve the policy for a given repo (owner/repo).
  *
@@ -108,57 +153,40 @@ export async function resolvePolicy(
       autoFix: false,
       severityThreshold: "minor",
       issueTracker: "none",
+      linearTeam: null,
       slackNotify: false,
       slackChannel: null,
-      protectMode: false,
       rawProject: null,
     };
   }
 
-  const partners = Array.isArray(matchedProject.partners)
-    ? (matchedProject.partners as string[]).map((p) => p.toLowerCase())
-    : [];
-  const businessCode = (
-    typeof matchedProject.business === "string" ? matchedProject.business : ""
-  ).toLowerCase();
-  const projectKeyLower = matchedKey?.toLowerCase() ?? "";
-
-  const protectMode =
-    businessCode === "konverge" ||
-    projectKeyLower === "konverge" ||
-    partners.includes("konverge");
-
-  const isPolymarketV2 =
-    projectKeyLower === "polymarket-v2" || projectKeyLower === "polymarketv2";
-
   const slackChannelRaw =
     typeof matchedProject.slack === "string" ? matchedProject.slack : "";
 
-  if (protectMode) {
-    return {
-      projectKey: matchedKey,
-      matched: true,
-      autoReview: true,
-      autoFix: false,
-      severityThreshold: "major",
-      issueTracker: "none",
-      slackNotify: false,
-      slackChannel: null,
-      protectMode: true,
-      rawProject: matchedProject,
-    };
-  }
+  const issueTracker = normalizeIssueTracker(matchedProject.issue_tracker);
+  const linearTeam =
+    issueTracker === "linear" && typeof matchedProject.linear_team === "string"
+      ? (matchedProject.linear_team as string)
+      : null;
+
+  // `auto_review` defaults to true when omitted; an explicit `false` disables
+  // review for the repo (still honored — that gate is unrelated to protect_mode).
+  const autoReview = matchedProject.auto_review !== false;
+  const autoFix = matchedProject.auto_fix === true;
 
   return {
     projectKey: matchedKey,
     matched: true,
-    autoReview: true,
-    autoFix: !isPolymarketV2,
-    severityThreshold: isPolymarketV2 ? "major" : "minor",
-    issueTracker: "none",
+    autoReview,
+    autoFix,
+    severityThreshold: normalizeSeverity(
+      matchedProject.severity_threshold,
+      "minor"
+    ),
+    issueTracker,
+    linearTeam,
     slackNotify: Boolean(slackChannelRaw),
     slackChannel: slackChannelRaw || null,
-    protectMode: false,
     rawProject: matchedProject,
   };
 }

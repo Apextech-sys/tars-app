@@ -13,12 +13,6 @@ import { toast } from "sonner";
 import { NotificationsSettingsSection } from "@/components/tars/notifications-settings-section";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import {
   loadModelSettings,
@@ -104,9 +98,10 @@ function YamlEditorSection() {
         <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
           <Lock className="size-3.5 shrink-0 text-yellow-500" />
           <span>
-            <strong>konverge.protect_mode</strong> is hardcoded in{" "}
-            <code className="text-xs">workflows/lib/konverge-guard.ts</code> and
-            cannot be changed via this UI.
+            protect_mode is <strong>retired</strong>. All{" "}
+            <code className="text-xs">auto_review: true</code> repos (including
+            Konverge / Reflex-Connect) are reviewed; nothing is written
+            externally until you approve from the run detail page.
           </span>
         </div>
 
@@ -217,7 +212,6 @@ function KillSwitchesSection() {
             {projects.map(([key]) => {
               const autoReview = effectiveVal(key, "auto_review");
               const autoFix = effectiveVal(key, "auto_fix");
-              const isKonverge = key === "konverge";
               const changed =
                 pending[key]?.auto_review !== undefined ||
                 pending[key]?.auto_fix !== undefined;
@@ -242,51 +236,25 @@ function KillSwitchesSection() {
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-4">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                            <input
-                              checked={autoReview}
-                              className="size-5 cursor-pointer accent-primary"
-                              disabled={isKonverge}
-                              onChange={() =>
-                                toggle(key, "auto_review", autoReview)
-                              }
-                              type="checkbox"
-                            />
-                            Auto-review
-                          </label>
-                        </TooltipTrigger>
-                        {isKonverge && (
-                          <TooltipContent>
-                            Konverge is read-only — protect_mode active
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
+                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                      <input
+                        checked={autoReview}
+                        className="size-5 cursor-pointer accent-primary"
+                        onChange={() => toggle(key, "auto_review", autoReview)}
+                        type="checkbox"
+                      />
+                      Auto-review
+                    </label>
 
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                            <input
-                              checked={autoFix}
-                              className="size-5 cursor-pointer accent-primary"
-                              disabled={isKonverge}
-                              onChange={() => toggle(key, "auto_fix", autoFix)}
-                              type="checkbox"
-                            />
-                            Auto-fix
-                          </label>
-                        </TooltipTrigger>
-                        {isKonverge && (
-                          <TooltipContent>
-                            Konverge is read-only — protect_mode active
-                          </TooltipContent>
-                        )}
-                      </Tooltip>
-                    </TooltipProvider>
+                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
+                      <input
+                        checked={autoFix}
+                        className="size-5 cursor-pointer accent-primary"
+                        onChange={() => toggle(key, "auto_fix", autoFix)}
+                        type="checkbox"
+                      />
+                      Auto-fix
+                    </label>
                   </div>
                 </div>
               );

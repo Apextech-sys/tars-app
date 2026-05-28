@@ -71,19 +71,9 @@ export async function saveProjectsYaml(
     return { ok: false, error: "YAML root must be a mapping of project keys." };
   }
 
-  // Re-enforce konverge protect_mode — cannot be changed via UI
-  if ("konverge" in parsed) {
-    const konverge = parsed.konverge as ProjectPolicy;
-    if (konverge.protect_mode === false) {
-      return {
-        ok: false,
-        error:
-          "protect_mode for konverge is hardcoded in workflows/lib/konverge-guard.ts and cannot be changed via this UI.",
-      };
-    }
-    // Always write protect_mode: true for konverge
-    (parsed.konverge as ProjectPolicy).protect_mode = true;
-  }
+  // protect_mode is RETIRED (Slice 1). We no longer force-write
+  // `konverge.protect_mode = true`; the human approval gate is the safety
+  // boundary now, so the YAML field carries no meaning and edits pass through.
 
   try {
     writeFileSync(getProjectsYamlPath(), YAML.stringify(parsed), "utf8");
