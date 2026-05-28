@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Analytics } from "@vercel/analytics/react";
-import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Provider } from "jotai";
 import { type ReactNode, Suspense } from "react";
 import { AuthProvider } from "@/components/auth/provider";
@@ -44,8 +42,6 @@ const RootLayout = ({ children }: RootLayoutProps) => (
           </AuthProvider>
         </Provider>
       </ThemeProvider>
-      <Analytics />
-      <SpeedInsights />
     </body>
   </html>
 );
