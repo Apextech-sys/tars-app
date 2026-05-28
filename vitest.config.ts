@@ -6,6 +6,7 @@ export default defineConfig({
       "workflows/__tests__/**/*.test.ts",
       "lib/tars/__tests__/**/*.test.ts",
       "lib/notifications/__tests__/**/*.test.ts",
+      "lib/demo/__tests__/**/*.test.ts",
       "app/**/__tests__/**/*.test.ts",
     ],
     environment: "node",

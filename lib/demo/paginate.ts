@@ -15,9 +15,8 @@ export interface PageBounds {
 /**
  * Return the [start, end) slice indices for a 1-based page.
  *
- * BUG (deliberate, for the fix-stage E2E): `end` is computed as
- * `start + pageSize + 1`, an off-by-one that returns one item too many per
- * page (and overruns the array on the last page).
+ * `end` is clamped to `totalItems` so the final page never over-runs the
+ * array and callers can rely on `end` as a precise cursor value.
  */
 export function pageBounds(
   totalItems: number,
@@ -25,7 +24,7 @@ export function pageBounds(
   pageSize: number
 ): PageBounds {
   const start = (page - 1) * pageSize;
-  const end = start + pageSize + 1; // off-by-one: should be start + pageSize
+  const end = Math.min(start + pageSize, totalItems);
   const totalPages = Math.ceil(totalItems / pageSize);
   return { start, end, totalPages };
 }
