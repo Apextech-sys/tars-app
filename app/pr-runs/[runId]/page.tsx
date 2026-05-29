@@ -4,6 +4,7 @@ import {
   Bot,
   FileText,
   GitPullRequest,
+  MessagesSquare,
   ShieldCheck,
   Wrench,
 } from "lucide-react";
@@ -12,12 +13,14 @@ import { notFound } from "next/navigation";
 import type { JSX } from "react";
 import { ApprovalPanel } from "@/components/pr-runs/approval-panel";
 import { AuditTimeline } from "@/components/pr-runs/audit-timeline";
+import { DebatePanel } from "@/components/pr-runs/debate-panel";
 import { DisagreementPanel } from "@/components/pr-runs/disagreement-panel";
 import { FindingsSummary } from "@/components/pr-runs/findings-summary";
 import { FixPanel } from "@/components/pr-runs/fix-panel";
 import { RunHeader } from "@/components/pr-runs/run-header";
 import type {
   AgreedFinding,
+  DebateTranscript,
   DisagreementPayload,
   FixBlastRadius,
   FixRevalidationItem,
@@ -112,6 +115,14 @@ export default async function PrRunDetailPage({
           <SectionHeader icon={FileText} title="Findings" />
           <FindingsSummary auditRows={auditLog} run={run} />
         </section>
+
+        {/* Debate — the iterative reviewer exchange (Slice 3) */}
+        {run.debateRounds && (
+          <section className="rounded-lg border border-violet-500/20 bg-card/30 p-5">
+            <SectionHeader icon={MessagesSquare} title="Debate" />
+            <DebatePanel debate={run.debateRounds as DebateTranscript} />
+          </section>
+        )}
 
         {/* Approval panel — pending-approval (actionable) or any decided/fix state */}
         {(run.status === "pending-approval" ||

@@ -36,6 +36,31 @@ export interface AgreedFinding {
   suggestion?: string;
 }
 
+/** One reviewer's position at a given debate round. */
+export interface DebateReviewerPosition {
+  reviewer: "codex" | "claude";
+  summary?: string;
+  findings: AgreedFinding[];
+  endorsed?: number;
+  retracted?: number;
+}
+
+/** A single debate round: both reviewers' positions. */
+export interface DebateRound {
+  round: number;
+  codex: DebateReviewerPosition;
+  claude: DebateReviewerPosition;
+}
+
+/** The full iterative reviewer-debate transcript (Slice 3). */
+export interface DebateTranscript {
+  rounds: DebateRound[];
+  maxRounds: number;
+  agreed: AgreedFinding[];
+  disputed: AgreedFinding[];
+  stopReason: "converged" | "max-rounds" | "no-findings";
+}
+
 export interface PrRun {
   runId: string;
   owner: string;
@@ -50,6 +75,7 @@ export interface PrRun {
   disagreedPayload: unknown;
   adjudicationAction: string | null;
   adjudicationActionAt: string | null;
+  debateRounds: DebateTranscript | null;
   agreedFindings: AgreedFinding[] | null;
   linearIssueId: string | null;
   linearIssueIdentifier: string | null;

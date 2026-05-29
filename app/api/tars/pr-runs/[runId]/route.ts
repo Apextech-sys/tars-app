@@ -27,6 +27,7 @@ export async function GET(
           disagreedPayload: prReviewRuns.disagreedPayload,
           adjudicationAction: prReviewRuns.adjudicationAction,
           adjudicationActionAt: prReviewRuns.adjudicationActionAt,
+          debateRounds: prReviewRuns.debateRounds,
           agreedFindings: prReviewRuns.agreedFindings,
           linearIssueId: prReviewRuns.linearIssueId,
           linearIssueIdentifier: prReviewRuns.linearIssueIdentifier,
