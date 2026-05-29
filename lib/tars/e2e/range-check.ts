@@ -6,5 +6,5 @@
  * e.g. inRange(5, 1, 5) returns false when it should return true.
  */
 export function inRange(value: number, min: number, max: number): boolean {
-  return value >= min && value < max;
+  return value >= min && value <= max;
 }
