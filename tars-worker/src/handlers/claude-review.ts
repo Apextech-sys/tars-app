@@ -1,6 +1,7 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import type { JobHandler } from "../types.js";
+import { DebateContextSchema, debateInstruction } from "./debate-shared.js";
 
 const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]+?)```/;
 
@@ -10,6 +11,7 @@ const ReviewInputSchema = z.object({
   repo: z.string().optional(),
   prNumber: z.number().optional(),
   cwd: z.string().optional(),
+  debateContext: DebateContextSchema.optional(),
 });
 
 const FindingSchema = z.object({
@@ -52,22 +54,40 @@ Rules:
 - "findings" may be an empty array if the change is clean.
 - Use "block" only for security/correctness issues that must not ship.
 - Use "approve" when the change is good. Use "comment" for nits-only feedback.
-- Use Read/Grep/Glob if you need to confirm context, but stay focused on the diff.`;
+- Use Read/Grep/Glob if you need to confirm context, but stay focused on the diff.
+
+SCOPE — these are hard constraints, not suggestions:
+- Review ONLY the lines this PR changes (the added/modified lines in the diff). Do NOT flag pre-existing issues in unchanged code, even if you see them while reading a file for context.
+- Do NOT invent issues. If the changed lines are correct, return an EMPTY findings array. An empty findings array is a valid and good outcome — it means the PR is clean.
+- Do NOT suggest scope-expanding refactors, style preferences, or "while you're here" improvements. Only report real defects that were introduced or directly touched by this PR's changed lines.
+- Every finding's "file"/"line" MUST point at a line this PR actually changed. If you cannot tie a finding to a changed line, do not report it.`;
 
 export const claudeReviewHandler: JobHandler = async (ctx) => {
   const input = ReviewInputSchema.parse(ctx.job.payload);
+
+  const debate = input.debateContext;
+  const debateBlock = debate
+    ? debateInstruction(
+        debate.round,
+        debate.otherReviewer,
+        debate.otherFindings
+      )
+    : null;
 
   const userPrompt = [
     input.repo ? `Repo: ${input.repo}` : null,
     typeof input.prNumber === "number" ? `PR #${input.prNumber}` : null,
     input.context ? `Context:\n${input.context}` : null,
     `Diff:\n\`\`\`diff\n${input.diff}\n\`\`\``,
+    debateBlock,
     "Return ONLY the JSON review object — no markdown, no commentary.",
   ]
     .filter(Boolean)
     .join("\n\n");
 
-  ctx.log("claude-review: starting query");
+  ctx.log("claude-review: starting query", {
+    debateRound: debate?.round ?? 1,
+  });
 
   const q = query({
     prompt: userPrompt,
