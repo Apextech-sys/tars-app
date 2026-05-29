@@ -45,8 +45,16 @@ export const auditLog = pgTable(
  * `status` values used in code (status is stored as text, not an enum):
  *   started | skipped-no-findings | skipped-policy | disagreed
  *   pending-approval | approved | rejected | error
+ *   Slice 2 (fix stage): fixing | fix-in-review | fix-failed | done
  *   (legacy/historical only: completed, blocked-konverge — protect_mode is
  *    retired as of Slice 1, but old rows still carry these statuses.)
+ *
+ * `fix_*` columns are written by the fix workflow (workflows/pr-fix.ts) once a
+ * run is approved: fix_branch / fix_pr_url / fix_pr_number link the fix PR,
+ * fix_revalidation records which findings survived independent re-check,
+ * fix_blast_radius records the traced blast radius of the fix, and
+ * fix_coverage_rootcause is the why-the-suite-missed-it analysis.
+ * Migration: drizzle/0013_pr_review_fix_stage.sql.
  *
  * `disagreed_payload` is populated only when Codex and Claude disagree on
  * findings. It carries both raw reviewer outputs so Shaun can adjudicate
@@ -86,6 +94,15 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   approvalAction: text("approval_action"),
   approvalActionAt: timestamp("approval_action_at", { withTimezone: true }),
   approvalReason: text("approval_reason"),
+  // Slice 2: FIX stage. fix_status carries a granular sub-status; the run's
+  // top-level `status` carries fixing | fix-in-review | fix-failed | done.
+  fixStatus: text("fix_status"),
+  fixBranch: text("fix_branch"),
+  fixPrUrl: text("fix_pr_url"),
+  fixPrNumber: integer("fix_pr_number"),
+  fixRevalidation: jsonb("fix_revalidation"),
+  fixBlastRadius: jsonb("fix_blast_radius"),
+  fixCoverageRootcause: text("fix_coverage_rootcause"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

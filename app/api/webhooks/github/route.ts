@@ -22,12 +22,17 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { webhookEvents } from "@/lib/db/tars-schema";
+import { prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
+import { transitionPrReviewIssue } from "@/workflows/lib/linear-lifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+/** TARS fix PRs always use this head-branch prefix: `tars/fix-<runId>`. */
+const FIX_BRANCH_PREFIX = "tars/fix-";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -35,9 +40,11 @@ interface PullRequestPayload {
   action: string;
   number: number;
   pull_request: {
-    head: { sha: string };
+    head: { sha: string; ref: string };
+    base: { ref: string };
     title: string;
     draft: boolean;
+    merged?: boolean;
   };
   repository: {
     full_name: string;
@@ -115,6 +122,88 @@ async function logWebhookEvent(opts: {
   }
 }
 
+/**
+ * Done-on-merge handler (Slice 2). When a TARS fix PR (head branch
+ * `tars/fix-<runId>`) merges, transition the originating run to `done` and move
+ * its Linear issue to Done. Best-effort: a Linear failure does not block the
+ * status update. Returns true if a matching run was found + updated.
+ */
+async function handleFixPrMerge(
+  headRef: string,
+  mergedPrNumber: number | null,
+  repoFullName: string
+): Promise<boolean> {
+  if (!headRef.startsWith(FIX_BRANCH_PREFIX)) {
+    return false;
+  }
+  const runId = headRef.slice(FIX_BRANCH_PREFIX.length);
+  if (!runId) {
+    return false;
+  }
+
+  // Look up the run; confirm the merged PR number matches what we recorded
+  // (defends against a same-named branch on an unrelated PR).
+  const rows = await db
+    .select({
+      runId: prReviewRuns.runId,
+      fixPrNumber: prReviewRuns.fixPrNumber,
+      linearIssueId: prReviewRuns.linearIssueId,
+      linearIssueIdentifier: prReviewRuns.linearIssueIdentifier,
+      policy: prReviewRuns.policy,
+    })
+    .from(prReviewRuns)
+    .where(eq(prReviewRuns.runId, runId))
+    .limit(1);
+
+  if (rows.length === 0) {
+    return false;
+  }
+  const run = rows[0];
+  if (
+    typeof run.fixPrNumber === "number" &&
+    mergedPrNumber != null &&
+    run.fixPrNumber !== mergedPrNumber
+  ) {
+    console.warn(
+      `[webhook/github] fix-merge branch ${headRef} matched run ${runId} but PR# ${mergedPrNumber} != recorded ${run.fixPrNumber}; skipping`
+    );
+    return false;
+  }
+
+  await db
+    .update(prReviewRuns)
+    .set({ status: "done", fixStatus: "merged", updatedAt: new Date() })
+    .where(eq(prReviewRuns.runId, runId));
+
+  // Derive the Linear team from the persisted policy, falling back to the
+  // issue identifier prefix (e.g. "REF-9" -> "REF") since the persisted policy
+  // can be empty (see resolveLinear in workflows/pr-fix.ts).
+  const policy = (run.policy as { linearTeam?: string | null } | null) ?? null;
+  const teamKey =
+    policy?.linearTeam ??
+    (run.linearIssueIdentifier?.includes("-")
+      ? run.linearIssueIdentifier.split("-")[0]
+      : null);
+  if (run.linearIssueId && teamKey) {
+    try {
+      await transitionPrReviewIssue({
+        teamKey,
+        issueId: run.linearIssueId,
+        phase: "done",
+      });
+    } catch (err) {
+      console.error(
+        `[webhook/github] done-on-merge Linear transition failed for ${runId}:`,
+        err
+      );
+    }
+  }
+  console.info(
+    `[webhook/github] fix PR merged: run ${runId} (${repoFullName} #${mergedPrNumber}) -> done`
+  );
+  return true;
+}
+
 // --- GET -- return 405 -------------------------------------------------------
 
 export function GET(): NextResponse {
@@ -189,6 +278,38 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       senderLogin: payload?.sender?.login ?? null,
       rawPayload: payload,
       triggeredRun: null,
+    });
+    return new NextResponse(null, { status: 204 });
+  }
+
+  // 4b. Done-on-merge: a fix PR (head branch `tars/fix-<runId>`) merging marks
+  //     the originating run terminal and moves its Linear issue to Done.
+  if (
+    eventType === "pull_request" &&
+    action === "closed" &&
+    payload?.pull_request?.merged === true
+  ) {
+    const headRef: string = payload?.pull_request?.head?.ref ?? "";
+    const mergedPrNumber: number | null = payload?.number ?? null;
+    const handled = await handleFixPrMerge(
+      headRef,
+      mergedPrNumber,
+      repoFullName
+    );
+    await logWebhookEvent({
+      eventType,
+      deliveryId,
+      repoKey: repoFullName,
+      action: handled ? "closed__fix_merged" : "closed__merged",
+      prNumber: mergedPrNumber,
+      prSha: payload?.pull_request?.head?.sha ?? null,
+      prTitle: payload?.pull_request?.title ?? null,
+      senderLogin: payload?.sender?.login ?? null,
+      rawPayload: payload,
+      triggeredRun:
+        handled && headRef.startsWith(FIX_BRANCH_PREFIX)
+          ? headRef.slice(FIX_BRANCH_PREFIX.length)
+          : null,
     });
     return new NextResponse(null, { status: 204 });
   }

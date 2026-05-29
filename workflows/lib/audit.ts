@@ -94,6 +94,23 @@ async function ensureSchema(sql: any) {
       on pr_review_runs (created_at desc)
       where status = 'pending-approval';
   `;
+  // Slice 2 (drizzle/0013): fix-stage columns. Idempotent so a deploy that
+  // hasn't run the Drizzle migration still self-heals on first fix write.
+  await sql /* sql */`
+    alter table pr_review_runs
+      add column if not exists fix_status text,
+      add column if not exists fix_branch text,
+      add column if not exists fix_pr_url text,
+      add column if not exists fix_pr_number integer,
+      add column if not exists fix_revalidation jsonb,
+      add column if not exists fix_blast_radius jsonb,
+      add column if not exists fix_coverage_rootcause text;
+  `;
+  await sql /* sql */`
+    create index if not exists pr_review_runs_fix_active_idx
+      on pr_review_runs (updated_at desc)
+      where status in ('fixing', 'fix-in-review', 'fix-failed');
+  `;
   await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
@@ -205,6 +222,11 @@ export interface PrReviewRunRecord {
     | "pending-approval"
     | "approved"
     | "rejected"
+    // Slice 2 (fix stage) statuses:
+    | "fixing"
+    | "fix-in-review"
+    | "fix-failed"
+    | "done"
     | "error";
   findingsCount?: number;
   reviewCommentUrl?: string;
@@ -269,6 +291,137 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
   } catch (err) {
     if (process.env.TARS_DEBUG_AUDIT) {
       console.warn("[audit] upsertPrReviewRun failed:", (err as Error).message);
+    }
+  } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+// ── Slice 2: fix-stage persistence ───────────────────────────────────────────
+
+/** The run context the fix workflow needs to do its work. */
+export interface RunForFix {
+  runId: string;
+  owner: string;
+  repo: string;
+  prNumber: number;
+  prSha: string | null;
+  status: string;
+  policy: {
+    issueTracker?: string;
+    linearTeam?: string | null;
+  } | null;
+  agreedFindings: AgreedFinding[] | null;
+  linearIssueId: string | null;
+  linearIssueIdentifier: string | null;
+  linearIssueUrl: string | null;
+}
+
+/**
+ * Load an approved run for the fix workflow. Returns null if the row is
+ * missing. `"use step"` so the WDK treats the DB read as a durable step.
+ */
+export async function getRunForFix(runId: string): Promise<RunForFix | null> {
+  "use step";
+  const sql = await makeSql();
+  try {
+    await ensureSchema(sql);
+    const rows = await sql /* sql */`
+      select run_id, owner, repo, pr_number, pr_sha, status, policy,
+             agreed_findings, linear_issue_id, linear_issue_identifier,
+             linear_issue_url
+      from pr_review_runs where run_id = ${runId} limit 1
+    `;
+    if (rows.length === 0) {
+      return null;
+    }
+    const r = rows[0] as Record<string, unknown>;
+    return {
+      runId: r.run_id as string,
+      owner: r.owner as string,
+      repo: r.repo as string,
+      prNumber: r.pr_number as number,
+      prSha: (r.pr_sha as string | null) ?? null,
+      status: r.status as string,
+      policy: (r.policy as RunForFix["policy"]) ?? null,
+      agreedFindings: (r.agreed_findings as AgreedFinding[] | null) ?? null,
+      linearIssueId: (r.linear_issue_id as string | null) ?? null,
+      linearIssueIdentifier:
+        (r.linear_issue_identifier as string | null) ?? null,
+      linearIssueUrl: (r.linear_issue_url as string | null) ?? null,
+    };
+  } catch (err) {
+    if (process.env.TARS_DEBUG_AUDIT) {
+      console.warn("[audit] getRunForFix failed:", (err as Error).message);
+    }
+    return null;
+  } finally {
+    // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown
+    await sql.end({ timeout: 5 }).catch(() => {});
+  }
+}
+
+export interface FixResultUpdate {
+  runId: string;
+  /** The pr_review_runs.status to set (fixing | fix-in-review | fix-failed). */
+  status: "fixing" | "fix-in-review" | "fix-failed" | "done";
+  /** Granular sub-status string stored in fix_status. */
+  fixStatus?: string;
+  fixBranch?: string;
+  fixPrUrl?: string;
+  fixPrNumber?: number;
+  fixRevalidation?: unknown;
+  fixBlastRadius?: unknown;
+  fixCoverageRootcause?: string;
+  error?: string;
+}
+
+/**
+ * Update the run row with fix-stage status + work product. Only writes the
+ * columns that are provided (COALESCE keeps prior values), so calling it first
+ * with `{ status: "fixing" }` and later with the full result is safe.
+ */
+export async function upsertFixResult(rec: FixResultUpdate): Promise<void> {
+  "use step";
+  const sql = await makeSql();
+  try {
+    await ensureSchema(sql);
+    await sql /* sql */`
+      update pr_review_runs set
+        status = ${rec.status},
+        fix_status = coalesce(${rec.fixStatus ?? null}, fix_status),
+        fix_branch = coalesce(${rec.fixBranch ?? null}, fix_branch),
+        fix_pr_url = coalesce(${rec.fixPrUrl ?? null}, fix_pr_url),
+        fix_pr_number = coalesce(${rec.fixPrNumber ?? null}, fix_pr_number),
+        fix_revalidation = coalesce(
+          ${
+            rec.fixRevalidation
+              ? sql.json(
+                  rec.fixRevalidation as Parameters<typeof sql.json>[0]
+                )
+              : null
+          },
+          fix_revalidation
+        ),
+        fix_blast_radius = coalesce(
+          ${
+            rec.fixBlastRadius
+              ? sql.json(rec.fixBlastRadius as Parameters<typeof sql.json>[0])
+              : null
+          },
+          fix_blast_radius
+        ),
+        fix_coverage_rootcause = coalesce(
+          ${rec.fixCoverageRootcause ?? null}, fix_coverage_rootcause
+        ),
+        error = ${rec.error ?? null},
+        updated_at = now()
+      where run_id = ${rec.runId}
+    `;
+  } catch (err) {
+    if (process.env.TARS_DEBUG_AUDIT) {
+      console.warn("[audit] upsertFixResult failed:", (err as Error).message);
     }
   } finally {
     // biome-ignore lint/suspicious/noEmptyBlockStatements: best-effort pool shutdown

@@ -109,11 +109,23 @@ export async function resolveTeamByKey(
   };
 }
 
-export type LifecyclePhase = "pending-approval" | "approved" | "rejected";
+export type LifecyclePhase =
+  | "pending-approval"
+  | "approved"
+  // Slice 2 (fix stage) phases:
+  | "fixing"
+  | "in-review"
+  | "done"
+  | "rejected";
 
 /**
  * Pick the workflow-state id for a lifecycle phase. Name-first, type-fallback
  * so the mapping survives a column rename in Linear.
+ *
+ * Slice 2 adds the fix-stage phases:
+ *   - "fixing"    -> In Progress (the run is approved; Claude Code is fixing).
+ *   - "in-review" -> In Review (the fix PR is open, awaiting human review).
+ *   - "done"      -> Done       (the fix PR merged).
  */
 export function pickStateForPhase(
   states: LinearState[],
@@ -132,8 +144,22 @@ export function pickStateForPhase(
       null
     );
   }
-  if (phase === "approved") {
+  if (phase === "approved" || phase === "fixing") {
     return byName("In Progress") ?? byType("started") ?? null;
+  }
+  if (phase === "in-review") {
+    return (
+      byName("In Review") ??
+      byName("Code Review") ??
+      byName("Review") ??
+      // Linear's "review"-flavoured states are still type `started`; only fall
+      // back to the generic started state if no review column exists.
+      byType("started") ??
+      null
+    );
+  }
+  if (phase === "done") {
+    return byName("Done") ?? byType("completed") ?? null;
   }
   // rejected
   return byName("Canceled") ?? byType("canceled") ?? null;
@@ -343,5 +369,105 @@ export async function createPendingApprovalIssue(args: {
       );
     }
     return null;
+  }
+}
+
+// ── Slice 2: fix-stage Linear lifecycle ──────────────────────────────────────
+
+/** Post a markdown comment onto an existing Linear issue. */
+export async function commentOnIssue(args: {
+  issueId: string;
+  body: string;
+  fetchImpl?: typeof fetch;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const json = await gql<{
+    commentCreate?: { success: boolean };
+  }>(
+    `mutation CommentCreate($input: CommentCreateInput!) {
+      commentCreate(input: $input) { success }
+    }`,
+    { input: { issueId: args.issueId, body: args.body } },
+    args.fetchImpl
+  );
+  if (json.errors && json.errors.length > 0) {
+    return { ok: false, error: json.errors.map((e) => e.message).join("; ") };
+  }
+  if (!json.data?.commentCreate?.success) {
+    return { ok: false, error: "commentCreate.success=false" };
+  }
+  return { ok: true };
+}
+
+/**
+ * `"use step"` wrapper: transition the run's Linear issue to a fix-stage phase.
+ * Best-effort — never throws (Linear being down must not fail the fix). Returns
+ * the state name on success, null on any failure.
+ */
+export async function transitionFixPhase(args: {
+  teamKey: string;
+  issueId: string;
+  phase: LifecyclePhase;
+}): Promise<string | null> {
+  "use step";
+  try {
+    const result = await transitionPrReviewIssue({
+      teamKey: args.teamKey,
+      issueId: args.issueId,
+      phase: args.phase,
+    });
+    if (result.ok) {
+      return result.stateName;
+    }
+    if (process.env.TARS_DEBUG_LINEAR) {
+      console.warn("[linear] transitionFixPhase failed:", result.error);
+    }
+    return null;
+  } catch (err) {
+    if (process.env.TARS_DEBUG_LINEAR) {
+      console.warn(
+        "[linear] transitionFixPhase threw:",
+        (err as Error).message
+      );
+    }
+    return null;
+  }
+}
+
+/**
+ * `"use step"` wrapper: comment a fix-PR link onto the run's Linear issue.
+ * Best-effort — never throws. Returns true on success.
+ */
+export async function commentFixPrOnIssue(args: {
+  issueId: string;
+  fixPrUrl: string;
+  fixSummary?: string;
+  filesChanged?: string[];
+  coverageRootCause?: string;
+}): Promise<boolean> {
+  "use step";
+  try {
+    const lines: string[] = [];
+    lines.push(`**TARS opened a fix PR for human review:** ${args.fixPrUrl}`);
+    if (args.fixSummary) {
+      lines.push("");
+      lines.push(args.fixSummary);
+    }
+    if (args.filesChanged && args.filesChanged.length > 0) {
+      lines.push("");
+      lines.push(
+        `Files changed: ${args.filesChanged.map((f) => `\`${f}\``).join(", ")}`
+      );
+    }
+    if (args.coverageRootCause) {
+      lines.push("");
+      lines.push(`_Coverage-gap root cause:_ ${args.coverageRootCause}`);
+    }
+    const result = await commentOnIssue({
+      issueId: args.issueId,
+      body: lines.join("\n"),
+    });
+    return result.ok;
+  } catch {
+    return false;
   }
 }
