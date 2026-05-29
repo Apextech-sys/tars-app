@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { desc, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { workerHeartbeats } from "@/lib/db/worker-schema";
@@ -7,9 +7,16 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    // Only return LIVE workers: last_seen within 2 minutes (120 s).
+    // Stale historical rows (from previous PIDs) are excluded here so the
+    // dashboard Worker Status card shows an accurate headcount.
+    const LIVE_WINDOW_S = 120;
+    const liveThreshold = new Date(Date.now() - LIVE_WINDOW_S * 1000);
+
     const rows = await db
       .select()
       .from(workerHeartbeats)
+      .where(gte(workerHeartbeats.lastSeen, liveThreshold))
       .orderBy(desc(workerHeartbeats.lastSeen));
 
     const now = Date.now();
@@ -27,8 +34,15 @@ export async function GET() {
           healthStatus = "red";
         }
 
+        // Display a clean name: strip the legacy "worker-<hostname>-<pid>" prefix
+        // if present; fall back to the raw workerId. New registrations use the
+        // stable "tars-worker" id so this is mainly for transition hygiene.
+        const displayName = w.workerId.startsWith("tars-")
+          ? w.workerId
+          : w.workerId.replace(/^worker-[^-]+-\d+$/, "tars-worker") || w.workerId;
+
         return {
-          workerId: w.workerId,
+          workerId: displayName,
           lastSeen: w.lastSeen.toISOString(),
           startedAt: w.startedAt.toISOString(),
           hostname: w.hostname,

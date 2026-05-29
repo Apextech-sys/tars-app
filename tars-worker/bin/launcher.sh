@@ -49,7 +49,9 @@ export CODEX_HOME="${CODEX_HOME:-/home/shaun/.codex}"
 : "${TARS_WORKER_CALLBACK_SECRET:?TARS_WORKER_CALLBACK_SECRET must be set from Infisical}"
 
 export NODE_ENV="${NODE_ENV:-production}"
-export TARS_WORKER_ID="${TARS_WORKER_ID:-worker-$(hostname)-$$}"
+# Use a stable worker ID so restarts reuse the same DB row instead of
+# accumulating stale historical rows. Override via env if you need a custom id.
+export TARS_WORKER_ID="${TARS_WORKER_ID:-tars-worker}"
 
 NODE_BIN="${NODE_BIN:-/usr/bin/node}"
 if [[ ! -x "${NODE_BIN}" ]]; then

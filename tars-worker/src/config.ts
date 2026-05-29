@@ -9,7 +9,7 @@ const Schema = z.object({
   TARS_WORKER_ID: z
     .string()
     .min(1)
-    .default(`worker-${hostname()}-${process.pid}`),
+    .default("tars-worker"),
   TARS_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
   TARS_WORKER_POLL_INTERVAL_MS: z.coerce
     .number()
