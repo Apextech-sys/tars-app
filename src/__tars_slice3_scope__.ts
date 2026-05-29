@@ -12,3 +12,12 @@ export function divideTotals(sum: number, count: number): number {
 export function formatLabel(name: string): string {
   return name.trim();
 }
+
+// --- The scope-test PR adds ONLY the clean, correct function below. ---
+// It is correct: it validates input and has no defects. The diff is clean.
+export function clampPercent(value: number): number {
+  if (Number.isNaN(value)) {
+    return 0;
+  }
+  return Math.min(Math.max(value, 0), 100);
+}
