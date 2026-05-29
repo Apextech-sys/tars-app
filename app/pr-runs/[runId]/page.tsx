@@ -24,6 +24,7 @@ import type {
   DisagreementPayload,
   FixBlastRadius,
   FixRevalidationItem,
+  FixTestGate,
   PolicyConfig,
   PrRun,
   PrRunDetail,
@@ -172,6 +173,7 @@ export default async function PrRunDetailPage({
                 (run.fixRevalidation as FixRevalidationItem[] | null) ?? null
               }
               fixStatus={run.fixStatus}
+              fixTestGate={(run.fixTestGate as FixTestGate | null) ?? null}
               runId={run.runId}
               status={run.status}
             />

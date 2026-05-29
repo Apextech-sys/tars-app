@@ -19,6 +19,15 @@
  *                          reason).
  *   10c. Root-cause gap   — short analysis of WHY the existing suite missed it.
  *
+ * TEST GATE — BASELINE DIFF (not "all tests must pass"). THIS handler runs the
+ * repo's test suite ONCE before the agent edits (the baseline) and again after,
+ * with a machine-readable reporter, and compares per-test results. A fix is
+ * SAFE iff it introduces no REGRESSION — i.e. no test that was passing in the
+ * baseline is now failing. Pre-existing reds and env-dependent tests that fail
+ * in BOTH runs (e.g. DB tests with no `DATABASE_URL` in the clone) do NOT block.
+ * The model's self-reported `existingTestsPassed` is informational ONLY; the
+ * gate decision is computed deterministically here (see ./test-gate.ts).
+ *
  * The Agent SDK does the investigation + editing + test work inside the clone.
  * Everything that touches GitHub (branch create, commit, push, open PR) is done
  * deterministically by THIS handler — never by the model — so the safety
@@ -37,6 +46,16 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { Octokit } from "@octokit/rest";
 import { z } from "zod";
 import type { JobHandler } from "../types.js";
+import {
+  type DetectedRunner,
+  detectRunner,
+  evaluateGate,
+  type GateDecision,
+  installDeps,
+  runTestSuite,
+  TEST_GATE_TIMEOUT_MS,
+  type TestRunOutcome,
+} from "./test-gate.js";
 
 const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]+?)```/;
 
@@ -105,6 +124,22 @@ const ModelReportSchema = z.object({
 
 export type FixModelReport = z.infer<typeof ModelReportSchema>;
 
+/**
+ * Serializable summary of the baseline-diff gate, persisted on the run and
+ * surfaced in the fix panel. JSON-safe (no Maps).
+ */
+export interface FixTestGateSummary {
+  passed: boolean;
+  code: GateDecision["code"];
+  baselinePassCount: number | null;
+  afterPassCount: number | null;
+  regressions: string[];
+  newlyFailing: string[];
+  summary: string;
+  reason?: string;
+  testCommand: string | null;
+}
+
 export interface ClaudeFixApplyOutput {
   outcome: "fix-in-review" | "fix-failed";
   /** populated on success */
@@ -121,10 +156,30 @@ export interface ClaudeFixApplyOutput {
   coverageRootCause?: string;
   existingTestsPassed?: boolean;
   testCommand?: string | null;
+  /** Deterministic baseline-diff gate result (the real test verdict). */
+  testGate?: FixTestGateSummary;
   filesChanged: string[];
   shortstat?: string;
   sessionId?: string;
   error?: string;
+}
+
+/** Project a GateDecision into the JSON-safe summary persisted on the run. */
+function toGateSummary(
+  decision: GateDecision,
+  testCommand: string | null
+): FixTestGateSummary {
+  return {
+    passed: decision.passed,
+    code: decision.code,
+    baselinePassCount: decision.baselinePassCount,
+    afterPassCount: decision.afterPassCount,
+    regressions: decision.regressions,
+    newlyFailing: decision.newlyFailing,
+    summary: decision.summary,
+    reason: decision.reason,
+    testCommand,
+  };
 }
 
 function ghToken(): string {
@@ -194,6 +249,14 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     // New branch for the fix.
     await git(workspace, ["checkout", "-b", fixBranch], 30_000);
 
+    // ── TEST GATE step 1: capture the BASELINE before any edits ──────────────
+    // Detect the runner + run the suite once on the pristine PR-head tree. The
+    // per-test pass/fail snapshot is the floor we diff against after the fix.
+    // Any failure here is non-fatal: the gate fallback handles a missing
+    // baseline (see evaluateGate). Runner is reused for the after-run.
+    const runner = await detectRunner(workspace).catch(() => null);
+    const baseline = await captureBaseline(ctx, workspace, runner);
+
     // ── Stages 7–10 (investigation + edits + tests) via the Agent SDK ─────────
     // obtainFixReport runs the fix turn and, ONLY if the structured report is
     // missing/unparseable, issues a single recovery turn that resumes the same
@@ -219,11 +282,18 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
       };
     }
 
+    // ── TEST GATE step 2: run the suite AFTER the fix + compute the diff ──────
+    // THIS handler — never the model — decides pass/fail. The gate is SAFE iff
+    // it introduces no regression vs the baseline (pre-existing reds and
+    // env-flaky tests that fail in both runs do not block).
+    const gate = await computeTestGate(ctx, workspace, runner, baseline);
+
     const validated = await validateFixWorkProduct(
       workspace,
       input,
       report,
-      sessionId
+      sessionId,
+      gate
     );
     if ("failure" in validated) {
       return validated.failure;
@@ -241,6 +311,7 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
       revalidation,
       keptCount,
       fixBranch,
+      gate,
     });
     if ("error" in opened) {
       return { ...baseFail(opened.error), sessionId };
@@ -249,6 +320,8 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     ctx.log("claude-fix-apply: fix PR opened", {
       url: opened.fixPrUrl,
       number: opened.fixPrNumber,
+      testGate: gate.code,
+      testSummary: gate.summary,
     });
 
     return {
@@ -265,7 +338,8 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
       testFiles: report.testFiles,
       coverageRootCause: report.coverageRootCause,
       existingTestsPassed: report.existingTestsPassed,
-      testCommand: report.testCommand ?? null,
+      testCommand: gate.testCommand ?? report.testCommand ?? null,
+      testGate: gate,
       filesChanged,
       shortstat,
       sessionId,
@@ -280,6 +354,100 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     );
   }
 };
+
+/**
+ * Run the test suite on the pristine PR-head tree to capture the baseline.
+ * Best-effort: a missing/unparseable baseline is handled by the gate fallback,
+ * so any failure here returns null rather than aborting the fix.
+ */
+async function captureBaseline(
+  ctx: Parameters<JobHandler>[0],
+  workspace: string,
+  runner: DetectedRunner | null
+): Promise<TestRunOutcome | null> {
+  if (!runner) {
+    ctx.log("claude-fix-apply: no test runner detected — baseline skipped");
+    return null;
+  }
+  // Install deps FIRST: the clone is fresh, so without node_modules the runner
+  // exits instantly and yields no per-test baseline (which then forces the gate
+  // into its no-baseline fallback and wrongly fails on pre-existing reds — the
+  // exact PR #10/#11 failure). The after-fix run reuses these node_modules.
+  ctx.log("claude-fix-apply: installing deps for baseline");
+  const install = await installDeps(workspace, {
+    timeoutMs: TEST_GATE_TIMEOUT_MS,
+    signal: ctx.signal,
+  }).catch((err) => ({
+    ran: false,
+    ok: false,
+    manager: "unknown",
+    outputTail: err instanceof Error ? err.message : String(err),
+  }));
+  ctx.log("claude-fix-apply: deps install done", {
+    manager: install.manager,
+    ok: install.ok,
+  });
+  ctx.log("claude-fix-apply: capturing test baseline", {
+    command: runner.display,
+  });
+  try {
+    const outcome = await runTestSuite(workspace, runner, {
+      timeoutMs: TEST_GATE_TIMEOUT_MS,
+      signal: ctx.signal,
+    });
+    ctx.log("claude-fix-apply: baseline captured", {
+      parsed: outcome.results?.size ?? null,
+      exitCode: outcome.exitCode,
+      note: outcome.note,
+    });
+    return outcome;
+  } catch (err) {
+    ctx.log("claude-fix-apply: baseline run threw — continuing without it", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+/**
+ * Run the suite AFTER the fix and compute the deterministic gate decision.
+ * When there is no runner at all, we mark tests inconclusive (PR still opens
+ * with a visible warning — never a silent success, never a discarded fix).
+ */
+async function computeTestGate(
+  ctx: Parameters<JobHandler>[0],
+  workspace: string,
+  runner: DetectedRunner | null,
+  baseline: TestRunOutcome | null
+): Promise<GateDecision> {
+  if (!runner) {
+    return evaluateGate(baseline, {
+      command: null,
+      results: null,
+      exitCode: null,
+      timedOut: false,
+      outputTail: "no JS test runner detected in the cloned repo",
+      note: "no runner",
+    });
+  }
+  ctx.log("claude-fix-apply: running after-fix test suite", {
+    command: runner.display,
+  });
+  const after = await runTestSuite(workspace, runner, {
+    timeoutMs: TEST_GATE_TIMEOUT_MS,
+    signal: ctx.signal,
+  });
+  const decision = evaluateGate(baseline, after);
+  ctx.log("claude-fix-apply: test gate decision", {
+    code: decision.code,
+    passed: decision.passed,
+    baselinePass: decision.baselinePassCount,
+    afterPass: decision.afterPassCount,
+    regressions: decision.regressions.length,
+    newlyFailing: decision.newlyFailing.length,
+  });
+  return decision;
+}
 
 interface AgentRunResult {
   sessionId?: string;
@@ -502,25 +670,32 @@ interface ValidatedWorkProduct {
 }
 
 /**
- * Gate the agent's work product before we commit anything: at least one
- * finding must survive re-validation, there must be a real diff, and the
- * existing suite must pass. Returns the validated data or a terminal failure.
+ * Gate the agent's work product before we commit anything:
+ *   1. at least one finding must survive re-validation,
+ *   2. there must be a real diff,
+ *   3. the BASELINE-DIFF test gate must pass (no regression vs the pre-fix
+ *      baseline; pre-existing reds / env-flaky tests do NOT block).
+ * Returns the validated data or a terminal failure.
  */
 async function validateFixWorkProduct(
   workspace: string,
   input: z.infer<typeof FixInputSchema>,
   report: FixModelReport,
-  sessionId: string | undefined
+  sessionId: string | undefined,
+  gate: GateDecision
 ): Promise<ValidatedWorkProduct | { failure: ClaudeFixApplyOutput }> {
   const revalidation = mapRevalidation(report, input.agreedFindings);
   const keptCount = revalidation.filter((r) => r.kept).length;
+  const gateSummary = toGateSummary(gate, gate.testCommand);
   const base = {
     revalidation,
     blastRadius: report.blastRadius,
     fixSummary: report.fixSummary,
     coverageRootCause: report.coverageRootCause,
+    // Model self-report is informational only; the gate is the real verdict.
     existingTestsPassed: report.existingTestsPassed,
-    testCommand: report.testCommand ?? null,
+    testCommand: gate.testCommand ?? report.testCommand ?? null,
+    testGate: gateSummary,
     sessionId,
   };
 
@@ -555,7 +730,13 @@ async function validateFixWorkProduct(
     };
   }
 
-  if (!report.existingTestsPassed) {
+  // ── BASELINE-DIFF GATE ────────────────────────────────────────────────────
+  // The gate FAILS only on a regression (a previously-passing test now fails)
+  // or an agent-added test that fails. Pre-existing reds and env-dependent
+  // tests that fail in BOTH the baseline and the after-run produce 0
+  // regressions and therefore PASS. Inconclusive results still open the PR
+  // (a human reviews it) with a visible warning baked into the PR body.
+  if (!gate.passed) {
     return {
       failure: {
         outcome: "fix-failed",
@@ -564,8 +745,7 @@ async function validateFixWorkProduct(
         testsAdded: report.testsAdded,
         testFiles: report.testFiles,
         ...base,
-        existingTestsPassed: false,
-        error: `Existing test suite did not pass after the fix. Tail:\n${(report.testOutputTail ?? "").slice(-1500)}`,
+        error: `Test gate failed (${gate.code}): ${gate.summary}\n${gate.reason ?? ""}`,
       },
     };
   }
@@ -592,6 +772,7 @@ async function commitPushAndOpenPr(args: {
   revalidation: RevalidatedFinding[];
   keptCount: number;
   fixBranch: string;
+  gate: GateDecision;
 }): Promise<OpenedPr | { error: string }> {
   const {
     workspace,
@@ -601,6 +782,7 @@ async function commitPushAndOpenPr(args: {
     revalidation,
     keptCount,
     fixBranch,
+    gate,
   } = args;
 
   if (PROTECTED_BASE_RE.test(fixBranch)) {
@@ -637,7 +819,7 @@ async function commitPushAndOpenPr(args: {
     title: prTitle(input, keptCount),
     head: fixBranch,
     base: baseRef,
-    body: buildPrBody(input, report, revalidation, fixCommitSha),
+    body: buildPrBody(input, report, revalidation, fixCommitSha, gate),
     draft: false, // never auto-merge; this is for human review
   });
 
@@ -868,7 +1050,18 @@ function blastSection(blast: FixModelReport["blastRadius"]): string[] {
   return out;
 }
 
-function testsSection(report: FixModelReport): string[] {
+/** Whether the gate verdict is a verified pass (vs an inconclusive open). */
+function gateIsVerified(gate: GateDecision): boolean {
+  return (
+    gate.code === "no-regressions" ||
+    gate.code === "after-suite-passed" ||
+    gate.code === "regressions" ||
+    gate.code === "added-test-failed" ||
+    gate.code === "after-suite-failed"
+  );
+}
+
+function testsSection(report: FixModelReport, gate: GateDecision): string[] {
   const added = report.testsAdded
     ? `Added regression coverage that would have caught this bug${
         report.testFiles.length
@@ -876,12 +1069,32 @@ function testsSection(report: FixModelReport): string[] {
           : ""
       }.`
     : `No new test added — ${report.testExemptionReason ?? "trivial/cosmetic change"}.`;
-  const suite = `Existing suite: **${report.existingTestsPassed ? "passing" : "FAILING"}**${
-    report.testCommand
-      ? ` (\`${report.testCommand}\`, run locally on VM 102)`
-      : ""
-  }.`;
-  return ["", "## Tests", added, suite];
+
+  // The DETERMINISTIC baseline-diff gate is the real verdict — surface it.
+  const cmd = gate.testCommand
+    ? ` (\`${gate.testCommand}\`, run locally on VM 102)`
+    : "";
+  const verdict = `**Baseline-diff gate:** ${gate.summary}${cmd}.`;
+  const out = ["", "## Tests", added, verdict];
+
+  if (gate.regressions.length > 0) {
+    out.push(
+      "",
+      "Regressions (previously-passing tests now failing):",
+      ...gate.regressions.slice(0, 20).map((r) => `- \`${r}\``)
+    );
+  }
+  if (!gateIsVerified(gate)) {
+    out.push(
+      "",
+      "> ⚠️ **Tests unverified.** Per-test results could not be produced in the",
+      "> ephemeral clone (e.g. no machine-readable reporter, or the suite needs",
+      "> env not present here). The fix was NOT discarded — this PR is opened for",
+      "> human review. Please run the suite locally before merging.",
+      gate.reason ? `>\n> Detail: ${gate.reason.slice(0, 400)}` : ""
+    );
+  }
+  return out;
 }
 
 function linksSection(
@@ -906,7 +1119,8 @@ function buildPrBody(
   input: z.infer<typeof FixInputSchema>,
   report: FixModelReport,
   revalidation: RevalidatedFinding[],
-  commitSha: string
+  commitSha: string,
+  gate: GateDecision
 ): string {
   return [
     `Automated fix opened by the **TARS PR-review lifecycle** after Shaun approved the agreed findings on #${input.prNumber}.`,
@@ -918,7 +1132,7 @@ function buildPrBody(
     "## Fix summary",
     report.fixSummary,
     ...blastSection(report.blastRadius),
-    ...testsSection(report),
+    ...testsSection(report, gate),
     "",
     "## Coverage-gap root cause",
     report.coverageRootCause,

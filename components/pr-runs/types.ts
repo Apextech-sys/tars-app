@@ -91,9 +91,32 @@ export interface PrRun {
   fixRevalidation: FixRevalidationItem[] | null;
   fixBlastRadius: FixBlastRadius | null;
   fixCoverageRootcause: string | null;
+  fixTestGate: FixTestGate | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * The deterministic baseline-diff test-gate verdict (Slice 4). The gate runs
+ * the suite before + after the fix and a fix is safe iff it adds no regression.
+ */
+export interface FixTestGate {
+  passed: boolean;
+  code:
+    | "no-regressions"
+    | "regressions"
+    | "added-test-failed"
+    | "after-suite-passed"
+    | "after-suite-failed"
+    | "tests-inconclusive";
+  baselinePassCount: number | null;
+  afterPassCount: number | null;
+  regressions: string[];
+  newlyFailing: string[];
+  summary: string;
+  reason?: string;
+  testCommand: string | null;
 }
 
 /** A finding's independent re-validation outcome (stage 7). */

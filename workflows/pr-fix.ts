@@ -74,6 +74,18 @@ interface FixHandlerResult {
   coverageRootCause?: string;
   existingTestsPassed?: boolean;
   testCommand?: string | null;
+  /** Slice 4: deterministic baseline-diff test-gate summary. */
+  testGate?: {
+    passed: boolean;
+    code: string;
+    baselinePassCount: number | null;
+    afterPassCount: number | null;
+    regressions: string[];
+    newlyFailing: string[];
+    summary: string;
+    reason?: string;
+    testCommand: string | null;
+  };
   filesChanged?: string[];
   shortstat?: string;
   error?: string;
@@ -316,6 +328,7 @@ async function persistFixResult(
     fixRevalidation: result.revalidation,
     fixBlastRadius: result.blastRadius,
     fixCoverageRootcause: result.coverageRootCause,
+    fixTestGate: result.testGate,
     error: result.error,
   });
 }

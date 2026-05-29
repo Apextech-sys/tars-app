@@ -42,6 +42,7 @@ export async function GET(
           fixRevalidation: prReviewRuns.fixRevalidation,
           fixBlastRadius: prReviewRuns.fixBlastRadius,
           fixCoverageRootcause: prReviewRuns.fixCoverageRootcause,
+          fixTestGate: prReviewRuns.fixTestGate,
           archivedAt: prReviewRuns.archivedAt,
           createdAt: prReviewRuns.createdAt,
           updatedAt: prReviewRuns.updatedAt,

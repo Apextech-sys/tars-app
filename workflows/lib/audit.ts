@@ -117,6 +117,13 @@ async function ensureSchema(sql: any) {
     alter table pr_review_runs
       add column if not exists debate_rounds jsonb;
   `;
+  // Slice 4 (drizzle/0015): deterministic baseline-diff test gate. Idempotent so
+  // a deploy that hasn't run the Drizzle migration still self-heals on first
+  // fix write.
+  await sql /* sql */`
+    alter table pr_review_runs
+      add column if not exists fix_test_gate jsonb;
+  `;
   await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
@@ -441,6 +448,8 @@ export interface FixResultUpdate {
   fixRevalidation?: unknown;
   fixBlastRadius?: unknown;
   fixCoverageRootcause?: string;
+  /** Slice 4: deterministic baseline-diff test-gate summary (JSON-safe). */
+  fixTestGate?: unknown;
   error?: string;
 }
 
@@ -464,9 +473,7 @@ export async function upsertFixResult(rec: FixResultUpdate): Promise<void> {
         fix_revalidation = coalesce(
           ${
             rec.fixRevalidation
-              ? sql.json(
-                  rec.fixRevalidation as Parameters<typeof sql.json>[0]
-                )
+              ? sql.json(rec.fixRevalidation as Parameters<typeof sql.json>[0])
               : null
           },
           fix_revalidation
@@ -481,6 +488,14 @@ export async function upsertFixResult(rec: FixResultUpdate): Promise<void> {
         ),
         fix_coverage_rootcause = coalesce(
           ${rec.fixCoverageRootcause ?? null}, fix_coverage_rootcause
+        ),
+        fix_test_gate = coalesce(
+          ${
+            rec.fixTestGate
+              ? sql.json(rec.fixTestGate as Parameters<typeof sql.json>[0])
+              : null
+          },
+          fix_test_gate
         ),
         error = ${rec.error ?? null},
         updated_at = now()

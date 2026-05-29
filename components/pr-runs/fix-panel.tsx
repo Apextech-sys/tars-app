@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   FlaskConical,
@@ -8,13 +9,14 @@ import {
   Loader2,
   Radar,
   ShieldX,
+  TestTube2,
   XCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { SeverityBadge } from "./status-badge";
-import type { FixBlastRadius, FixRevalidationItem } from "./types";
+import type { FixBlastRadius, FixRevalidationItem, FixTestGate } from "./types";
 
 interface FixPanelProps {
   runId: string;
@@ -26,6 +28,7 @@ interface FixPanelProps {
   fixRevalidation: FixRevalidationItem[] | null;
   fixBlastRadius: FixBlastRadius | null;
   fixCoverageRootcause: string | null;
+  fixTestGate: FixTestGate | null;
   error: string | null;
 }
 
@@ -213,11 +216,130 @@ export function FixPanel(props: FixPanelProps) {
         </div>
       )}
 
+      {/* Stage 10 — baseline-diff test gate (the deterministic verdict) */}
+      <TestGateCard gate={props.fixTestGate} />
+
       {/* Stage 8 — blast radius of the fix */}
       <BlastRadiusCard blast={blast} />
 
       {/* Stage 10c — coverage-gap root cause */}
       <CoverageCard rootCause={props.fixCoverageRootcause} />
+    </div>
+  );
+}
+
+const VERIFIED_GATE_CODES = new Set([
+  "no-regressions",
+  "after-suite-passed",
+  "regressions",
+  "added-test-failed",
+  "after-suite-failed",
+]);
+
+function gateTone(gate: FixTestGate): {
+  cls: string;
+  Icon: typeof CheckCircle2;
+  iconCls: string;
+} {
+  if (!gate.passed) {
+    return {
+      cls: "border-red-500/30 bg-red-500/5",
+      Icon: XCircle,
+      iconCls: "text-red-400",
+    };
+  }
+  if (!VERIFIED_GATE_CODES.has(gate.code)) {
+    return {
+      cls: "border-amber-500/30 bg-amber-500/5",
+      Icon: AlertTriangle,
+      iconCls: "text-amber-400",
+    };
+  }
+  return {
+    cls: "border-emerald-500/30 bg-emerald-500/5",
+    Icon: CheckCircle2,
+    iconCls: "text-emerald-400",
+  };
+}
+
+function TestGateCard({ gate }: { gate: FixTestGate | null }) {
+  if (!gate) {
+    return null;
+  }
+  const { cls, Icon, iconCls } = gateTone(gate);
+  const unverified = gate.passed && !VERIFIED_GATE_CODES.has(gate.code);
+  return (
+    <div className={cn("space-y-2 rounded-lg border p-4", cls)}>
+      <div className="flex items-center gap-2">
+        <TestTube2 className="size-4 text-muted-foreground" />
+        <h3 className="font-semibold text-sm">Test gate (baseline diff)</h3>
+      </div>
+      <div className="flex items-start gap-2">
+        <Icon className={cn("mt-0.5 size-4 shrink-0", iconCls)} />
+        {/* One-line summary, e.g. "88 passing before → 89 after, 0 regressions" */}
+        <p className="font-medium text-foreground/90 text-sm leading-relaxed">
+          {gate.summary}
+        </p>
+      </div>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        A fix is safe when it breaks no test that was passing before it.
+        Pre-existing failures and env-dependent tests that fail in both runs do
+        not block the fix.
+        {gate.testCommand ? (
+          <>
+            {" "}
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-[11px]">
+              {gate.testCommand}
+            </code>
+          </>
+        ) : null}
+      </p>
+      {gate.regressions.length > 0 && (
+        <div>
+          <p className="mb-1 font-medium text-red-400 text-xs">
+            Regressions ({gate.regressions.length})
+          </p>
+          <ul className="space-y-0.5">
+            {gate.regressions.slice(0, 12).map((r) => (
+              <li
+                className="break-all font-mono text-red-300/90 text-xs"
+                key={`reg-${r}`}
+              >
+                {r}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {gate.newlyFailing.length > 0 && (
+        <div>
+          <p className="mb-1 font-medium text-red-400 text-xs">
+            Agent-added tests failing ({gate.newlyFailing.length})
+          </p>
+          <ul className="space-y-0.5">
+            {gate.newlyFailing.slice(0, 12).map((r) => (
+              <li
+                className="break-all font-mono text-red-300/90 text-xs"
+                key={`new-${r}`}
+              >
+                {r}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {unverified && (
+        <p className="rounded-md border border-amber-500/20 bg-amber-500/5 p-2 text-amber-300/90 text-xs leading-relaxed">
+          Tests could not be fully verified in the ephemeral clone — this PR is
+          opened for human review rather than discarded. Run the suite locally
+          before merging.
+        </p>
+      )}
+      {gate.reason && !gate.passed && (
+        <pre className="overflow-x-auto whitespace-pre-wrap break-words text-muted-foreground text-xs leading-relaxed">
+          {gate.reason}
+        </pre>
+      )}
     </div>
   );
 }

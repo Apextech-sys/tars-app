@@ -56,6 +56,11 @@ export const auditLog = pgTable(
  * fix_coverage_rootcause is the why-the-suite-missed-it analysis.
  * Migration: drizzle/0013_pr_review_fix_stage.sql.
  *
+ * `fix_test_gate` (Slice 4) records the DETERMINISTIC baseline-diff test gate:
+ * the suite is run before the fix (baseline) and after, and the fix is safe iff
+ * it introduces no regression. Replaces the model's self-reported pass/fail.
+ * Migration: drizzle/0015_pr_review_fix_test_gate.sql.
+ *
  * `disagreed_payload` is populated only when Codex and Claude disagree on
  * findings. It carries both raw reviewer outputs so Shaun can adjudicate
  * the disagreement from /inbox. Migration: drizzle/0008_pr_review_disagreed.sql.
@@ -111,6 +116,13 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   fixRevalidation: jsonb("fix_revalidation"),
   fixBlastRadius: jsonb("fix_blast_radius"),
   fixCoverageRootcause: text("fix_coverage_rootcause"),
+  // Slice 4: deterministic baseline-diff test-gate summary. The gate runs the
+  // repo's suite BEFORE the fix (baseline) and AFTER, and a fix is safe iff it
+  // introduces no regression (a previously-passing test now failing). Carries
+  // { passed, code, baselinePassCount, afterPassCount, regressions[],
+  //   newlyFailing[], summary, reason?, testCommand }.
+  // Migration: drizzle/0015_pr_review_fix_test_gate.sql.
+  fixTestGate: jsonb("fix_test_gate"),
   archivedAt: timestamp("archived_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()

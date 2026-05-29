@@ -36,6 +36,15 @@ export async function cleanJobs(): Promise<void> {
 }
 
 beforeAll(async () => {
+  // The schema bootstrap only matters for DB-backed integration tests. Pure
+  // unit suites (e.g. test-gate, fix-report-recovery) must run without a DB —
+  // so when TARS_APP_DB_URL is unset we SKIP the bootstrap rather than throwing
+  // in a global hook. Integration tests still call getTestPool() directly and
+  // get the explicit "TARS_APP_DB_URL not set" error if the URL is missing, so
+  // this never lets a DB test silently pass without a database.
+  if (!process.env.TARS_APP_DB_URL) {
+    return;
+  }
   await ensureSchema();
 });
 
