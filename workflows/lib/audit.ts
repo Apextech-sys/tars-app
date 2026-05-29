@@ -280,35 +280,61 @@ export interface PrReviewRunRecord {
   linearIssueUrl?: string;
 }
 
+/**
+ * jsonb-or-NULL helper. Returns NULL for null/undefined/empty objects so the
+ * ON CONFLICT coalesces preserve prior values; otherwise wraps as sql.json.
+ * Centralizing this keeps upsertPrReviewRun flat (one branch per column would
+ * otherwise blow past the cognitive-complexity budget).
+ */
+type SqlClient = Awaited<ReturnType<typeof makeSql>>;
+
+function jsonOrNull(
+  sql: SqlClient,
+  value: unknown
+): ReturnType<SqlClient["json"]> | null {
+  if (value == null) {
+    return null;
+  }
+  if (
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    Object.keys(value as Record<string, unknown>).length === 0
+  ) {
+    return null;
+  }
+  return sql.json(value as Parameters<SqlClient["json"]>[0]);
+}
+
 export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
   "use step";
   const sql = await makeSql();
   try {
     await ensureSchema(sql);
-    // `disagreed_payload` is passed as NULL when not provided so the COALESCE
-    // in the ON CONFLICT clause preserves any earlier-written payload.
+    // The baseline `started` insert runs BEFORE policy is resolved, so it has
+    // no real policy yet. Writing `{}` there used to poison the row: the old
+    // ON CONFLICT clause did `coalesce(existing, excluded)` which, because the
+    // existing `{}` is non-null, NEVER let the later resolved policy overwrite
+    // it. Fix: jsonOrNull() passes NULL (not `{}`) when the incoming policy is
+    // empty, and a non-empty incoming policy WINS on conflict via
+    // `coalesce(excluded, existing)` — so the resolved policy is always
+    // persisted while an empty later write can't clobber an already-resolved one.
     await sql /* sql */`
       insert into pr_review_runs (
         run_id, owner, repo, pr_number, pr_sha, policy, status,
         findings_count, review_comment_url, error, disagreed_payload,
-        agreed_findings, linear_issue_id, linear_issue_identifier,
+        debate_rounds, agreed_findings, linear_issue_id, linear_issue_identifier,
         linear_issue_url, updated_at
       ) values (
         ${rec.runId}, ${rec.owner}, ${rec.repo}, ${rec.prNumber},
         ${rec.prSha ?? null},
-        ${sql.json((rec.policy ?? {}) as any)},
+        ${jsonOrNull(sql, rec.policy)},
         ${rec.status},
         ${rec.findingsCount ?? 0},
         ${rec.reviewCommentUrl ?? null},
         ${rec.error ?? null},
-        ${rec.disagreedPayload ? sql.json(rec.disagreedPayload as any) : null},
-        ${
-          rec.agreedFindings
-            ? sql.json(
-                rec.agreedFindings as unknown as Parameters<typeof sql.json>[0]
-              )
-            : null
-        },
+        ${jsonOrNull(sql, rec.disagreedPayload)},
+        ${jsonOrNull(sql, rec.debateRounds)},
+        ${jsonOrNull(sql, rec.agreedFindings)},
         ${rec.linearIssueId ?? null},
         ${rec.linearIssueIdentifier ?? null},
         ${rec.linearIssueUrl ?? null},
@@ -320,8 +346,9 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
         review_comment_url = excluded.review_comment_url,
         error = excluded.error,
         pr_sha = coalesce(pr_review_runs.pr_sha, excluded.pr_sha),
-        policy = coalesce(pr_review_runs.policy, excluded.policy),
+        policy = coalesce(excluded.policy, pr_review_runs.policy),
         disagreed_payload = coalesce(excluded.disagreed_payload, pr_review_runs.disagreed_payload),
+        debate_rounds = coalesce(excluded.debate_rounds, pr_review_runs.debate_rounds),
         agreed_findings = coalesce(excluded.agreed_findings, pr_review_runs.agreed_findings),
         linear_issue_id = coalesce(excluded.linear_issue_id, pr_review_runs.linear_issue_id),
         linear_issue_identifier = coalesce(excluded.linear_issue_identifier, pr_review_runs.linear_issue_identifier),
