@@ -12,6 +12,13 @@ export class Heartbeat {
   }
 
   async start(): Promise<void> {
+    // Prune any heartbeat rows that don't match the current stable worker_id
+    // (e.g. legacy `worker-<hostname>-<pid>` rows from before the stable-ID fix,
+    // or rows left by a future worker_id format change). Keeps the table to just
+    // the live worker across restarts without manual intervention. Non-fatal.
+    await this.prune().catch((err) => {
+      logger().warn({ err }, "heartbeat startup prune failed");
+    });
     await this.write();
     this.timer = setInterval(() => {
       this.write().catch((err) => {
@@ -26,6 +33,13 @@ export class Heartbeat {
       clearInterval(this.timer);
       this.timer = undefined;
     }
+  }
+
+  private async prune(): Promise<void> {
+    const pool = getPool();
+    await pool.query("DELETE FROM worker_heartbeats WHERE worker_id <> $1", [
+      this.cfg.TARS_WORKER_ID,
+    ]);
   }
 
   private async write(): Promise<void> {
