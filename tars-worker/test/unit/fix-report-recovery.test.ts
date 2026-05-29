@@ -59,7 +59,7 @@ function fakeCtx(): HandlerContext {
     log: (msg: string, fields?: Record<string, unknown>) => {
       logs.push({ msg, fields });
     },
-  } as HandlerContext & {
+  } as unknown as HandlerContext & {
     _logs: typeof logs;
   };
   // expose for assertions
