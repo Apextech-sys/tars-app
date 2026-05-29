@@ -228,16 +228,16 @@ export function DashboardShell({
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="pointer-events-auto flex min-h-screen bg-background">
+    <div className="pointer-events-auto flex h-screen overflow-hidden bg-background">
       <DesktopSidebar />
       <MobileDrawer onClose={() => setDrawerOpen(false)} open={drawerOpen} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col min-h-0">
         <MobileTopBar
           inboxCount={inboxCount}
           onOpen={() => setDrawerOpen(true)}
           title={title}
         />
-        <main className="flex-1">{children}</main>
+        <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
       </div>
     </div>
   );
