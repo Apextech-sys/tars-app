@@ -485,6 +485,10 @@ export default function ChatPage() {
 
     let currentSessionId = activeSessionId;
     let fullText = "";
+    // currentParts mirrors setStreaming's parts array in the local closure so
+    // the finally block can read the final accumulated parts without going
+    // through React state (which is async and would return stale data).
+    let currentParts: MessagePart[] = [];
     const toolCallsMap = new Map<string, MessagePart>();
     const toolResultsMap = new Map<string, MessagePart>();
 
@@ -548,6 +552,15 @@ export default function ChatPage() {
           if (code === "0") {
             // text delta
             fullText += parsed as string;
+            // Update local tracking
+            const existingTextIdx = currentParts.findIndex((p) => p.type === "text");
+            if (existingTextIdx >= 0) {
+              currentParts = currentParts.map((p, i) =>
+                i === existingTextIdx ? { ...p, text: fullText } : p
+              );
+            } else {
+              currentParts = [...currentParts, { type: "text", text: fullText }];
+            }
             setStreaming((prev) => {
               if (!prev) {
                 return prev;
@@ -572,6 +585,12 @@ export default function ChatPage() {
               args: tc.args,
             };
             toolCallsMap.set(tc.toolCallId, toolPart);
+            currentParts = [
+              ...currentParts.filter(
+                (p) => p.type !== "tool-call" || p.toolCallId !== tc.toolCallId
+              ),
+              toolPart,
+            ];
             setStreaming((prev) => {
               if (!prev) {
                 return prev;
@@ -590,6 +609,12 @@ export default function ChatPage() {
               result: tr.result,
             };
             toolResultsMap.set(tr.toolCallId, resultPart);
+            currentParts = [
+              ...currentParts.filter(
+                (p) => p.type !== "tool-result" || p.toolCallId !== tr.toolCallId
+              ),
+              resultPart,
+            ];
             setStreaming((prev) => {
               if (!prev) {
                 return prev;
@@ -620,33 +645,29 @@ export default function ChatPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Stream error");
     } finally {
-      // Commit streaming message to messages
-      setStreaming((prev) => {
-        if (!prev) {
-          return null;
-        }
-        const finalParts = prev.parts.map((p) => {
-          if (p.type === "text" && !p.text && fullText) {
-            return { ...p, text: fullText };
-          }
-          return p;
-        });
-        const finalMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          parts:
-            finalParts.length > 0
-              ? finalParts
-              : [{ type: "text", text: fullText }],
-          content: fullText,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((msgs) => {
-          // Remove optimistic user message duplicate if the DB already has it
-          return [...msgs, finalMsg];
-        });
-        return null;
-      });
+      // Commit streaming message to messages.
+      // IMPORTANT: do NOT call setMessages inside a setStreaming updater —
+      // calling a setter inside another setter's functional update is not
+      // reliably batched in React and causes the message to silently drop.
+      // Instead capture the streamed parts via the fullText closure (already
+      // in scope) and build the final message here, then call both setters
+      // separately so React sees them as two independent enqueued updates.
+      const capturedText = fullText;
+      // Use the locally tracked currentParts (kept in sync during streaming)
+      // instead of reading React state (which is async/stale at this point).
+      const finalParts: MessagePart[] =
+        currentParts.length > 0
+          ? currentParts
+          : [{ type: "text", text: capturedText }];
+      const finalMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        parts: finalParts,
+        content: capturedText,
+        createdAt: new Date().toISOString(),
+      };
+      setStreaming(null);
+      setMessages((msgs) => [...msgs, finalMsg]);
       setIsLoading(false);
 
       // Refresh sessions list after first message
