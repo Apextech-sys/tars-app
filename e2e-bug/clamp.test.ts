@@ -12,4 +12,9 @@ describe("clamp", () => {
   it("clamps to the lower bound when below min", () => {
     expect(clamp(-3, 0, 10)).toBe(0);
   });
+
+  it("clamps to the upper bound when above max", () => {
+    // Regression: previously returned `min` (0) instead of `max` (10)
+    expect(clamp(15, 0, 10)).toBe(10);
+  });
 });

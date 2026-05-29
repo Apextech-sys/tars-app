@@ -7,6 +7,7 @@ export default defineConfig({
       "lib/tars/__tests__/**/*.test.ts",
       "lib/notifications/__tests__/**/*.test.ts",
       "app/**/__tests__/**/*.test.ts",
+      "e2e-bug/**/*.test.ts",
     ],
     environment: "node",
     testTimeout: 30_000,

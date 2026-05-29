@@ -9,9 +9,7 @@ export function clamp(value: number, min: number, max: number): number {
     return min;
   }
   if (value > max) {
-    // BUG: should return `max`, but returns `min`, so values above the
-    // upper bound are wrongly snapped to the bottom of the range.
-    return min;
+    return max;
   }
   return value;
 }
