@@ -40,11 +40,14 @@ export async function GET() {
         // Display a clean name: strip the legacy "worker-<hostname>-<pid>" prefix
         // if present; fall back to the raw workerId. New registrations use the
         // stable "tars-worker" id so this is mainly for transition hygiene.
-        const displayName = w.workerId.startsWith("tars-")
-          ? w.workerId
-          : LEGACY_WORKER_ID_RE.test(w.workerId)
-            ? "tars-worker"
-            : w.workerId;
+        let displayName: string;
+        if (w.workerId.startsWith("tars-")) {
+          displayName = w.workerId;
+        } else if (LEGACY_WORKER_ID_RE.test(w.workerId)) {
+          displayName = "tars-worker";
+        } else {
+          displayName = w.workerId;
+        }
 
         return {
           workerId: displayName,

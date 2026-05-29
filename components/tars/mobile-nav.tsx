@@ -231,13 +231,13 @@ export function DashboardShell({
     <div className="pointer-events-auto flex h-screen overflow-hidden bg-background">
       <DesktopSidebar />
       <MobileDrawer onClose={() => setDrawerOpen(false)} open={drawerOpen} />
-      <div className="flex min-w-0 flex-1 flex-col min-h-0">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <MobileTopBar
           inboxCount={inboxCount}
           onOpen={() => setDrawerOpen(true)}
           title={title}
         />
-        <main className="flex-1 overflow-y-auto min-h-0">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );

@@ -553,13 +553,18 @@ export default function ChatPage() {
             // text delta
             fullText += parsed as string;
             // Update local tracking
-            const existingTextIdx = currentParts.findIndex((p) => p.type === "text");
+            const existingTextIdx = currentParts.findIndex(
+              (p) => p.type === "text"
+            );
             if (existingTextIdx >= 0) {
               currentParts = currentParts.map((p, i) =>
                 i === existingTextIdx ? { ...p, text: fullText } : p
               );
             } else {
-              currentParts = [...currentParts, { type: "text", text: fullText }];
+              currentParts = [
+                ...currentParts,
+                { type: "text", text: fullText },
+              ];
             }
             setStreaming((prev) => {
               if (!prev) {
@@ -611,7 +616,8 @@ export default function ChatPage() {
             toolResultsMap.set(tr.toolCallId, resultPart);
             currentParts = [
               ...currentParts.filter(
-                (p) => p.type !== "tool-result" || p.toolCallId !== tr.toolCallId
+                (p) =>
+                  p.type !== "tool-result" || p.toolCallId !== tr.toolCallId
               ),
               resultPart,
             ];

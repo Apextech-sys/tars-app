@@ -1,4 +1,3 @@
-import { hostname } from "node:os";
 import { z } from "zod";
 
 const Schema = z.object({
@@ -6,10 +5,7 @@ const Schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(20),
   TARS_WORKER_CALLBACK_SECRET: z.string().min(16),
 
-  TARS_WORKER_ID: z
-    .string()
-    .min(1)
-    .default("tars-worker"),
+  TARS_WORKER_ID: z.string().min(1).default("tars-worker"),
   TARS_WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
   TARS_WORKER_POLL_INTERVAL_MS: z.coerce
     .number()
