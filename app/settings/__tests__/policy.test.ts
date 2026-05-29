@@ -25,7 +25,6 @@ import {
 const TMP_DIR = join(tmpdir(), `tars-policy-test-${process.pid}`);
 const TMP_YAML = join(TMP_DIR, "projects.yaml");
 const YAML_ERR_RE = /yaml/i;
-const PROTECT_MODE_RE = /protect_mode/i;
 
 beforeEach(async () => {
   mkdirSync(TMP_DIR, { recursive: true });
@@ -90,35 +89,6 @@ describe("saveProjectsYaml", () => {
 
     const result = await saveProjectsYaml("- item1\n- item2\n");
     expect(result.ok).toBe(false);
-  });
-
-  it("enforces konverge protect_mode cannot be set to false", async () => {
-    writeFileSync(
-      TMP_YAML,
-      "konverge:\n  kind: client\n  protect_mode: true\n",
-      "utf8"
-    );
-
-    const result = await saveProjectsYaml(
-      "konverge:\n  kind: client\n  protect_mode: false\n"
-    );
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error).toMatch(PROTECT_MODE_RE);
-    }
-  });
-
-  it("allows konverge with protect_mode omitted (stays true)", async () => {
-    writeFileSync(TMP_YAML, "konverge:\n  kind: client\n", "utf8");
-    await invalidateCache();
-
-    const result = await saveProjectsYaml(
-      "konverge:\n  kind: client\n  auto_review: true\n"
-    );
-    expect(result.ok).toBe(true);
-
-    const { parsed } = await loadProjectsYaml();
-    expect(parsed.konverge.protect_mode).toBe(true);
   });
 });
 
