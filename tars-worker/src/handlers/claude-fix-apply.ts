@@ -193,6 +193,53 @@ function ghToken(): string {
 /** Branch names we must never push to or target with a force. */
 const PROTECTED_BASE_RE = /^(main|master|develop|dev|v2-main)$/i;
 
+/**
+ * Scratch artifacts the handler/test-gate may write. These now live in a
+ * sibling dir OUTSIDE the clone (see `scratchDir`), so they shouldn't appear in
+ * the repo at all — but we still defensively unstage anything matching these
+ * basenames before committing, in case the model writes one into the repo dir
+ * despite the prompt, so they can never leak into the fix PR.
+ */
+const SCRATCH_BASENAMES = [
+  "tars-fix-report.json",
+  ".tars-fix-report.json",
+  "tars-test-report.json",
+  ".tars-test-report.json",
+];
+
+/**
+ * Stage every change the agent made — modified, NEW, and deleted — with
+ * `git add -A`, then defensively unstage any scratch artifacts so they never
+ * enter the fix PR. Returns the staged file list + shortstat computed from the
+ * INDEX (`git diff --cached`), which — unlike a bare `git diff` — counts new
+ * (previously-untracked) files such as the Stage-10b regression test the agent
+ * writes. Without this, `git commit -am` would silently drop every new file.
+ */
+export async function stageFixChanges(
+  workspace: string
+): Promise<{ filesChanged: string[]; shortstat: string }> {
+  // Stage modified + new + deleted in one shot.
+  await git(workspace, ["add", "-A"], 30_000);
+  // Defensively unstage scratch artifacts (no-op if none are tracked/staged).
+  for (const name of SCRATCH_BASENAMES) {
+    await git(workspace, ["reset", "-q", "--", name], 10_000).catch(
+      () => undefined
+    );
+  }
+  // Accounting from the INDEX so new files are counted (bare `git diff` omits
+  // untracked files; `--cached` reflects exactly what will be committed).
+  const shortstat = (
+    await git(workspace, ["diff", "--cached", "--shortstat"], 15_000)
+  ).trim();
+  const filesChanged = (
+    await git(workspace, ["diff", "--cached", "--name-only"], 15_000)
+  )
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return { filesChanged, shortstat };
+}
+
 export const claudeFixApplyHandler: JobHandler = async (ctx) => {
   const input = FixInputSchema.parse(ctx.job.payload);
   const token = ghToken();
@@ -204,6 +251,13 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
   // Workspace under /tmp; always cleaned up in `finally`.
   const workspace = await mkdtemp(
     join(tmpdir(), `tars-fix-${input.prNumber}-`)
+  );
+  // Scratch dir OUTSIDE the repo workspace for the handler's bookkeeping files
+  // (the agent's JSON report, the test reporter output). Writing these OUTSIDE
+  // the clone means `git add -A` at commit time can never sweep them into the
+  // fix PR — no exclusion gymnastics needed. Cleaned up in `finally`.
+  const scratchDir = await mkdtemp(
+    join(tmpdir(), `tars-fix-scratch-${input.prNumber}-`)
   );
 
   const baseFail = (error: string): ClaudeFixApplyOutput => ({
@@ -255,13 +309,13 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     // Any failure here is non-fatal: the gate fallback handles a missing
     // baseline (see evaluateGate). Runner is reused for the after-run.
     const runner = await detectRunner(workspace).catch(() => null);
-    const baseline = await captureBaseline(ctx, workspace, runner);
+    const baseline = await captureBaseline(ctx, workspace, runner, scratchDir);
 
     // ── Stages 7–10 (investigation + edits + tests) via the Agent SDK ─────────
     // obtainFixReport runs the fix turn and, ONLY if the structured report is
     // missing/unparseable, issues a single recovery turn that resumes the same
     // session to re-emit the JSON (the on-disk edits are preserved either way).
-    const reportPath = join(workspace, ".tars-fix-report.json");
+    const reportPath = join(scratchDir, "tars-fix-report.json");
     const agent = await obtainFixReport(
       ctx,
       workspace,
@@ -286,7 +340,13 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     // THIS handler — never the model — decides pass/fail. The gate is SAFE iff
     // it introduces no regression vs the baseline (pre-existing reds and
     // env-flaky tests that fail in both runs do not block).
-    const gate = await computeTestGate(ctx, workspace, runner, baseline);
+    const gate = await computeTestGate(
+      ctx,
+      workspace,
+      runner,
+      baseline,
+      scratchDir
+    );
 
     const validated = await validateFixWorkProduct(
       workspace,
@@ -352,6 +412,9 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     await rm(workspace, { recursive: true, force: true }).catch(
       () => undefined
     );
+    await rm(scratchDir, { recursive: true, force: true }).catch(
+      () => undefined
+    );
   }
 };
 
@@ -363,7 +426,8 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
 async function captureBaseline(
   ctx: Parameters<JobHandler>[0],
   workspace: string,
-  runner: DetectedRunner | null
+  runner: DetectedRunner | null,
+  scratchDir: string
 ): Promise<TestRunOutcome | null> {
   if (!runner) {
     ctx.log("claude-fix-apply: no test runner detected — baseline skipped");
@@ -394,6 +458,7 @@ async function captureBaseline(
     const outcome = await runTestSuite(workspace, runner, {
       timeoutMs: TEST_GATE_TIMEOUT_MS,
       signal: ctx.signal,
+      reportDir: scratchDir,
     });
     ctx.log("claude-fix-apply: baseline captured", {
       parsed: outcome.results?.size ?? null,
@@ -418,7 +483,8 @@ async function computeTestGate(
   ctx: Parameters<JobHandler>[0],
   workspace: string,
   runner: DetectedRunner | null,
-  baseline: TestRunOutcome | null
+  baseline: TestRunOutcome | null,
+  scratchDir: string
 ): Promise<GateDecision> {
   if (!runner) {
     return evaluateGate(baseline, {
@@ -436,6 +502,7 @@ async function computeTestGate(
   const after = await runTestSuite(workspace, runner, {
     timeoutMs: TEST_GATE_TIMEOUT_MS,
     signal: ctx.signal,
+    reportDir: scratchDir,
   });
   const decision = evaluateGate(baseline, after);
   ctx.log("claude-fix-apply: test gate decision", {
@@ -711,13 +778,10 @@ async function validateFixWorkProduct(
     };
   }
 
-  const shortstat = (
-    await git(workspace, ["diff", "--shortstat"], 15_000)
-  ).trim();
-  const filesChanged = (await git(workspace, ["diff", "--name-only"], 15_000))
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // Stage everything the agent changed (modified + NEW + deleted), excluding
+  // scratch artifacts, and compute accounting from the index so new files
+  // (e.g. the Stage-10b regression test) are counted and end up in the PR.
+  const { filesChanged, shortstat } = await stageFixChanges(workspace);
 
   if (filesChanged.length === 0) {
     return {
@@ -793,6 +857,12 @@ async function commitPushAndOpenPr(args: {
     return { error: "base ref equals fix branch — refusing" };
   }
 
+  // The index is already staged by validateFixWorkProduct (modified + NEW +
+  // deleted, scratch excluded). Re-stage defensively — idempotent — so the
+  // commit captures NEW files too. We use `commit -m` (NOT `-am`): `-a` would
+  // re-stage only tracked-modified files and would NOT add the agent's new
+  // regression test, which is the whole point of expanding the suite.
+  await stageFixChanges(workspace);
   await git(
     workspace,
     [
@@ -801,7 +871,7 @@ async function commitPushAndOpenPr(args: {
       "-c",
       "user.name=TARS Fix Bot",
       "commit",
-      "-am",
+      "-m",
       commitMessage(input, report),
     ],
     30_000

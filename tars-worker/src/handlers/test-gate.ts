@@ -316,10 +316,13 @@ export function parseJestJson(raw: string): TestResultMap | null {
 export async function runTestSuite(
   workspace: string,
   runner: DetectedRunner,
-  opts: { timeoutMs?: number; signal?: AbortSignal } = {}
+  opts: { timeoutMs?: number; signal?: AbortSignal; reportDir?: string } = {}
 ): Promise<TestRunOutcome> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TEST_TIMEOUT_MS;
-  const reportFile = join(workspace, ".tars-test-report.json");
+  // Write the reporter output OUTSIDE the cloned repo when a scratch dir is
+  // provided, so it can never be staged into the fix PR. Falls back to the
+  // workspace for callers (and tests) that don't pass one.
+  const reportFile = join(opts.reportDir ?? workspace, "tars-test-report.json");
   // Best-effort clean of any prior report so a stale file can't leak across runs.
   await rm(reportFile, { force: true }).catch(() => undefined);
 
