@@ -5,6 +5,9 @@ import { workerHeartbeats } from "@/lib/db/worker-schema";
 
 export const dynamic = "force-dynamic";
 
+// Regex used to detect legacy worker-<hostname>-<pid> id format (top-level for perf).
+const LEGACY_WORKER_ID_RE = /^worker-[^-]+-\d+$/;
+
 export async function GET() {
   try {
     // Only return LIVE workers: last_seen within 2 minutes (120 s).
@@ -39,7 +42,9 @@ export async function GET() {
         // stable "tars-worker" id so this is mainly for transition hygiene.
         const displayName = w.workerId.startsWith("tars-")
           ? w.workerId
-          : w.workerId.replace(/^worker-[^-]+-\d+$/, "tars-worker") || w.workerId;
+          : LEGACY_WORKER_ID_RE.test(w.workerId)
+            ? "tars-worker"
+            : w.workerId;
 
         return {
           workerId: displayName,
