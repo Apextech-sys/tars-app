@@ -25,11 +25,13 @@
 
 import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+import { start } from "workflow/api";
 import { z } from "zod";
 import { timingSafeAuthTokenEqual } from "@/lib/auth/internal-secret";
 import { db } from "@/lib/db";
 import { auditLog, prReviewRuns } from "@/lib/db/tars-schema";
 import { transitionPrReviewIssue } from "@/workflows/lib/linear-lifecycle";
+import { prFixWorkflow } from "@/workflows/pr-fix";
 
 export const runtime = "nodejs";
 
@@ -107,6 +109,48 @@ function linearAuditSuffix(t: LinearTransitionResult): string {
     return ` (Linear failed: ${t.error.slice(0, 200)})`;
   }
   return "";
+}
+
+interface FixStartResult {
+  fixWorkflowRunId: string | null;
+  fixStartError?: string;
+}
+
+/**
+ * On approve, start the Slice 2 fix workflow. `start()` enqueues the durable
+ * workflow and returns immediately — the approval HTTP response is never
+ * blocked on the fix work. A start failure is recorded but never fails the
+ * approval (the decision is already persisted; a sweep can retry).
+ */
+async function startFixStage(
+  action: "approve" | "reject",
+  runId: string
+): Promise<FixStartResult> {
+  if (action !== "approve") {
+    return { fixWorkflowRunId: null };
+  }
+  try {
+    const fixRun = await start(prFixWorkflow, [{ runId }]);
+    return { fixWorkflowRunId: fixRun.runId ?? null };
+  } catch (err) {
+    return {
+      fixWorkflowRunId: null,
+      fixStartError: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function fixAuditSuffix(
+  action: "approve" | "reject",
+  fix: FixStartResult
+): string {
+  if (action !== "approve") {
+    return "";
+  }
+  if (fix.fixStartError) {
+    return ` (fix start FAILED: ${fix.fixStartError.slice(0, 150)})`;
+  }
+  return " (fix stage started)";
 }
 
 export async function POST(req: NextRequest) {
@@ -199,19 +243,24 @@ export async function POST(req: NextRequest) {
     action,
   });
 
+  // On approve, kick off the FIX stage (Slice 2) — non-blocking.
+  const fix = await startFixStage(action, runId);
+
   await writeAuditRow({
     runId,
     owner: run.owner,
     repo: run.repo,
     prNumber: run.prNumber,
-    status: linearTransition.error ? "error" : "ok",
-    message: `${action} -> ${newStatus}${linearAuditSuffix(linearTransition)}`,
+    status: linearTransition.error || fix.fixStartError ? "error" : "ok",
+    message: `${action} -> ${newStatus}${linearAuditSuffix(linearTransition)}${fixAuditSuffix(action, fix)}`,
     data: {
       action,
       newStatus,
       reason: reason ?? null,
       linearIssueIdentifier: run.linearIssueIdentifier,
       linearTransition,
+      fixWorkflowRunId: fix.fixWorkflowRunId,
+      fixStartError: fix.fixStartError ?? null,
       actionedBy: "shaun",
     },
   });
@@ -222,5 +271,6 @@ export async function POST(req: NextRequest) {
     action,
     status: newStatus,
     linear: linearTransition,
+    fixWorkflowRunId: fix.fixWorkflowRunId,
   });
 }
