@@ -195,10 +195,14 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     await git(workspace, ["checkout", "-b", fixBranch], 30_000);
 
     // ── Stages 7–10 (investigation + edits + tests) via the Agent SDK ─────────
+    // obtainFixReport runs the fix turn and, ONLY if the structured report is
+    // missing/unparseable, issues a single recovery turn that resumes the same
+    // session to re-emit the JSON (the on-disk edits are preserved either way).
     const reportPath = join(workspace, ".tars-fix-report.json");
-    const agent = await runFixAgent(
+    const agent = await obtainFixReport(
       ctx,
       workspace,
+      reportPath,
       buildPrompt(input, reportPath)
     );
     const sessionId = agent.sessionId;
@@ -207,12 +211,10 @@ export const claudeFixApplyHandler: JobHandler = async (ctx) => {
     }
 
     // ── Parse the structured report (file-first, message-text fallback) ───────
-    const report = await loadReport(reportPath, agent.resultText);
+    const report = agent.report;
     if (!report) {
       return {
-        ...baseFail(
-          `could not parse fix report. First 400 chars of result: ${agent.resultText.slice(0, 400)}`
-        ),
+        ...baseFail(reportParseFailureMessage(agent)),
         sessionId,
       };
     }
@@ -299,23 +301,36 @@ function safeInterrupt(q: { interrupt?: () => void }): void {
   }
 }
 
-/** Run the fix agent inside the workspace; collect session id + final text. */
-async function runFixAgent(
+/**
+ * Run ONE agent turn inside the workspace; collect session id + final text.
+ *
+ * When `resume` is supplied, the SDK reloads the conversation history for that
+ * session (Agent SDK `query({ options: { resume } })`, v0.3.x), so a follow-up
+ * turn retains all context about what the agent already did to the working
+ * tree. Edits made in the first turn persist on disk regardless — a resumed
+ * turn is only used to coax a structured summary out of the agent.
+ */
+async function runAgentTurn(
   ctx: Parameters<JobHandler>[0],
   workspace: string,
-  prompt: string
+  prompt: string,
+  resume?: string
 ): Promise<AgentRunResult> {
-  ctx.log("claude-fix-apply: starting agent query", { cwd: workspace });
+  ctx.log("claude-fix-apply: starting agent query", {
+    cwd: workspace,
+    resume: resume ?? null,
+  });
   const q = query({
     prompt,
     options: {
       ...FIX_AGENT_OPTIONS,
       cwd: workspace,
+      ...(resume ? { resume } : {}),
       env: { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: "tars-worker/0.2.0" },
     },
   });
 
-  let sessionId: string | undefined;
+  let sessionId: string | undefined = resume;
   for await (const msg of q) {
     if (ctx.signal.aborted) {
       safeInterrupt(q);
@@ -331,6 +346,111 @@ async function runFixAgent(
     }
   }
   return { sessionId, resultText: "" };
+}
+
+/** A single agent turn — injectable so the recovery loop is unit-testable. */
+export type TurnRunner = (
+  ctx: Parameters<JobHandler>[0],
+  workspace: string,
+  prompt: string,
+  resume?: string
+) => Promise<AgentRunResult>;
+
+/** Loads + parses the structured report — injectable for the same reason. */
+export type ReportLoader = (
+  reportPath: string,
+  resultText: string
+) => Promise<FixModelReport | null>;
+
+export interface FixReportResult {
+  report: FixModelReport | null;
+  sessionId?: string;
+  resultText: string;
+  /** populated only when the agent turn itself errored (timeout, dirty exit). */
+  error?: string;
+  /** true when the recovery re-prompt was issued. */
+  recoveryUsed: boolean;
+}
+
+/**
+ * Run the fix agent, then GUARANTEE-or-recover the structured report.
+ *
+ * The agent is non-deterministic: it sometimes finishes the actual fix work but
+ * returns a prose summary instead of the machine-readable JSON report (PR #6
+ * burn-in — a completed fix was discarded because no JSON was emitted). When the
+ * first turn yields no parseable report, we issue ONE recovery turn that RESUMES
+ * the same session (so the agent keeps full context of what it just did) and
+ * asks ONLY for the JSON — no further file edits. The edits already live on disk
+ * and are committed from the git diff downstream, so they survive regardless.
+ *
+ * `turnRunner` / `reportLoader` default to the real implementations; tests
+ * inject fakes to prove the second turn fires without a live Claude session.
+ */
+export async function obtainFixReport(
+  ctx: Parameters<JobHandler>[0],
+  workspace: string,
+  reportPath: string,
+  prompt: string,
+  deps: { turnRunner?: TurnRunner; reportLoader?: ReportLoader } = {}
+): Promise<FixReportResult> {
+  const turnRunner = deps.turnRunner ?? runAgentTurn;
+  const reportLoader = deps.reportLoader ?? loadReport;
+
+  // ── Turn 1: the real fix work (investigation + edits + tests + report). ──
+  const first = await turnRunner(ctx, workspace, prompt);
+  if (first.error) {
+    return {
+      report: null,
+      sessionId: first.sessionId,
+      resultText: first.resultText,
+      error: first.error,
+      recoveryUsed: false,
+    };
+  }
+
+  const report = await reportLoader(reportPath, first.resultText);
+  if (report) {
+    return {
+      report,
+      sessionId: first.sessionId,
+      resultText: first.resultText,
+      recoveryUsed: false,
+    };
+  }
+
+  // ── Recovery: same session, JSON-only, no edits. ─────────────────────────
+  ctx.log("claude-fix-apply: fix-report-recovery", {
+    reason: "first turn produced no parseable report; resuming session",
+    sessionId: first.sessionId ?? null,
+    firstResultPreview: first.resultText.slice(0, 200),
+  });
+
+  const recovery = await turnRunner(
+    ctx,
+    workspace,
+    buildRecoveryPrompt(reportPath),
+    first.sessionId
+  );
+  const recovered = await reportLoader(reportPath, recovery.resultText);
+
+  return {
+    report: recovered,
+    sessionId: recovery.sessionId ?? first.sessionId,
+    resultText: recovery.resultText || first.resultText,
+    error: recovery.error,
+    recoveryUsed: true,
+  };
+}
+
+/** Build the terminal error message when no report could be parsed. */
+function reportParseFailureMessage(agent: FixReportResult): string {
+  const recoveryNote = agent.recoveryUsed
+    ? " (recovery re-prompt was attempted)"
+    : "";
+  return `could not parse fix report${recoveryNote}. First 400 chars of result: ${agent.resultText.slice(
+    0,
+    400
+  )}`;
 }
 
 /** Convert a terminal `result` message into an AgentRunResult. */
@@ -599,7 +719,46 @@ function buildPrompt(
   ].join("\n");
 }
 
-async function loadReport(
+/**
+ * Recovery re-prompt. Issued on a RESUMED session ONLY when the first turn
+ * finished its fix work but failed to leave a parseable report. The agent
+ * already has full context of what it did; this turn must NOT change files —
+ * it only re-emits the structured summary the parser needs. Schema fields below
+ * mirror exactly what `ModelReportSchema` / `buildPrompt` document.
+ */
+function buildRecoveryPrompt(reportPath: string): string {
+  return [
+    "You did NOT produce the required machine-readable report on your previous",
+    "turn — you returned prose (or nothing parseable). Your code edits are fine",
+    "and must be LEFT EXACTLY AS THEY ARE: do NOT change, add, or revert any",
+    "files; do NOT run any commands; do NOT touch git.",
+    "",
+    "Your ONLY task now is to emit the structured report describing the work you",
+    `already did. If you already wrote ${reportPath}, just re-emit its contents`,
+    "verbatim as raw JSON.",
+    "",
+    "Output ONLY a single JSON object matching EXACTLY this schema — no prose, no",
+    "markdown, no code fences, nothing before or after the JSON:",
+    "{",
+    '  "revalidation": [{"file": str, "line"?: num, "message": str, "kept": bool, "reason": str}],',
+    '  "blastRadius": {"summary": str, "changedFiles": [str], "callers": [str], "notes"?: str},',
+    '  "fixSummary": "what you changed and why",',
+    '  "testsAdded": bool,',
+    '  "testExemptionReason": string|null,',
+    '  "testFiles": [paths of test files you added/edited],',
+    '  "coverageRootCause": "why the suite missed it",',
+    '  "existingTestsPassed": bool,',
+    '  "testCommand": "the command you ran"|null,',
+    '  "testOutputTail": "last ~40 lines of test output"',
+    "}",
+    "",
+    "Reflect your ACTUAL work from the previous turn — do not invent values.",
+    `You may also (re)write the report to ${reportPath} using the Write tool, but`,
+    "you MUST also output the same JSON as your final message.",
+  ].join("\n");
+}
+
+export async function loadReport(
   reportPath: string,
   resultText: string
 ): Promise<FixModelReport | null> {
