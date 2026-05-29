@@ -4,11 +4,16 @@
  * Pipeline (against M3's actual worker API):
  *   1. routing          — resolve policy from projects.yaml
  *   2. fetch-pr         — pull PR metadata + diff
- *   3. parallel dual review:
- *      a. codex-review   — dispatch to tars-worker (kind="codex-review")
- *      b. claude-review  — dispatch to tars-worker (kind="claude-review")
- *      Both run independently. We wait for both, then compute agreement
- *      by finding overlap (same file & nearby line, OR same title).
+ *   3. iterative dual-review DEBATE (Slice 3):
+ *      Round 1: codex-review + claude-review run independently in parallel.
+ *      If a finding is raised by only ONE reviewer, we run further rounds
+ *      (bounded by MAX_DEBATE_ROUNDS) in which each reviewer is shown the
+ *      OTHER's findings and asked to endorse / defend / retract. A finding is
+ *      "agreed" once BOTH reviewers endorse it. After the final round:
+ *        - findings both endorse  -> agreed       -> pending-approval
+ *        - findings still in one side only -> disputed -> disagreement panel
+ *        - nothing on either side -> skipped-no-findings
+ *      The full transcript is persisted on the run (debate_rounds).
  *   4. triage           — map severities, dedupe, filter by threshold
  *   5. blast-radius     — graph callers (best-effort, never blocks)
  *   6. approval gate    — when reviewers AGREE and findings remain, the run
@@ -24,6 +29,12 @@
  * Worker dispatch uses M3's UUID-based job rows + polling via waitForJob.
  */
 
+import type {
+  AgreedFinding,
+  DebateReviewerPosition,
+  DebateRound,
+  DebateTranscript,
+} from "./lib/audit";
 import { upsertPrReviewRun, writeAudit } from "./lib/audit";
 import {
   fetchPR,
@@ -68,6 +79,13 @@ export interface PRReviewResult {
 }
 
 const WORKER_TIMEOUT_MS = 8 * 60_000;
+
+/**
+ * Maximum number of debate rounds (round 1 = independent review, rounds 2..N =
+ * exchange). Bounds cost + latency: each extra round dispatches BOTH reviewers
+ * again. 3 means: independent review, one exchange, one final exchange.
+ */
+const MAX_DEBATE_ROUNDS = 3;
 
 // M3 worker severities -> TARS severities.
 function mapM3Severity(
@@ -159,24 +177,75 @@ function computeOverlapRatio(
   return overlapping / Math.max(codexFindings.length, 1);
 }
 
-function computeAgreement(
-  codexFindings: Finding[],
-  claudeFindings: Finding[]
-): "agree" | "partial" | "disagree" {
-  if (codexFindings.length === 0 && claudeFindings.length === 0) {
-    return "agree";
+// ── Slice 3: debate helpers ──────────────────────────────────────────────────
+
+/** Convert an internal Finding to the slim AgreedFinding shape we persist. */
+function toAgreed(f: Finding): AgreedFinding {
+  return {
+    file: f.file,
+    line: f.line,
+    severity: f.severity,
+    category: f.category,
+    message: f.message,
+    suggestion: f.suggestion,
+  };
+}
+
+/**
+ * The shape we feed into a reviewer's debateContext (the OTHER side's findings).
+ * Kept loose because the worker handler re-parses it with its own zod schema.
+ */
+interface DebateContextFinding {
+  severity?: string;
+  file?: string;
+  line?: number;
+  message?: string;
+  suggestion?: string;
+}
+
+function toDebateContextFindings(findings: Finding[]): DebateContextFinding[] {
+  return findings.map((f) => ({
+    severity: f.severity,
+    file: f.file,
+    line: f.line,
+    message: f.message,
+    suggestion: f.suggestion,
+  }));
+}
+
+/** True if `set` contains a finding overlapping `f` (same file+near line / title). */
+function setHasOverlap(f: Finding, set: Finding[]): boolean {
+  return set.some((g) => findingsOverlap(f, g));
+}
+
+/**
+ * Given both reviewers' CURRENT-round findings, partition into:
+ *  - agreed:   raised (overlapping) by BOTH reviewers
+ *  - disputed: raised by exactly one reviewer
+ * Agreed findings are deduped (the codex representative is kept).
+ */
+function partitionFindings(
+  codex: Finding[],
+  claude: Finding[]
+): { agreed: Finding[]; disputed: Finding[] } {
+  const agreed: Finding[] = [];
+  const disputed: Finding[] = [];
+
+  for (const c of codex) {
+    if (setHasOverlap(c, claude)) {
+      agreed.push(c);
+    } else {
+      disputed.push(c);
+    }
   }
-  if (codexFindings.length === 0 || claudeFindings.length === 0) {
-    return "disagree";
+  for (const cl of claude) {
+    if (!setHasOverlap(cl, codex)) {
+      disputed.push(cl);
+    }
+    // claude findings that overlap codex are already represented in `agreed`
+    // via their codex counterpart — don't double-count.
   }
-  const overlapRatio = computeOverlapRatio(codexFindings, claudeFindings);
-  if (overlapRatio >= 0.5) {
-    return "agree";
-  }
-  if (overlapRatio >= 0.2) {
-    return "partial";
-  }
-  return "disagree";
+  return { agreed: dedupeFindings(agreed), disputed: dedupeFindings(disputed) };
 }
 
 function dedupeFindings(findings: Finding[]): Finding[] {
@@ -192,6 +261,198 @@ function dedupeFindings(findings: Finding[]): Finding[] {
 
 function uniqStr(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+type AuditFn = (
+  step: string,
+  status: "start" | "ok" | "skip" | "error" | "info",
+  data?: Record<string, unknown>,
+  message?: string
+) => Promise<void>;
+
+interface ReviewerRunResult {
+  result: M3ReviewResult;
+  findings: Finding[];
+  jobId: string;
+  errorText: string | null;
+}
+
+/** The outcome of the full bounded debate, consumed by the workflow body. */
+interface DebateResult {
+  transcript: DebateTranscript;
+  agreed: Finding[];
+  disputed: Finding[];
+  overlapRatio: number;
+  /** Last-round raw results + ids, for the disagreement payload. */
+  codexResult: M3ReviewResult;
+  claudeResult: M3ReviewResult;
+  codexJobId: string;
+  claudeJobId: string;
+  codexErr: string | null;
+  claudeErr: string | null;
+  codexCount: number;
+  claudeCount: number;
+}
+
+/** Dispatch ONE reviewer for ONE round, returning the parsed review. */
+async function runReviewer(
+  reviewer: "codex" | "claude",
+  round: number,
+  otherFindings: Finding[] | null,
+  ctx: { runId: string; basePayload: Record<string, unknown>; audit: AuditFn }
+): Promise<ReviewerRunResult> {
+  const kind = reviewer === "codex" ? "codex-review" : "claude-review";
+  const payload: Record<string, unknown> = { ...ctx.basePayload };
+  if (round > 1 && otherFindings) {
+    payload.debateContext = {
+      round,
+      otherReviewer: reviewer === "codex" ? "claude" : "codex",
+      otherFindings: toDebateContextFindings(otherFindings),
+    };
+  }
+  const dispatch = await dispatchJob(kind, payload, {
+    idempotencyKey: `${ctx.runId}:${kind}:r${round}`,
+    maxAttempts: 2,
+  });
+  await ctx.audit(kind, "start", { jobId: dispatch.jobId, round });
+  const job = await waitForJob(dispatch.jobId, { timeoutMs: WORKER_TIMEOUT_MS });
+  await ctx.audit(kind, job.status === "done" ? "ok" : "error", {
+    status: job.status,
+    attempts: job.attempts,
+    round,
+    errorText: job.errorText?.slice(0, 200),
+  });
+  const result: M3ReviewResult =
+    job.status === "done" && job.result
+      ? (job.result as M3ReviewResult)
+      : { summary: job.errorText ?? `${kind} unavailable`, findings: [] };
+  return {
+    result,
+    findings: m3ToTarsFindings(result),
+    jobId: dispatch.jobId,
+    errorText: job.errorText ?? null,
+  };
+}
+
+function toPosition(
+  reviewer: "codex" | "claude",
+  result: M3ReviewResult,
+  findings: Finding[],
+  prev: Finding[] | null
+): DebateReviewerPosition {
+  const pos: DebateReviewerPosition = {
+    reviewer,
+    summary: result.summary ?? "",
+    findings: findings.map(toAgreed),
+  };
+  if (prev) {
+    // endorsed = present now but not before; retracted = present before, gone now.
+    pos.endorsed = findings.filter((f) => !setHasOverlap(f, prev)).length;
+    pos.retracted = prev.filter((f) => !setHasOverlap(f, findings)).length;
+  }
+  return pos;
+}
+
+/**
+ * Run the bounded iterative debate (round 1 = independent review, rounds 2..N
+ * = exchange). Stops early on full convergence or when neither reviewer flags
+ * anything; otherwise runs up to MAX_DEBATE_ROUNDS. Extracted from the workflow
+ * body so the workflow stays readable; all step calls (dispatch/wait/audit)
+ * run in the workflow context via the passed-in closures.
+ */
+async function runDebate(ctx: {
+  runId: string;
+  basePayload: Record<string, unknown>;
+  audit: AuditFn;
+}): Promise<DebateResult> {
+  await ctx.audit("debate", "start", { maxRounds: MAX_DEBATE_ROUNDS });
+
+  const rounds: DebateRound[] = [];
+  let codexFindings: Finding[] = [];
+  let claudeFindings: Finding[] = [];
+  let last = {
+    codexResult: {} as M3ReviewResult,
+    claudeResult: {} as M3ReviewResult,
+    codexJobId: "",
+    claudeJobId: "",
+    codexErr: null as string | null,
+    claudeErr: null as string | null,
+  };
+  let stopReason: DebateTranscript["stopReason"] = "max-rounds";
+
+  for (let round = 1; round <= MAX_DEBATE_ROUNDS; round++) {
+    const prevCodex = round > 1 ? codexFindings : null;
+    const prevClaude = round > 1 ? claudeFindings : null;
+    // Each reviewer sees the OTHER reviewer's PREVIOUS-round findings (round 2+).
+    const [codexRun, claudeRun] = await Promise.all([
+      runReviewer("codex", round, round > 1 ? claudeFindings : null, ctx),
+      runReviewer("claude", round, round > 1 ? codexFindings : null, ctx),
+    ]);
+
+    codexFindings = codexRun.findings;
+    claudeFindings = claudeRun.findings;
+    last = {
+      codexResult: codexRun.result,
+      claudeResult: claudeRun.result,
+      codexJobId: codexRun.jobId,
+      claudeJobId: claudeRun.jobId,
+      codexErr: codexRun.errorText,
+      claudeErr: claudeRun.errorText,
+    };
+
+    rounds.push({
+      round,
+      codex: toPosition("codex", codexRun.result, codexFindings, prevCodex),
+      claude: toPosition("claude", claudeRun.result, claudeFindings, prevClaude),
+    });
+
+    const { agreed, disputed } = partitionFindings(codexFindings, claudeFindings);
+    await ctx.audit("debate-round", "ok", {
+      round,
+      codex: codexFindings.length,
+      claude: claudeFindings.length,
+      agreed: agreed.length,
+      disputed: disputed.length,
+    });
+
+    if (codexFindings.length === 0 && claudeFindings.length === 0) {
+      stopReason = "no-findings";
+      break;
+    }
+    if (disputed.length === 0) {
+      stopReason = "converged";
+      break;
+    }
+    // Else one-sided findings remain -> another round (until MAX_DEBATE_ROUNDS).
+  }
+
+  const { agreed, disputed } = partitionFindings(codexFindings, claudeFindings);
+  const overlapRatio = computeOverlapRatio(codexFindings, claudeFindings);
+  const transcript: DebateTranscript = {
+    rounds,
+    maxRounds: MAX_DEBATE_ROUNDS,
+    agreed: agreed.map(toAgreed),
+    disputed: disputed.map(toAgreed),
+    stopReason,
+  };
+
+  await ctx.audit("debate", "ok", {
+    rounds: rounds.length,
+    stopReason,
+    agreed: agreed.length,
+    disputed: disputed.length,
+    overlapRatio,
+  });
+
+  return {
+    transcript,
+    agreed,
+    disputed,
+    overlapRatio,
+    ...last,
+    codexCount: codexFindings.length,
+    claudeCount: claudeFindings.length,
+  };
 }
 
 /**
@@ -301,100 +562,73 @@ export async function prReviewWorkflow(
       status: "started",
     });
 
-    // ---------- Step 3: parallel codex-review + claude-review ----------
-    await audit("dispatch-reviews", "start");
-    const reviewPayload = {
-      diff: prDiff,
-      repo: `${input.owner}/${input.repo}`,
-      prNumber: input.prNumber,
-      context: `Title: ${pr.title}\n\n${pr.body}`,
-    };
-    const codexDispatch = await dispatchJob("codex-review", reviewPayload, {
-      idempotencyKey: `${runId}:codex-review`,
-      maxAttempts: 2,
-    });
-    const claudeDispatch = await dispatchJob("claude-review", reviewPayload, {
-      idempotencyKey: `${runId}:claude-review`,
-      maxAttempts: 2,
-    });
-    await audit("dispatch-reviews", "ok", {
-      codexJobId: codexDispatch.jobId,
-      claudeJobId: claudeDispatch.jobId,
+    // ---------- Step 3: iterative dual-review DEBATE ----------
+    // The full bounded debate (round 1 = independent review, rounds 2..N =
+    // exchange) is in runDebate(); it runs all reviewer dispatches + audits in
+    // this workflow context via the passed closures.
+    const debate = await runDebate({
+      runId,
+      basePayload: {
+        diff: prDiff,
+        repo: `${input.owner}/${input.repo}`,
+        prNumber: input.prNumber,
+        context: `Title: ${pr.title}\n\n${pr.body}`,
+      },
+      audit,
     });
 
-    await audit("codex-review", "start", { jobId: codexDispatch.jobId });
-    const codexJob = await waitForJob(codexDispatch.jobId, {
-      timeoutMs: WORKER_TIMEOUT_MS,
-    });
-    await audit("codex-review", codexJob.status === "done" ? "ok" : "error", {
-      status: codexJob.status,
-      attempts: codexJob.attempts,
-      errorText: codexJob.errorText?.slice(0, 200),
-    });
-
-    await audit("claude-review", "start", { jobId: claudeDispatch.jobId });
-    const claudeJob = await waitForJob(claudeDispatch.jobId, {
-      timeoutMs: WORKER_TIMEOUT_MS,
-    });
-    await audit("claude-review", claudeJob.status === "done" ? "ok" : "error", {
-      status: claudeJob.status,
-      attempts: claudeJob.attempts,
-      errorText: claudeJob.errorText?.slice(0, 200),
-    });
-
-    // Parse results, fall back to empty review on failure.
-    const codexResult: M3ReviewResult =
-      codexJob.status === "done" && codexJob.result
-        ? (codexJob.result as M3ReviewResult)
-        : {
-            summary: codexJob.errorText ?? "codex review unavailable",
-            findings: [],
-          };
-    const claudeResult: M3ReviewResult =
-      claudeJob.status === "done" && claudeJob.result
-        ? (claudeJob.result as M3ReviewResult)
-        : {
-            summary: claudeJob.errorText ?? "claude review unavailable",
-            findings: [],
-          };
-
-    const codexFindings = m3ToTarsFindings(codexResult);
-    const claudeFindings = m3ToTarsFindings(claudeResult);
-
-    // ---------- Step 4: agreement + triage ----------
-    const agreement = computeAgreement(codexFindings, claudeFindings);
-    const overlapRatio = computeOverlapRatio(codexFindings, claudeFindings);
-    await audit("agreement", "ok", {
-      agreement,
-      codex: codexFindings.length,
-      claude: claudeFindings.length,
+    const {
+      transcript: debateTranscript,
+      agreed: agreedRaw,
+      disputed: disputedRaw,
       overlapRatio,
+      codexResult,
+      claudeResult,
+      codexJobId,
+      claudeJobId,
+      codexErr,
+      claudeErr,
+      codexCount,
+      claudeCount,
+    } = debate;
+
+    // Persist the transcript on the run as soon as the debate finishes, so it
+    // is visible regardless of which terminal branch we take below.
+    await upsertPrReviewRun({
+      runId,
+      owner: input.owner,
+      repo: input.repo,
+      prNumber: input.prNumber,
+      prSha: pr.headSha,
+      policy: policy as unknown as Record<string, unknown>,
+      status: "started",
+      debateRounds: debateTranscript,
     });
 
-    // ---------- Step 4a: disagree gate ----------
-    // When Codex and Claude disagree AND at least one of them flagged something,
-    // we do NOT post a public PR comment. The two raw outputs are preserved on
-    // the pr_review_runs row for Shaun to adjudicate from /inbox. This path is
-    // unchanged by Slice 1 and runs for all repos (incl. Konverge/REF) now that
-    // protect_mode is retired.
-    if (
-      agreement === "disagree" &&
-      codexFindings.length + claudeFindings.length > 0
-    ) {
+    // ---------- Step 4a: disputed -> disagreement adjudication panel ----------
+    // Findings still raised by only ONE reviewer after the final round are
+    // genuine, debated-out disagreements. Route them to the EXISTING
+    // adjudication panel (disagreed terminal + disagreed_payload) unchanged.
+    // We take this branch when there is NOTHING both reviewers agreed on but
+    // there ARE one-sided findings — i.e. the debate failed to converge on
+    // anything actionable. (If some findings agreed and some stayed disputed,
+    // we proceed with the agreed set below; the disputed remnants are recorded
+    // in the transcript for visibility.)
+    if (agreedRaw.length === 0 && disputedRaw.length > 0) {
       const disagreedPayload = {
         codex: {
           summary: codexResult.summary ?? "",
           findings: codexResult.findings ?? [],
           rawResult: codexResult,
-          jobId: codexDispatch.jobId,
-          errorText: codexJob.errorText ?? null,
+          jobId: codexJobId,
+          errorText: codexErr,
         },
         claude: {
           summary: claudeResult.summary ?? "",
           findings: claudeResult.findings ?? [],
           rawResult: claudeResult,
-          jobId: claudeDispatch.jobId,
-          errorText: claudeJob.errorText ?? null,
+          jobId: claudeJobId,
+          errorText: claudeErr,
         },
         overlapRatio,
         capturedAt: new Date().toISOString(),
@@ -402,10 +636,12 @@ export async function prReviewWorkflow(
 
       await audit("disagree-route", "info", {
         reason:
-          "codex/claude disagreement — routing to disagreed terminal without posting",
-        codexCount: codexFindings.length,
-        claudeCount: claudeFindings.length,
+          "debate did not converge on any shared finding — routing to disagreed adjudication panel",
+        codexCount,
+        claudeCount,
+        disputed: disputedRaw.length,
         overlapRatio,
+        rounds: debateTranscript.rounds.length,
       });
 
       await upsertPrReviewRun({
@@ -416,14 +652,15 @@ export async function prReviewWorkflow(
         prSha: pr.headSha,
         policy: policy as unknown as Record<string, unknown>,
         status: "disagreed",
-        findingsCount: codexFindings.length + claudeFindings.length,
+        findingsCount: codexCount + claudeCount,
         disagreedPayload,
+        debateRounds: debateTranscript,
       });
 
       await audit("complete", "ok", {
         status: "disagreed",
-        codexCount: codexFindings.length,
-        claudeCount: claudeFindings.length,
+        codexCount,
+        claudeCount,
         overlapRatio,
         commentPosted: false,
       });
@@ -431,25 +668,30 @@ export async function prReviewWorkflow(
       return {
         runId,
         status: "disagreed",
-        findingsCount: codexFindings.length + claudeFindings.length,
+        findingsCount: codexCount + claudeCount,
         policy,
-        agreement,
+        agreement: "disagree",
         prSha: pr.headSha,
       };
     }
 
-    const merged = dedupeFindings([...codexFindings, ...claudeFindings]);
-    const filteredBySeverity = merged.filter((f) =>
+    // ---------- Step 4b: triage the AGREED set ----------
+    const agreement: "agree" | "partial" | "disagree" =
+      disputedRaw.length === 0 ? "agree" : "partial";
+    const filteredBySeverity = dedupeFindings(agreedRaw).filter((f) =>
       severityAtLeast(f.severity, policy.severityThreshold)
     );
     await audit("triage", "ok", {
-      merged: merged.length,
+      agreed: agreedRaw.length,
       afterSeverityFilter: filteredBySeverity.length,
       threshold: policy.severityThreshold,
+      stopReason: debateTranscript.stopReason,
     });
 
     if (filteredBySeverity.length === 0) {
-      await audit("triage", "skip", { reason: "no findings above threshold" });
+      await audit("triage", "skip", {
+        reason: "no agreed findings above threshold",
+      });
       await upsertPrReviewRun({
         runId,
         owner: input.owner,
@@ -458,6 +700,7 @@ export async function prReviewWorkflow(
         prSha: pr.headSha,
         policy: policy as unknown as Record<string, unknown>,
         status: "skipped-no-findings",
+        debateRounds: debateTranscript,
       });
       return {
         runId,
@@ -577,6 +820,7 @@ export async function prReviewWorkflow(
       status: "pending-approval",
       findingsCount: filteredBySeverity.length,
       agreedFindings,
+      debateRounds: debateTranscript,
       linearIssueId,
       linearIssueIdentifier,
       linearIssueUrl,

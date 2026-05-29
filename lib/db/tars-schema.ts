@@ -65,6 +65,11 @@ export const auditLog = pgTable(
  * approval UI, the Linear issue links the REF ticket, and the approval fields
  * record Shaun's Approve/Reject decision. Migration: drizzle/0012_*.sql.
  *
+ * `debate_rounds` (Slice 3) records the iterative reviewer debate: an array of
+ * rounds, each carrying both reviewers' positions for that round, plus a final
+ * convergence summary (which findings became agreed vs stayed disputed).
+ * Migration: drizzle/0014_pr_review_debate.sql.
+ *
  * `archived_at` is set by the retention workflow once a terminal-state row
  * is older than 30 days; heavy fields (disagreed_payload) are NULLed and
  * `error` is truncated. Slim summary fields are kept forever.
@@ -86,6 +91,9 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   adjudicationActionAt: timestamp("adjudication_action_at", {
     withTimezone: true,
   }),
+  // Slice 3: iterative debate transcript. Records each round's per-reviewer
+  // positions and what converged. Migration: drizzle/0014_pr_review_debate.sql.
+  debateRounds: jsonb("debate_rounds"),
   // Slice 1: approval gate + Linear lifecycle.
   agreedFindings: jsonb("agreed_findings"),
   linearIssueId: text("linear_issue_id"),

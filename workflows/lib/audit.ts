@@ -111,6 +111,12 @@ async function ensureSchema(sql: any) {
       on pr_review_runs (updated_at desc)
       where status in ('fixing', 'fix-in-review', 'fix-failed');
   `;
+  // Slice 3 (drizzle/0014): iterative debate transcript. Idempotent so a deploy
+  // that hasn't run the Drizzle migration still self-heals on first write.
+  await sql /* sql */`
+    alter table pr_review_runs
+      add column if not exists debate_rounds jsonb;
+  `;
   await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
@@ -202,6 +208,38 @@ export interface AgreedFinding {
   suggestion?: string;
 }
 
+/** One reviewer's findings as captured at a given debate round. */
+export interface DebateReviewerPosition {
+  reviewer: "codex" | "claude";
+  summary: string;
+  findings: AgreedFinding[];
+  /** Set on round >= 2: how this round's set changed vs the previous one. */
+  endorsed?: number;
+  retracted?: number;
+}
+
+/** A single debate round: both reviewers' positions for that round. */
+export interface DebateRound {
+  round: number;
+  codex: DebateReviewerPosition;
+  claude: DebateReviewerPosition;
+}
+
+/**
+ * Full debate transcript persisted on the run. `rounds` is the per-round
+ * exchange; `outcome` summarises convergence. Persisted as `debate_rounds`.
+ */
+export interface DebateTranscript {
+  rounds: DebateRound[];
+  maxRounds: number;
+  /** Findings BOTH reviewers endorsed by the final round. */
+  agreed: AgreedFinding[];
+  /** Findings still raised by only one reviewer after the final round. */
+  disputed: AgreedFinding[];
+  /** Why the debate stopped: "converged" | "max-rounds" | "no-findings". */
+  stopReason: "converged" | "max-rounds" | "no-findings";
+}
+
 export interface PrReviewRunRecord {
   runId: string;
   owner: string;
@@ -232,6 +270,8 @@ export interface PrReviewRunRecord {
   reviewCommentUrl?: string;
   error?: string;
   disagreedPayload?: DisagreedPayload;
+  /** Slice 3: the iterative reviewer debate transcript. */
+  debateRounds?: DebateTranscript;
   /** Agreed findings persisted at pending-approval for the approval UI. */
   agreedFindings?: AgreedFinding[];
   /** Linear issue created when the run reaches pending-approval. */
