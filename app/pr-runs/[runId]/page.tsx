@@ -5,6 +5,7 @@ import {
   FileText,
   GitPullRequest,
   ShieldCheck,
+  Wrench,
 } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,10 +14,13 @@ import { ApprovalPanel } from "@/components/pr-runs/approval-panel";
 import { AuditTimeline } from "@/components/pr-runs/audit-timeline";
 import { DisagreementPanel } from "@/components/pr-runs/disagreement-panel";
 import { FindingsSummary } from "@/components/pr-runs/findings-summary";
+import { FixPanel } from "@/components/pr-runs/fix-panel";
 import { RunHeader } from "@/components/pr-runs/run-header";
 import type {
   AgreedFinding,
   DisagreementPayload,
+  FixBlastRadius,
+  FixRevalidationItem,
   PolicyConfig,
   PrRun,
   PrRunDetail,
@@ -109,10 +113,14 @@ export default async function PrRunDetailPage({
           <FindingsSummary auditRows={auditLog} run={run} />
         </section>
 
-        {/* Approval panel — pending-approval (actionable) or terminal decision */}
+        {/* Approval panel — pending-approval (actionable) or any decided/fix state */}
         {(run.status === "pending-approval" ||
           run.status === "approved" ||
-          run.status === "rejected") && (
+          run.status === "rejected" ||
+          run.status === "fixing" ||
+          run.status === "fix-in-review" ||
+          run.status === "fix-failed" ||
+          run.status === "done") && (
           <section className="rounded-lg border border-sky-500/20 bg-card/30 p-5">
             <SectionHeader icon={ShieldCheck} title="Approval Gate" />
             <ApprovalPanel
@@ -121,6 +129,38 @@ export default async function PrRunDetailPage({
               findings={(run.agreedFindings as AgreedFinding[] | null) ?? []}
               linearIssueIdentifier={run.linearIssueIdentifier}
               linearIssueUrl={run.linearIssueUrl}
+              runId={run.runId}
+              status={
+                // Once fixing starts, the gate itself is "approved"; the fix
+                // progress lives in the Fix Stage panel below.
+                run.status === "pending-approval" || run.status === "rejected"
+                  ? run.status
+                  : "approved"
+              }
+            />
+          </section>
+        )}
+
+        {/* Fix Stage panel — fixing / fix-in-review / fix-failed / done */}
+        {(run.status === "fixing" ||
+          run.status === "fix-in-review" ||
+          run.status === "fix-failed" ||
+          run.status === "done") && (
+          <section className="rounded-lg border border-cyan-500/20 bg-card/30 p-5">
+            <SectionHeader icon={Wrench} title="Fix Stage" />
+            <FixPanel
+              error={run.error}
+              fixBlastRadius={
+                (run.fixBlastRadius as FixBlastRadius | null) ?? null
+              }
+              fixBranch={run.fixBranch}
+              fixCoverageRootcause={run.fixCoverageRootcause}
+              fixPrNumber={run.fixPrNumber}
+              fixPrUrl={run.fixPrUrl}
+              fixRevalidation={
+                (run.fixRevalidation as FixRevalidationItem[] | null) ?? null
+              }
+              fixStatus={run.fixStatus}
               runId={run.runId}
               status={run.status}
             />

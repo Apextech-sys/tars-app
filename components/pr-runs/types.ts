@@ -10,6 +10,11 @@ export type RunStatus =
   | "pending-approval"
   | "approved"
   | "rejected"
+  // Slice 2 (fix stage):
+  | "fixing"
+  | "fix-in-review"
+  | "fix-failed"
+  | "done"
   | "error";
 
 export interface PolicyConfig {
@@ -52,9 +57,32 @@ export interface PrRun {
   approvalAction: string | null;
   approvalActionAt: string | null;
   approvalReason: string | null;
+  // Slice 2: fix stage.
+  fixStatus: string | null;
+  fixBranch: string | null;
+  fixPrUrl: string | null;
+  fixPrNumber: number | null;
+  fixRevalidation: FixRevalidationItem[] | null;
+  fixBlastRadius: FixBlastRadius | null;
+  fixCoverageRootcause: string | null;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** A finding's independent re-validation outcome (stage 7). */
+export interface FixRevalidationItem {
+  finding?: AgreedFinding;
+  kept: boolean;
+  reason: string;
+}
+
+/** The traced blast radius of the applied fix (stage 8). */
+export interface FixBlastRadius {
+  summary?: string;
+  changedFiles?: string[];
+  callers?: string[];
+  notes?: string;
 }
 
 export interface AuditLogRow {

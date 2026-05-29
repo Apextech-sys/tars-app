@@ -11,6 +11,7 @@ import {
   TrendingUp,
   Wifi,
   WifiOff,
+  Wrench,
   Zap,
 } from "lucide-react";
 import Link from "next/link";
@@ -71,6 +72,10 @@ const STATUS_COLORS: Record<string, string> = {
   "pending-approval": "bg-sky-500/10 text-sky-400 border border-sky-500/30",
   approved: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
   rejected: "bg-rose-500/10 text-rose-400 border border-rose-500/30",
+  fixing: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/30",
+  "fix-in-review": "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30",
+  "fix-failed": "bg-red-500/10 text-red-400 border border-red-500/30",
+  done: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
   error: "bg-red-500/10 text-red-400 border border-red-500/30",
 };
 
@@ -93,6 +98,7 @@ function StatusChip({ status }: { status: string }) {
 interface StatsData {
   inFlight: number;
   pendingApproval: number;
+  fixActive: number;
   errorRate: number;
   disagreementRate: number;
   meanReviewMs: number;
@@ -112,6 +118,20 @@ function pendingApprovalCaption(stats: StatsData | null): string {
     return "Loading...";
   }
   return stats.pendingApproval === 0 ? "Nothing waiting" : "Awaiting your call";
+}
+
+function fixActiveColor(stats: StatsData | null): string {
+  if (!stats) {
+    return "text-muted-foreground";
+  }
+  return stats.fixActive > 0 ? "text-cyan-400" : "text-emerald-400";
+}
+
+function fixActiveCaption(stats: StatsData | null): string {
+  if (!stats) {
+    return "Loading...";
+  }
+  return stats.fixActive === 0 ? "Nothing fixing" : "Fixing / in review";
 }
 
 interface ActivityBucket {
@@ -349,7 +369,7 @@ export function DashboardHome() {
         </div>
 
         {/* KPI Grid */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-6">
           {/* Runs in flight */}
           <div className="space-y-2 rounded-xl border border-border bg-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
@@ -412,6 +432,30 @@ export function DashboardHome() {
                 href="/pr-runs?status=pending-approval"
               >
                 Review now →
+              </Link>
+            ) : null}
+          </div>
+
+          {/* Fix stage — fixing + fix PRs awaiting review */}
+          <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+              <Wrench className="size-3.5" />
+              Fix Stage
+            </div>
+            <div className="flex items-end gap-2">
+              <span className={cn("font-bold text-3xl", fixActiveColor(stats))}>
+                {stats?.fixActive ?? "—"}
+              </span>
+            </div>
+            <p className="text-muted-foreground text-xs">
+              {fixActiveCaption(stats)}
+            </p>
+            {stats?.fixActive && stats.fixActive > 0 ? (
+              <Link
+                className="text-primary text-xs hover:underline"
+                href="/pr-runs?status=fix-in-review"
+              >
+                View fixes →
               </Link>
             ) : null}
           </div>

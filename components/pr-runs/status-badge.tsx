@@ -40,6 +40,23 @@ const STATUS_CONFIG: Record<RunStatus, { label: string; className: string }> = {
     label: "Rejected",
     className: "bg-rose-500/10 text-rose-400 border border-rose-500/30",
   },
+  fixing: {
+    label: "Fixing",
+    className: "bg-indigo-500/10 text-indigo-400 border border-indigo-500/30",
+  },
+  "fix-in-review": {
+    label: "Fix in Review",
+    className: "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30",
+  },
+  "fix-failed": {
+    label: "Fix Failed",
+    className: "bg-red-500/10 text-red-400 border border-red-500/30",
+  },
+  done: {
+    label: "Done",
+    className:
+      "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
+  },
   error: {
     label: "Error",
     className: "bg-red-500/10 text-red-400 border border-red-500/30",

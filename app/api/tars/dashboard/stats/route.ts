@@ -11,24 +11,30 @@ export async function GET(req: NextRequest) {
     const days = windowParam === "7d" ? 7 : windowParam === "30d" ? 30 : 7;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const [inFlight, pendingApprovalRows, recent] = await Promise.all([
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(prReviewRuns)
-        .where(eq(prReviewRuns.status, "started")),
-      db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(prReviewRuns)
-        .where(eq(prReviewRuns.status, "pending-approval")),
-      db
-        .select({
-          status: prReviewRuns.status,
-          createdAt: prReviewRuns.createdAt,
-          updatedAt: prReviewRuns.updatedAt,
-        })
-        .from(prReviewRuns)
-        .where(gte(prReviewRuns.createdAt, since)),
-    ]);
+    const [inFlight, pendingApprovalRows, fixActiveRows, recent] =
+      await Promise.all([
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(prReviewRuns)
+          .where(eq(prReviewRuns.status, "started")),
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(prReviewRuns)
+          .where(eq(prReviewRuns.status, "pending-approval")),
+        // Fix stage active: currently fixing OR a fix PR awaiting human review.
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(prReviewRuns)
+          .where(sql`${prReviewRuns.status} in ('fixing', 'fix-in-review')`),
+        db
+          .select({
+            status: prReviewRuns.status,
+            createdAt: prReviewRuns.createdAt,
+            updatedAt: prReviewRuns.updatedAt,
+          })
+          .from(prReviewRuns)
+          .where(gte(prReviewRuns.createdAt, since)),
+      ]);
 
     const total = recent.length;
     const errors = recent.filter((r) => r.status === "error").length;
@@ -47,6 +53,11 @@ export async function GET(req: NextRequest) {
         "error",
         "blocked-konverge",
         "skipped-policy",
+        // Fix-stage statuses also imply the dual-AI review is long done.
+        "fixing",
+        "fix-in-review",
+        "fix-failed",
+        "done",
       ].includes(r.status)
     );
 
@@ -65,6 +76,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       inFlight: inFlight[0]?.count ?? 0,
       pendingApproval: pendingApprovalRows[0]?.count ?? 0,
+      fixActive: fixActiveRows[0]?.count ?? 0,
       errorRate: Math.round(errorRate * 10) / 10,
       disagreementRate: Math.round(disagreementRate * 10) / 10,
       meanReviewMs,
