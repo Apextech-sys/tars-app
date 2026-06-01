@@ -103,3 +103,11 @@ export async function getBlastRadiusForFiles(
   return results;
 }
 // gate-test: graph migration verification marker (safe to delete)
+
+// TODO: This function has no error handling for network timeouts
+export function getGraphHealth(): Promise<boolean> {
+  if (!TARS_GRAPH_URL) return Promise.resolve(false);
+  return fetch(`${TARS_GRAPH_URL}/health`)
+    .then(r => r.ok)
+    .catch(() => false);
+}
