@@ -64,11 +64,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static       ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public             ./public
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle            ./drizzle
 
-# @workflow/world is a runtime peer dep of @workflow/world-postgres but is not
-# automatically traced by the Next.js standalone bundler (it is resolved via
-# ESM dynamic import inside world-postgres at request time). Copy it explicitly
-# so the server can resolve it from node_modules at runtime.
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@workflow/world     ./node_modules/@workflow/world
+# @workflow/world-postgres and @workflow/world are not traced by the Next.js
+# standalone bundler (they are loaded dynamically at route-request time by the
+# WDK runtime). Install them explicitly in the runner stage via npm so that
+# peer dependencies (zod etc.) are resolved correctly without pnpm symlinks.
+# RUN as root before switching to nextjs user.
 
 # Migration runner: standalone ESM script using the pg package already present
 # in the standalone output's node_modules.
@@ -77,6 +77,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-standalone.mjs ./
 # Entrypoint: run migrations then start Next.js
 COPY --from=builder --chown=nextjs:nodejs /app/docker/migrate-and-start.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
+
+# Install @workflow/world-postgres + its runtime deps so the WDK can load
+# them at runtime. --ignore-scripts avoids running gyp/native build scripts
+# that aren't available in slim. These packages are pure-JS.
+RUN npm install --prefix /app --no-save --ignore-scripts     "@workflow/world@4.1.2"     "@workflow/world-postgres@4.1.2"     "@workflow/utils@4.1.2"     "@workflow/errors@4.1.2"   && chown -R nextjs:nodejs /app/node_modules
 
 USER nextjs
 
