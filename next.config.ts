@@ -3,33 +3,59 @@ import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   // Standalone output for minimal Docker runner image.
-  // The existing VM 102 systemd deploy (next start) is unaffected —
-  // standalone mode still produces .next/server and next start works.
   output: "standalone",
 
-  // Include the WDK world-postgres package in the standalone output trace.
-  // Next.js static analysis can't detect dynamic require('@workflow/world-postgres')
+  // Include the WDK runtime packages in the standalone output trace.
+  // Next.js static analysis cannot detect dynamic require('@workflow/world-postgres')
   // that the WDK runtime resolves based on WORKFLOW_TARGET_WORLD at startup.
+  // We include the full pnpm virtual-store directories for all @workflow packages
+  // and their runtime dependencies so the standalone output contains everything
+  // needed to initialise the WDK postgres world at route request time.
   outputFileTracingIncludes: {
     "/**": [
-      "./node_modules/@workflow/world-postgres/**",
-      "./node_modules/.pnpm/@workflow+world-postgres*/**",
+      // @workflow packages (all variants in pnpm store)
+      "./node_modules/@workflow/**",
+      "./node_modules/.pnpm/@workflow+*/**",
+      // drizzle-orm/node-postgres (world-postgres uses this subpath)
+      "./node_modules/.pnpm/drizzle-orm*/**",
+      "./node_modules/drizzle-orm/**",
+      // pg (node-postgres driver)
+      "./node_modules/.pnpm/pg@*/**",
+      "./node_modules/pg/**",
+      // graphile-worker (used by world-postgres for the job queue)
+      "./node_modules/.pnpm/graphile*/**",
+      "./node_modules/.pnpm/@graphile*/**",
+      // cbor-x (used by @vercel/queue inside world-postgres)
+      "./node_modules/.pnpm/cbor-x*/**",
+      // @vercel/queue
+      "./node_modules/.pnpm/@vercel+queue*/**",
+      // zod (peer dep of @workflow/world)
+      "./node_modules/.pnpm/zod@4.3.6*/**",
+      // ulid (dep of @workflow/world)
+      "./node_modules/.pnpm/ulid*/**",
     ],
   },
 
   typescript: {
-    // The .next/types/validator.ts Turbopack race condition causes false positives.
-    // Type safety is enforced via ./node_modules/.bin/tsc --noEmit separately.
     ignoreBuildErrors: true,
   },
-  // Prevent Turbopack from bundling native Node modules into the WDK workflow bundle.
-  // These packages are only used in step functions (server-side), not in workflow orchestration.
+
   serverExternalPackages: [
     "@slack/web-api",
     "@anthropic-ai/claude-agent-sdk",
     "@anthropic-ai/sdk",
     "postgres",
     "drizzle-orm",
+    // WDK world packages — load from node_modules at runtime, not bundled
+    "@workflow/world",
+    "@workflow/world-postgres",
+    "@workflow/world-local",
+    "@workflow/utils",
+    "@workflow/errors",
+    "workflow",
+    "graphile-worker",
+    "pg",
+    "cbor-x",
   ],
 };
 
