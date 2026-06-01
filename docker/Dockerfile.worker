@@ -3,14 +3,15 @@
 # TARS Worker — multi-stage production image (slimmed, Iteration 1)
 # Node 24 slim (Debian, glibc) — matches app image; Alpine avoided.
 # NO infisical runtime dependency. Secrets via plain env vars at runtime.
-# Auth: Claude Max OAuth via ~/.claude/.credentials.json or
-#       CLAUDE_CODE_OAUTH_TOKEN env — NOT ANTHROPIC_API_KEY.
+# Auth: Claude Max OAuth via CLAUDE_CODE_OAUTH_TOKEN env or
+#       ~/.claude/.credentials.json mount — NOT ANTHROPIC_API_KEY.
 #
 # Build stages:
 #   base     — node + pnpm
 #   deps     — full monorepo deps (tsc needs root lib/ types at build time)
 #   builder  — compile tars-worker/src → tars-worker/dist
-#   runner   — ONLY worker prod deps + compiled JS. NO monorepo root deps.
+#   runner   — worker prod deps + compiled JS only. No monorepo root packages.
+#              Uses npm ci (no workspace config conflicts) for the slim install.
 #              Target size: <600MB (vs 3.25GB with monorepo root install).
 # =============================================================================
 
@@ -40,6 +41,10 @@ COPY . .
 RUN cd tars-worker && pnpm build
 
 # ── runner: worker prod deps ONLY — no monorepo root ─────────────────────────
+# Strategy: copy only tars-worker/package.json, generate a clean package-lock.json
+# via npm, then npm ci --production. This avoids pnpm workspace/override config
+# conflicts that occur when the lockfile references pnpm-workspace.yaml overrides
+# but the workspace file is not present in the runner context.
 FROM node:${NODE_VERSION}-slim AS runner
 ENV NODE_ENV=production
 
@@ -48,18 +53,12 @@ RUN groupadd --system --gid 1001 nodejs && \
 
 WORKDIR /app
 
-# Copy ONLY the worker package.json (not the monorepo root package.json or
-# pnpm-workspace.yaml). This ensures pnpm install only installs tars-worker's
-# own production dependencies — not the 800+ Next.js app packages in the root.
+# Copy only the worker's package.json for a clean prod install
 COPY --from=builder /workspace/tars-worker/package.json ./package.json
-COPY --from=builder /workspace/pnpm-lock.yaml           ./pnpm-lock.yaml
 
-# Install worker-only prod deps. Use --ignore-workspace-root-check because
-# there is no pnpm-workspace.yaml in this single-package runner context.
-RUN corepack enable && \
-    corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest && \
-    pnpm install --frozen-lockfile --ignore-scripts --prod \
-      --config.ignore-workspace-root-check=true
+# Install worker prod dependencies using npm (avoids pnpm workspace config conflicts).
+# npm resolves from package.json without needing a lockfile in this context.
+RUN npm install --production --ignore-scripts --no-audit --no-fund 2>&1
 
 # Compiled JS from the builder — the path mirrors rootDir structure under dist/:
 #   tars-worker/dist/tars-worker/src/index.js
