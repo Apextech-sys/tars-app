@@ -236,6 +236,9 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.150
         version: 0.3.150(@anthropic-ai/sdk@0.98.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
+      '@octokit/rest':
+        specifier: ^22.0.1
+        version: 22.0.1
       '@openai/codex-sdk':
         specifier: ^0.134.0
         version: 0.134.0
