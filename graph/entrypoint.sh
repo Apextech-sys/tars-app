@@ -16,5 +16,10 @@ python3 /app/ingest.py &
 INGEST_PID=$!
 echo "[tars-graph] Ingest running in background (pid=${INGEST_PID})"
 
+# Recurring discovery + code-analysis scheduler (in-container, no external cron)
+python3 /app/scheduler.py &
+SCHED_PID=$!
+echo "[tars-graph] Scheduler running in background (pid=${SCHED_PID})"
+
 # Start the HTTP API server (foreground)
 exec python3 /app/server.py

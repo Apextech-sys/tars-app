@@ -27,6 +27,11 @@ PORT = int(os.environ.get("TARS_GRAPH_PORT", "8765"))
 
 
 def query_callers(repo: str, file: str) -> dict:
+    """Blast-radius via the deterministic code graph (File + IMPORTS/CALLS).
+
+    Returns the files that import or call `file` (importer -> imported edges),
+    i.e. the blast radius of changing `file`. No LLM / embeddings involved.
+    """
     try:
         import kuzu  # type: ignore
     except Exception as e:
@@ -35,30 +40,6 @@ def query_callers(repo: str, file: str) -> dict:
     try:
         db = kuzu.Database(GRAPH_PATH, read_only=True)
         conn = kuzu.Connection(db)
-        query = """
-        MATCH (target:File {repo: $repo, path: $file})
-        OPTIONAL MATCH (caller)-[r]->(target)
-        WHERE caller.repo = $repo
-        RETURN DISTINCT caller.path AS path
-        LIMIT 50
-        """
-        try:
-            res = conn.execute(query, {"repo": repo, "file": file})
-            paths = []
-            while res.has_next():
-                row = res.get_next()
-                p = row[0] if row else None
-                if isinstance(p, str):
-                    paths.append(p)
-            return {"available": True, "callers": paths, "openPrs": [], "notes": ""}
-        except Exception as e:
-            # Graph is reachable but file node may not exist yet — still available:true
-            return {
-                "available": True,
-                "callers": [],
-                "openPrs": [],
-                "notes": f"graph query soft-fail: {e}",
-            }
     except Exception as e:
         return {
             "available": False,
@@ -66,6 +47,52 @@ def query_callers(repo: str, file: str) -> dict:
             "openPrs": [],
             "notes": f"graph open soft-fail: {e}",
         }
+
+    # If the File table doesn't exist yet, degrade softly but stay available.
+    try:
+        target_rows = conn.execute(
+            "MATCH (t:File {repo: $repo, path: $file}) RETURN count(t) AS n",
+            {"repo": repo, "file": file},
+        )
+        target_exists = target_rows.has_next() and (target_rows.get_next()[0] or 0) > 0
+    except Exception as e:
+        return {
+            "available": True,
+            "callers": [],
+            "openPrs": [],
+            "notes": f"code graph not built yet: {e}",
+        }
+
+    if not target_exists:
+        return {
+            "available": True,
+            "callers": [],
+            "openPrs": [],
+            "notes": f"file not found in code graph for repo {repo}",
+        }
+
+    callers: list[str] = []
+    try:
+        res = conn.execute(
+            "MATCH (caller:File {repo: $repo})-[:IMPORTS|CALLS]->(target:File {repo: $repo, path: $file}) "
+            "RETURN DISTINCT caller.path AS path ORDER BY path LIMIT 200",
+            {"repo": repo, "file": file},
+        )
+        while res.has_next():
+            row = res.get_next()
+            p = row[0] if row else None
+            if isinstance(p, str):
+                callers.append(p)
+    except Exception as e:
+        return {
+            "available": True,
+            "callers": [],
+            "openPrs": [],
+            "notes": f"graph query soft-fail: {e}",
+        }
+
+    note = "" if callers else "no importers/callers found in code graph"
+    return {"available": True, "callers": callers, "openPrs": [], "notes": note}
 
 
 def get_graph_stats() -> dict:
@@ -88,7 +115,14 @@ def get_graph_stats() -> dict:
                 edges = res.get_next()[0] or 0
         except Exception:
             pass
-        return {"nodes": nodes, "edges": edges, "db_exists": True}
+        files = -1
+        try:
+            res = conn.execute("MATCH (f:File) RETURN count(*)")
+            if res.has_next():
+                files = res.get_next()[0] or 0
+        except Exception:
+            files = -1
+        return {"nodes": nodes, "edges": edges, "files": files, "db_exists": True}
     except Exception as e:
         return {"nodes": -1, "edges": -1, "db_exists": Path(GRAPH_PATH).exists(), "error": str(e)}
 
@@ -116,6 +150,7 @@ class GraphHandler(BaseHTTPRequestHandler):
                 "db_exists": stats.get("db_exists", False),
                 "nodes": stats.get("nodes", -1),
                 "edges": stats.get("edges", -1),
+                "files": stats.get("files", -1),
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
         else:

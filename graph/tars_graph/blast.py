@@ -32,7 +32,6 @@ GRAPH_PATH = os.environ.get("TARS_GRAPH_PATH", "/data/graph.kuzu")
 
 def query_callers(repo: str, file: str) -> dict:
     try:
-        # Lazy-import; kuzu may not be on the venv path when called from Node.
         import kuzu  # type: ignore
     except Exception as e:
         return {"callers": [], "openPrs": [], "notes": f"kuzu not importable: {e}"}
@@ -40,37 +39,25 @@ def query_callers(repo: str, file: str) -> dict:
     try:
         db = kuzu.Database(GRAPH_PATH, read_only=True)
         conn = kuzu.Connection(db)
-        # Match files that reference this file via any edge. The TARS graph
-        # has IMPORTS / CALLS / REFERENCES edges; we union them where present.
-        query = """
-        MATCH (target:File {repo: $repo, path: $file})
-        OPTIONAL MATCH (caller)-[r]->(target)
-        WHERE caller.repo = $repo
-        RETURN DISTINCT caller.path AS path
-        LIMIT 50
-        """
-        try:
-            res = conn.execute(query, {"repo": repo, "file": file})
-            paths = []
-            while res.has_next():
-                row = res.get_next()
-                p = row[0] if row else None
-                if isinstance(p, str):
-                    paths.append(p)
-            return {"callers": paths, "openPrs": [], "notes": ""}
-        except Exception as e:
-            # Schema may not have File nodes yet — that's fine.
-            return {
-                "callers": [],
-                "openPrs": [],
-                "notes": f"graph query soft-fail: {e}",
-            }
     except Exception as e:
-        return {
-            "callers": [],
-            "openPrs": [],
-            "notes": f"graph open soft-fail: {e}",
-        }
+        return {"callers": [], "openPrs": [], "notes": f"graph open soft-fail: {e}"}
+
+    callers = []
+    try:
+        res = conn.execute(
+            "MATCH (caller:File {repo: $repo})-[:IMPORTS|CALLS]->(target:File {repo: $repo, path: $file}) "
+            "RETURN DISTINCT caller.path AS path ORDER BY path LIMIT 200",
+            {"repo": repo, "file": file},
+        )
+        while res.has_next():
+            row = res.get_next()
+            p = row[0] if row else None
+            if isinstance(p, str):
+                callers.append(p)
+        return {"callers": callers, "openPrs": [], "notes": ""}
+    except Exception as e:
+        # Schema may not have File nodes yet — that's fine.
+        return {"callers": [], "openPrs": [], "notes": f"graph query soft-fail: {e}"}
 
 
 def main():

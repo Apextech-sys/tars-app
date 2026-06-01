@@ -39,6 +39,7 @@ COPY tars_graph/ ./tars_graph/
 COPY knowledge/  ./knowledge/
 COPY server.py   ./
 COPY ingest.py   ./
+COPY scheduler.py ./
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
 

@@ -7,3 +7,7 @@ PyYAML==6.0.3
 python-dotenv==1.2.2
 httpx==0.28.1
 anyio==4.13.0
+
+# Code-understanding layer (Phase 1) — tree-sitter import-graph analyzer (LLM-free)
+tree-sitter==0.25.2
+tree-sitter-language-pack==1.8.1
