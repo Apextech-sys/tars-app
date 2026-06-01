@@ -10,6 +10,7 @@ overrides:
   "@workflow/world-local": "4.1.2"
   "@workflow/errors": "4.1.2"
   "@workflow/core": "4.2.5"
+  "drizzle-orm": "0.45.1"
 
 onlyBuiltDependencies:
   - "@swc/core"
