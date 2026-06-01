@@ -102,3 +102,4 @@ export async function getBlastRadiusForFiles(
   }
   return results;
 }
+// gate-test: graph migration verification marker (safe to delete)
