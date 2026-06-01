@@ -1,4 +1,4 @@
-// test utility — intentional bug for dual-AI gate verification
+// test utility — intentional bug for dual-AI gate verification (v2)
 // BUG: divide() has no zero-denominator guard; calling divide(x, 0) returns Infinity or throws
 export function divide(a: number, b: number): number {
   return a / b; // missing: if (b === 0) throw new Error("division by zero")
