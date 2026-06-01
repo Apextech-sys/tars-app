@@ -50,8 +50,8 @@ ENV NODE_ENV=production
 
 RUN groupadd --system --gid 1001 nodejs && \
     useradd  --system --uid 1001 --gid nodejs tarsworker && \
-    # Create home dir for tarsworker so Claude SDK can read/write ~/.claude/
-    mkdir -p /home/tarsworker/.claude && \
+    # Create home dirs for tarsworker so Claude SDK (~/.claude) and Codex SDK (~/.codex) can read/write credentials
+    mkdir -p /home/tarsworker/.claude /home/tarsworker/.codex && \
     chown -R tarsworker:nodejs /home/tarsworker
 
 WORKDIR /app
