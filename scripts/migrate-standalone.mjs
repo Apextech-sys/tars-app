@@ -1,12 +1,18 @@
 /**
  * Standalone drizzle migration runner for Dokploy/Docker deployments.
- * Reads DATABASE_URL from env. Applies pending migrations from /app/drizzle/.
+ * Uses drizzle-orm + postgres (postgres.js) — both bundled in Next.js standalone output.
+ * Reads DATABASE_URL from env. Applies pending migrations from ./drizzle/.
  * Called from the container entrypoint before server.js starts.
+ *
+ * IMPORTANT: This script must use only packages available in the Next.js standalone
+ * output (/app/node_modules). The 'pg' npm package is NOT available — use 'postgres'.
  */
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
-import pkg from "pg";
-const { Client } = pkg;
+
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -14,75 +20,59 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-// Allow specifying the migrations directory via env (for testing)
 const MIGRATIONS_DIR =
-  process.env.MIGRATIONS_DIR ?? join(import.meta.dirname, "drizzle");
+  process.env.MIGRATIONS_DIR ?? join(__dirname, "drizzle");
 
 async function applyMigrations() {
-  const client = new Client({ connectionString: DATABASE_URL });
+  let sql;
 
-  // Retry connection for up to 60s — Postgres may still be starting up
+  // Retry connection for up to 60s — postgres may still be starting
   const MAX_RETRIES = 12;
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      await client.connect();
+      // Dynamic import — postgres is available in /app/node_modules/postgres
+      const { default: postgres } = await import("postgres");
+      sql = postgres(DATABASE_URL, { max: 1, idle_timeout: 30 });
+      // Test the connection with a simple query
+      await sql`SELECT 1`;
       console.log("[migrate] connected to database");
       break;
     } catch (err) {
       if (attempt === MAX_RETRIES) {
-        console.error(`[migrate] failed to connect after ${MAX_RETRIES} attempts:`, err.message);
+        console.error(
+          `[migrate] failed to connect after ${MAX_RETRIES} attempts:`,
+          err.message
+        );
         process.exit(1);
       }
-      console.warn(`[migrate] connection attempt ${attempt}/${MAX_RETRIES} failed — retrying in 5s`);
+      console.warn(
+        `[migrate] connection attempt ${attempt}/${MAX_RETRIES} failed — retrying in 5s: ${err.message}`
+      );
+      if (sql) {
+        try { await sql.end(); } catch {}
+        sql = null;
+      }
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
 
   try {
-    // Ensure drizzle migrations journal table exists
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS __drizzle_migrations (
-        id        SERIAL PRIMARY KEY,
-        hash      TEXT NOT NULL UNIQUE,
-        created_at BIGINT
-      )
-    `);
+    const { drizzle } = await import("drizzle-orm/postgres-js");
+    const { migrate } = await import("drizzle-orm/postgres-js/migrator");
 
-    // Read migration files in order
-    const files = readdirSync(MIGRATIONS_DIR)
-      .filter((f) => f.endsWith(".sql"))
-      .sort();
+    const db = drizzle(sql);
 
-    console.log(`[migrate] found ${files.length} migration files`);
-
-    for (const file of files) {
-      // Use filename (without extension) as hash to match drizzle-kit convention
-      const hash = file.replace(/\.sql$/, "");
-      const { rows } = await client.query(
-        "SELECT id FROM __drizzle_migrations WHERE hash = $1",
-        [hash]
-      );
-      if (rows.length > 0) {
-        console.log(`[migrate] skipping (already applied): ${file}`);
-        continue;
-      }
-      const sql = readFileSync(join(MIGRATIONS_DIR, file), "utf-8");
-      console.log(`[migrate] applying: ${file}`);
-      await client.query(sql);
-      await client.query(
-        "INSERT INTO __drizzle_migrations (hash, created_at) VALUES ($1, $2)",
-        [hash, Date.now()]
-      );
-      console.log(`[migrate] done: ${file}`);
-    }
-
+    console.log(`[migrate] running drizzle migrations from: ${MIGRATIONS_DIR}`);
+    await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
     console.log("[migrate] all migrations applied successfully");
   } finally {
-    await client.end();
+    if (sql) {
+      await sql.end();
+    }
   }
 }
 
 applyMigrations().catch((err) => {
-  console.error("[migrate] fatal error:", err);
+  console.error("[migrate] fatal error:", err.message ?? err);
   process.exit(1);
 });
