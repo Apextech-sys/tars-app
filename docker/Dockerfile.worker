@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# TARS Worker — multi-stage production image
+# Node 24 slim (Debian, glibc) — matches app image; Alpine avoided.
+# NO infisical runtime dependency. Secrets via plain env vars at runtime.
+# =============================================================================
+
+ARG NODE_VERSION=24
+
+# ── base ──────────────────────────────────────────────────────────────────────
+FROM node:${NODE_VERSION}-slim AS base
+RUN corepack enable && corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest
+WORKDIR /workspace
+
+# ── deps ──────────────────────────────────────────────────────────────────────
+FROM base AS deps
+# Install workspace deps for BOTH root + tars-worker.
+# Worker tsconfig has rootDir ".." (monorepo root) so tsc needs root + lib/ types.
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json ./
+COPY tars-worker/package.json ./tars-worker/
+RUN pnpm install --frozen-lockfile --ignore-scripts
+
+# ── builder ───────────────────────────────────────────────────────────────────
+FROM deps AS builder
+# Full monorepo source — worker tsc includes lib/db/worker-schema.ts
+# and lib/tars/brief/schema.ts via tsconfig.json "include" paths.
+COPY . .
+# Worker tsconfig outDir is "dist" relative to tars-worker/ but rootDir is ".."
+# so compiled output lands at tars-worker/dist/tars-worker/src/index.js
+RUN cd tars-worker && pnpm build
+
+# ── runner: prod deps only ────────────────────────────────────────────────────
+FROM node:${NODE_VERSION}-slim AS runner
+ENV NODE_ENV=production
+
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd  --system --uid 1001 --gid nodejs tarsworker
+
+WORKDIR /app
+
+# Reinstall production deps for the pruned worker runtime
+COPY --from=builder /workspace/pnpm-workspace.yaml ./
+COPY --from=builder /workspace/pnpm-lock.yaml      ./
+COPY --from=builder /workspace/package.json        ./
+COPY --from=builder /workspace/tars-worker/package.json ./tars-worker/
+
+RUN corepack enable && corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest && \
+    pnpm install --frozen-lockfile --ignore-scripts --prod
+
+# Compiled JS from the builder (mirrors rootDir structure under dist/)
+COPY --from=builder --chown=tarsworker:nodejs /workspace/tars-worker/dist ./tars-worker/dist
+
+USER tarsworker
+
+# SIGTERM is handled in src/index.ts — worker drains active jobs then exits
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD node -e "process.exit(0)"
+
+# Direct node — NO infisical wrapper. Secrets injected by Dokploy at runtime.
+CMD ["node", "tars-worker/dist/tars-worker/src/index.js"]

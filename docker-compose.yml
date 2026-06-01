@@ -1,0 +1,98 @@
+# TARS docker-compose — local validation + Dokploy reference
+# Usage:
+#   docker compose --env-file .env.compose up -d
+#   docker compose --env-file .env.compose down -v
+#
+# The worker requires the app schema to be migrated before it can start.
+# Run migrations manually or add a migration init container (Iteration 1).
+#
+# Secrets: NEVER commit real secrets. Use .env.compose (gitignored) locally
+# or Dokploy env injection in production.
+
+networks:
+  tars-internal:
+    driver: bridge
+
+volumes:
+  tars-pgdata:
+
+services:
+
+  # ── postgres ────────────────────────────────────────────────────────────────
+  tars-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-tars_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_db}
+      POSTGRES_DB:       ${POSTGRES_DB:-tars_app}
+    volumes:
+      - tars-pgdata:/var/lib/postgresql/data
+    networks:
+      - tars-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tars_app}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── next.js app ─────────────────────────────────────────────────────────────
+  tars-app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    image: tars-app:local
+    depends_on:
+      tars-db:
+        condition: service_healthy
+    environment:
+      WORKFLOW_TARGET_WORLD:            "@workflow/world-postgres"
+      WORKFLOW_POSTGRES_URL:            "postgres://${POSTGRES_USER:-tars_app}:${POSTGRES_PASSWORD:-changeme_db}@tars-db:5432/${POSTGRES_DB:-tars_app}"
+      WORKFLOW_POSTGRES_JOB_PREFIX:     "${WORKFLOW_POSTGRES_JOB_PREFIX:-tars}"
+      WORKFLOW_POSTGRES_WORKER_CONCURRENCY: "${WORKFLOW_POSTGRES_WORKER_CONCURRENCY:-10}"
+      DATABASE_URL:                     "postgres://${POSTGRES_USER:-tars_app}:${POSTGRES_PASSWORD:-changeme_db}@tars-db:5432/${POSTGRES_DB:-tars_app}"
+      BETTER_AUTH_SECRET:               ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL:                  ${BETTER_AUTH_URL:-http://localhost:3001}
+      BETTER_AUTH_TELEMETRY:            "0"
+      APP_NAME:                         "${APP_NAME:-TARS}"
+      API_URL:                          "${API_URL:-http://localhost:3001}"
+      PORT:                             "3001"
+      HOST:                             "0.0.0.0"
+      NODE_ENV:                         "production"
+      TARS_WORKER_CALLBACK_SECRET:      ${TARS_WORKER_CALLBACK_SECRET}
+      SLACK_BOT_TOKEN:                  ${SLACK_BOT_TOKEN}
+      SLACK_USER_TOKEN:                 ${SLACK_USER_TOKEN}
+      SLACK_SIGNING_SECRET:             ${SLACK_SIGNING_SECRET}
+      LINEAR_API_KEY:                   ${LINEAR_API_KEY}
+      LINEAR_WEBHOOK_SECRET:            ${LINEAR_WEBHOOK_SECRET}
+      TARS_INTERNAL_SECRET:             ${TARS_INTERNAL_SECRET}
+      GITHUB_WEBHOOK_SECRET:            ${GITHUB_WEBHOOK_SECRET}
+      GH_TOKEN:                         ${GH_TOKEN}
+      OPENAI_API_KEY:                   "${OPENAI_API_KEY:-sk-noop}"
+    networks:
+      - tars-internal
+    ports:
+      - "${APP_PORT:-3001}:3001"
+    restart: unless-stopped
+
+  # ── background worker ────────────────────────────────────────────────────────
+  tars-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    image: tars-worker:local
+    depends_on:
+      tars-db:
+        condition: service_healthy
+    environment:
+      TARS_APP_DB_URL:             "postgres://${POSTGRES_USER:-tars_app}:${POSTGRES_PASSWORD:-changeme_db}@tars-db:5432/${POSTGRES_DB:-tars_app}"
+      ANTHROPIC_API_KEY:           ${ANTHROPIC_API_KEY}
+      TARS_WORKER_CALLBACK_SECRET: ${TARS_WORKER_CALLBACK_SECRET}
+      TARS_WORKER_ID:              "${TARS_WORKER_ID:-tars-worker}"
+      TARS_WORKER_CONCURRENCY:     "${TARS_WORKER_CONCURRENCY:-2}"
+      TARS_APP_BASE_URL:           "${TARS_APP_BASE_URL:-http://tars-app:3001}"
+      CODEX_HOME:                  "/home/tarsworker/.codex"
+      LOG_LEVEL:                   "${LOG_LEVEL:-info}"
+      NODE_ENV:                    "production"
+    networks:
+      - tars-internal
+    restart: unless-stopped
