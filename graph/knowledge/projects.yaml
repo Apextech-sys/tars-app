@@ -1,0 +1,160 @@
+konverge:
+  business: Apextech
+  kind: client
+  visibility: work
+  auto_review: true
+  auto_fix: false
+  severity_threshold: minor
+  repos:
+  - Apextech-Dev/reflex-connect-aws
+  - Apextech-Dev/reflex-connect-v2
+  - Apextech-sys/reflex-connect
+  - Apextech-sys/reflex-connect-secondary-fno-api
+  slack: '#p45'
+  issue_tracker: linear
+  linear_team: REF
+  notes: P45 partner work. Apextech Linear is source of truth (NOT P45's Linear).
+wondernet:
+  business: Apextech
+  kind: client
+  visibility: work
+  auto_review: true
+  auto_fix: false
+  protect_mode: false
+  severity_threshold: major
+  repos:
+  - Apextech-Dev/wonder-automate
+  - Apextech-sys/apex-modular-isp-platform
+  - Apextech-sys/gw-transition-site
+  - Apextech-sys/modular-fno-api-manager
+  - Apextech-sys/radius-platform
+  - Apextech-sys/radius-portal
+  - Apextech-sys/radstorm
+  - Apextech-sys/ruijie-networks-cloud-api
+  - Apextech-sys/visp-platform
+  - Apextech-sys/vuma-ae-diagnostics
+  - Apextech-sys/vuma-changer
+  - Apextech-sys/vuma-ordering
+  - Apextech-sys/vuma-ordering-v2
+  - Apextech-sys/vumatel-changer-2
+  - Apextech-sys/vumatel-package-changer
+  - Apextech-sys/vumatel-package-changer-2
+  - Apextech-sys/wonder-website
+  - Apextech-sys/wondernet-analytics-dashboard
+  - Apextech-sys/wondernet-chatbot
+  - Apextech-sys/wondernet-web-next
+  - Apextech-sys/wondernet-website-2026
+  - Apextech-sys/wondernet-website-new
+  issue_tracker: linear
+  linear_team: APE
+tars-app:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/tars-app
+  issue_tracker: github_issues
+  notes: TARS itself. PRs on this repo auto-review + auto-fix allowed.
+polymarket-v2:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/polymarket-v2
+  issue_tracker: github_issues
+  notes: Live trading repo. Personal — never surface to Linear or external systems.
+polymarket:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/polymarket-bot
+  - Apextech-sys/polymarket-dashboard
+  - Apextech-sys/polymarket-v2
+  issue_tracker: github_issues
+  notes: Polymarket v1 (legacy). Personal.
+freshbark:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/freshbark-2026
+  - Apextech-sys/freshbark-app
+  issue_tracker: github_issues
+trinova:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/trinova-oss-bss
+  - Apextech-sys/trinova-trader
+  - Apextech-sys/trinova-trading
+  - Apextech-sys/trinova-trading-platform
+  issue_tracker: github_issues
+household-os:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/household-os
+  issue_tracker: github_issues
+ubuntushield:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/ubuntushield
+  issue_tracker: github_issues
+crypto-predictor:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/crypto-predictor
+  issue_tracker: github_issues
+alphabet-soup:
+  business: Personal
+  kind: personal
+  visibility: personal
+  auto_review: true
+  auto_fix: true
+  protect_mode: false
+  severity_threshold: minor
+  repos:
+  - Apextech-sys/alpha-beta-soup
+  - Apextech-sys/alpha-beta-souper
+  - Apextech-sys/alpha-betty-soup
+  - Apextech-sys/alphabet-soup
+  issue_tracker: github_issues

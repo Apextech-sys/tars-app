@@ -1,13 +1,17 @@
 /**
  * Graph client for blast-radius queries.
  *
- * Marked `"use step"`; all Node imports are lazy.
+ * Calls the tars-graph HTTP service (Dokploy-internal network).
+ * Falls back gracefully when the service is unreachable — the worker
+ * continues, blast-radius is marked unavailable.
+ *
+ * Env:
+ *   TARS_GRAPH_URL  — base URL of the tars-graph service (no trailing slash)
+ *                     e.g. http://tars-graph:8765
+ *                     Defaults to empty string → graceful-degrade immediately.
  */
 
-const BLAST_SCRIPT =
-  process.env.TARS_BLAST_SCRIPT ??
-  "/home/shaun/.tars-state/tars_graph/blast.py";
-const PYTHON_BIN = process.env.TARS_PYTHON_BIN ?? "/usr/bin/python3";
+const TARS_GRAPH_URL = (process.env.TARS_GRAPH_URL ?? "").replace(/\/$/, "");
 const BLAST_TIMEOUT_MS = 15_000;
 
 export interface BlastRadiusResult {
@@ -23,32 +27,48 @@ export async function getBlastRadius(
   filePath: string
 ): Promise<BlastRadiusResult> {
   "use step";
-  const fs = await import("node:fs");
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const execFileAsync = promisify(execFile);
 
-  if (!fs.existsSync(BLAST_SCRIPT)) {
+  if (!TARS_GRAPH_URL) {
     return {
       available: false,
       file: filePath,
       callers: [],
       openPrs: [],
-      notes: `blast.py not found at ${BLAST_SCRIPT}`,
+      notes: "TARS_GRAPH_URL not configured",
     };
   }
 
+  const url = `${TARS_GRAPH_URL}/blast-radius`;
+
   try {
-    const { stdout } = await execFileAsync(
-      PYTHON_BIN,
-      [BLAST_SCRIPT, "--repo", repo, "--file", filePath],
-      { timeout: BLAST_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }
-    );
-    const parsed = JSON.parse(
-      stdout.trim() || "{}"
-    ) as Partial<BlastRadiusResult>;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), BLAST_TIMEOUT_MS);
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repo, file: filePath }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!res.ok) {
+      return {
+        available: false,
+        file: filePath,
+        callers: [],
+        openPrs: [],
+        notes: `tars-graph HTTP ${res.status}`,
+      };
+    }
+
+    const parsed = (await res.json()) as Partial<BlastRadiusResult>;
     return {
-      available: true,
+      available: parsed.available !== false,
       file: filePath,
       callers: Array.isArray(parsed.callers) ? parsed.callers : [],
       openPrs: Array.isArray(parsed.openPrs)
@@ -57,12 +77,14 @@ export async function getBlastRadius(
       notes: typeof parsed.notes === "string" ? parsed.notes : "",
     };
   } catch (err) {
+    // Network error or timeout — degrade gracefully
+    const msg = err instanceof Error ? err.message : String(err);
     return {
       available: false,
       file: filePath,
       callers: [],
       openPrs: [],
-      notes: `blast.py error: ${(err as Error).message}`,
+      notes: `tars-graph unreachable: ${msg}`,
     };
   }
 }

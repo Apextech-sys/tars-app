@@ -1,0 +1,9 @@
+# Pinned to match VM-102 graphiti-venv (tested working set)
+graphiti-core==0.29.1
+kuzu==0.11.3
+openai==2.38.0
+pydantic==2.13.4
+PyYAML==6.0.3
+python-dotenv==1.2.2
+httpx==0.28.1
+anyio==4.13.0

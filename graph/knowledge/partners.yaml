@@ -1,0 +1,13 @@
+# /home/shaun/.tars-state/knowledge/partners.yaml
+# 3rd-party partner entities — dev contractors, agencies, integrators.
+# Distinct from Customer (we don't model external customers as nodes here).
+#
+# Edit freely. Ingestion worker reads this every ~5 min.
+
+p45:
+  display_name: "Platform45"
+  kind: dev-contractor
+  description: |
+    3rd-party development partner helping with internal Apex coding.
+    Most active on the Konverge (Reflex Connect) project.
+    Members appear in Apex Slack via Slack Connect channels.
