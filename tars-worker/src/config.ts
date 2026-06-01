@@ -1,8 +1,21 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { z } from "zod";
 
 const Schema = z.object({
   TARS_APP_DB_URL: z.string().url(),
-  ANTHROPIC_API_KEY: z.string().min(20),
+  // ANTHROPIC_API_KEY is intentionally NOT required here.
+  // Auth for the Claude Agent SDK is via Shaun's Claude Max OAuth credential.
+  // The SDK reads ~/.claude/.credentials.json automatically when ANTHROPIC_API_KEY
+  // is absent. See memory/claude-agent-sdk-billing.md — this is a locked decision.
+  // Setting ANTHROPIC_API_KEY would force expensive PAYG billing and bypass the
+  // subscription pool.  If you need to override for a specific environment, set
+  // ANTHROPIC_API_KEY in that environment's config — but do NOT set it here by
+  // default.
+  //
+  // CLAUDE_CODE_OAUTH_TOKEN can be set as an alternative non-interactive path.
+  CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
+
   TARS_WORKER_CALLBACK_SECRET: z.string().min(16),
 
   TARS_WORKER_ID: z.string().min(1).default("tars-worker"),
@@ -47,6 +60,52 @@ const Schema = z.object({
 
 export type Config = z.infer<typeof Schema>;
 
+/**
+ * Check that at least one Claude auth path is available at startup.
+ * This is a soft-boot check, not a hard failure — the SDK will produce a
+ * more descriptive error if auth is truly absent when a job runs.
+ */
+function warnIfNoClaudeAuth(): void {
+  const hasApiKey =
+    typeof process.env.ANTHROPIC_API_KEY === "string" &&
+    process.env.ANTHROPIC_API_KEY.length >= 20;
+  const hasOauthToken =
+    typeof process.env.CLAUDE_CODE_OAUTH_TOKEN === "string" &&
+    process.env.CLAUDE_CODE_OAUTH_TOKEN.length > 0;
+  const homeDir = process.env.HOME ?? "/home/shaun";
+  const credPaths = [
+    join(homeDir, ".claude", ".credentials.json"),
+    join(homeDir, ".claude", "credentials.json"),
+  ];
+  const hasCredFile = credPaths.some((p) => {
+    try {
+      return existsSync(p);
+    } catch {
+      return false;
+    }
+  });
+
+  if (!(hasApiKey || hasOauthToken || hasCredFile)) {
+    console.warn(
+      "[tars-worker] WARNING: no Claude auth found. " +
+        "Set CLAUDE_CODE_OAUTH_TOKEN, mount ~/.claude/.credentials.json, " +
+        "or (not preferred) set ANTHROPIC_API_KEY. " +
+        "Claude agent jobs will fail until auth is available."
+    );
+  } else if (hasApiKey) {
+    console.warn(
+      "[tars-worker] WARNING: ANTHROPIC_API_KEY is set — this forces PAYG billing " +
+        "and bypasses the Claude Max subscription pool. " +
+        "Prefer OAuth credential auth (see memory/claude-agent-sdk-billing.md)."
+    );
+  } else {
+    const method = hasOauthToken
+      ? "CLAUDE_CODE_OAUTH_TOKEN env"
+      : "~/.claude/.credentials.json file";
+    console.info(`[tars-worker] Claude auth: ${method} (subscription billing)`);
+  }
+}
+
 export function loadConfig(): Config {
   const parsed = Schema.safeParse(process.env);
   if (!parsed.success) {
@@ -55,6 +114,7 @@ export function loadConfig(): Config {
       .join("\n  ");
     throw new Error(`Invalid worker env:\n  ${issues}`);
   }
+  warnIfNoClaudeAuth();
   return parsed.data;
 }
 

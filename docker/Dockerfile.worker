@@ -1,8 +1,17 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# TARS Worker — multi-stage production image
+# TARS Worker — multi-stage production image (slimmed, Iteration 1)
 # Node 24 slim (Debian, glibc) — matches app image; Alpine avoided.
 # NO infisical runtime dependency. Secrets via plain env vars at runtime.
+# Auth: Claude Max OAuth via ~/.claude/.credentials.json or
+#       CLAUDE_CODE_OAUTH_TOKEN env — NOT ANTHROPIC_API_KEY.
+#
+# Build stages:
+#   base     — node + pnpm
+#   deps     — full monorepo deps (tsc needs root lib/ types at build time)
+#   builder  — compile tars-worker/src → tars-worker/dist
+#   runner   — ONLY worker prod deps + compiled JS. NO monorepo root deps.
+#              Target size: <600MB (vs 3.25GB with monorepo root install).
 # =============================================================================
 
 ARG NODE_VERSION=24
@@ -14,8 +23,8 @@ WORKDIR /workspace
 
 # ── deps ──────────────────────────────────────────────────────────────────────
 FROM base AS deps
-# Install workspace deps for BOTH root + tars-worker.
-# Worker tsconfig has rootDir ".." (monorepo root) so tsc needs root + lib/ types.
+# Install full workspace deps (both root + tars-worker) for the build stage.
+# tsc needs root lib/ types because worker tsconfig has rootDir "..".
 COPY pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY package.json ./
 COPY tars-worker/package.json ./tars-worker/
@@ -23,14 +32,14 @@ RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── builder ───────────────────────────────────────────────────────────────────
 FROM deps AS builder
-# Full monorepo source — worker tsc includes lib/db/worker-schema.ts
-# and lib/tars/brief/schema.ts via tsconfig.json "include" paths.
+# Full monorepo source for compilation (worker tsc includes lib/db/worker-schema.ts
+# and lib/tars/brief/schema.ts via tsconfig.json "include" paths).
 COPY . .
 # Worker tsconfig outDir is "dist" relative to tars-worker/ but rootDir is ".."
 # so compiled output lands at tars-worker/dist/tars-worker/src/index.js
 RUN cd tars-worker && pnpm build
 
-# ── runner: prod deps only ────────────────────────────────────────────────────
+# ── runner: worker prod deps ONLY — no monorepo root ─────────────────────────
 FROM node:${NODE_VERSION}-slim AS runner
 ENV NODE_ENV=production
 
@@ -39,22 +48,31 @@ RUN groupadd --system --gid 1001 nodejs && \
 
 WORKDIR /app
 
-# Reinstall production deps for the pruned worker runtime
-COPY --from=builder /workspace/pnpm-workspace.yaml ./
-COPY --from=builder /workspace/pnpm-lock.yaml      ./
-COPY --from=builder /workspace/package.json        ./
-COPY --from=builder /workspace/tars-worker/package.json ./tars-worker/
+# Copy ONLY the worker package.json (not the monorepo root package.json or
+# pnpm-workspace.yaml). This ensures pnpm install only installs tars-worker's
+# own production dependencies — not the 800+ Next.js app packages in the root.
+COPY --from=builder /workspace/tars-worker/package.json ./package.json
+COPY --from=builder /workspace/pnpm-lock.yaml           ./pnpm-lock.yaml
 
-RUN corepack enable && corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest && \
-    pnpm install --frozen-lockfile --ignore-scripts --prod
+# Install worker-only prod deps. Use --ignore-workspace-root-check because
+# there is no pnpm-workspace.yaml in this single-package runner context.
+RUN corepack enable && \
+    corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest && \
+    pnpm install --frozen-lockfile --ignore-scripts --prod \
+      --config.ignore-workspace-root-check=true
 
-# Compiled JS from the builder (mirrors rootDir structure under dist/)
+# Compiled JS from the builder — the path mirrors rootDir structure under dist/:
+#   tars-worker/dist/tars-worker/src/index.js
 COPY --from=builder --chown=tarsworker:nodejs /workspace/tars-worker/dist ./tars-worker/dist
+
+# Worker reads lib/tars/SOUL.md for the brief-compose handler.
+# Copy it so SOUL_CANDIDATES path resolution finds it at /app/lib/tars/SOUL.md.
+COPY --from=builder --chown=tarsworker:nodejs /workspace/lib/tars/SOUL.md ./lib/tars/SOUL.md
 
 USER tarsworker
 
 # SIGTERM is handled in src/index.ts — worker drains active jobs then exits
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD node -e "process.exit(0)"
 
 # Direct node — NO infisical wrapper. Secrets injected by Dokploy at runtime.

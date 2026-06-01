@@ -1,9 +1,13 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
-# TARS App — multi-stage production image
+# TARS App — multi-stage production image (Iteration 1)
 # Node 24 slim (Debian, glibc) — Alpine avoided due to musl incompatibility
 # with native binaries in the dependency tree.
 # Uses Next.js standalone output for minimal runner layer.
+#
+# Startup: entrypoint runs drizzle migrations against DATABASE_URL before
+# starting the Next.js server — this is the migration gate for the Dokploy
+# deployment (no VERCEL_ENV dependency, no separate init container needed).
 # =============================================================================
 
 ARG NODE_VERSION=24
@@ -48,7 +52,10 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN groupadd --system --gid 1001 nodejs && \
-    useradd  --system --uid 1001 --gid nodejs nextjs
+    useradd  --system --uid 1001 --gid nodejs nextjs && \
+    # pg client (used by migration runner) needs no extra packages —
+    # node:slim has enough for the pg pure-JS driver
+    true
 
 WORKDIR /app
 
@@ -57,13 +64,21 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static       ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public             ./public
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle            ./drizzle
 
+# Migration runner: standalone ESM script using the pg package already present
+# in the standalone output's node_modules.
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-standalone.mjs ./migrate.js
+
+# Entrypoint: run migrations then start Next.js
+COPY --from=builder --chown=nextjs:nodejs /app/docker/migrate-and-start.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
 USER nextjs
 
 EXPOSE 3001
 ENV PORT=3001
 ENV HOST=0.0.0.0
 
-HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=90s --retries=5 \
     CMD node -e "require('http').get('http://localhost:'+process.env.PORT+'/api/health', r => process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
-CMD ["node", "server.js"]
+CMD ["/bin/sh", "/app/entrypoint.sh"]
