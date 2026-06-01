@@ -111,3 +111,4 @@ export function getGraphHealth(): Promise<boolean> {
     .then(r => r.ok)
     .catch(() => false);
 }
+// gate-v2: final verification push
