@@ -50,7 +50,9 @@ async function applyMigrations() {
       if (sql) {
         try {
           await sql.end();
-        } catch (_e) { /* ignore sql.end error */ }
+        } catch (_e) {
+          /* ignore sql.end error */
+        }
         sql = null;
       }
       await new Promise((r) => setTimeout(r, 5000));
