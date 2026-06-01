@@ -49,7 +49,10 @@ FROM node:${NODE_VERSION}-slim AS runner
 ENV NODE_ENV=production
 
 RUN groupadd --system --gid 1001 nodejs && \
-    useradd  --system --uid 1001 --gid nodejs tarsworker
+    useradd  --system --uid 1001 --gid nodejs tarsworker && \
+    # Create home dir for tarsworker so Claude SDK can read/write ~/.claude/
+    mkdir -p /home/tarsworker/.claude && \
+    chown -R tarsworker:nodejs /home/tarsworker
 
 WORKDIR /app
 
