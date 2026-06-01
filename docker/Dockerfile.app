@@ -1,12 +1,19 @@
 # syntax=docker/dockerfile:1
 # =============================================================================
 # TARS App — multi-stage production image (Iteration 3a)
-# Node 24 slim (Debian, glibc) — Alpine avoided due to musl incompatibility.
-# Uses Next.js standalone output for minimal runner layer.
+# Node 24 slim (Debian, glibc)
 #
-# The WDK (@workflow/world-postgres) and its dep tree are included via
-# outputFileTracingIncludes in next.config.ts and serverExternalPackages,
-# so the standalone output contains all packages needed at runtime.
+# Why non-standalone: the WDK (@workflow/world-postgres) resolves runtime deps
+# via dynamic ESM import at route request time. The Next.js standalone tracer
+# cannot follow pnpm's virtual-store symlinks to collect all transitive deps.
+# Running `next start` with production node_modules (same as VM-102 systemd)
+# is the correct approach.
+#
+# Build strategy:
+#   1. deps-dev  — full dev install (needed for `next build`)
+#   2. deps-prod — production-only install (no devDeps, for the runner)
+#   3. builder   — runs next build on top of dev deps
+#   4. runner    — copies the .next output + prod node_modules
 #
 # Startup: entrypoint runs drizzle migrations before starting Next.js.
 # =============================================================================
@@ -18,15 +25,23 @@ FROM node:${NODE_VERSION}-slim AS base
 RUN corepack enable && corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest
 WORKDIR /app
 
-# ── deps ──────────────────────────────────────────────────────────────────────
-FROM base AS deps
+# ── deps-dev: full install for build ──────────────────────────────────────────
+FROM base AS deps-dev
 COPY pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY package.json ./
 COPY tars-worker/package.json ./tars-worker/
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
+# ── deps-prod: production-only install for runner ─────────────────────────────
+FROM base AS deps-prod
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json ./
+COPY tars-worker/package.json ./tars-worker/
+# CI=true suppresses the interactive confirmation prompt for purging dev modules
+RUN CI=true pnpm install --frozen-lockfile --prod --ignore-scripts
+
 # ── builder ───────────────────────────────────────────────────────────────────
-FROM deps AS builder
+FROM deps-dev AS builder
 COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -46,16 +61,26 @@ FROM node:${NODE_VERSION}-slim AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN groupadd --system --gid 1001 nodejs && \
+RUN corepack enable && corepack prepare pnpm@latest --activate 2>/dev/null || npm install -g pnpm@latest && \
+    groupadd --system --gid 1001 nodejs && \
     useradd  --system --uid 1001 --gid nodejs nextjs
 
 WORKDIR /app
 
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone   ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static       ./.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/public             ./public
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle            ./drizzle
+# Production node_modules (pnpm virtual store — preserves symlinks)
+COPY --from=deps-prod --chown=nextjs:nodejs /app/node_modules         ./node_modules
+COPY --from=deps-prod --chown=nextjs:nodejs /app/tars-worker/node_modules ./tars-worker/node_modules
 
+# App files
+COPY --from=builder --chown=nextjs:nodejs /app/package.json         ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/pnpm-workspace.yaml  ./pnpm-workspace.yaml
+COPY --from=builder --chown=nextjs:nodejs /app/.next                ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/public               ./public
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle              ./drizzle
+COPY --from=builder --chown=nextjs:nodejs /app/lib                  ./lib
+COPY --from=builder --chown=nextjs:nodejs /app/workflows            ./workflows
+
+# Migration runner + entrypoint
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-standalone.mjs ./migrate.js
 COPY --from=builder --chown=nextjs:nodejs /app/docker/migrate-and-start.sh    ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
