@@ -92,14 +92,15 @@ async def run_code_analysis() -> None:
         "Apextech-sys/tars-app,Apextech-sys/reflex-connect",
     )
     repos = [r.strip() for r in repos_env.split(",") if r.strip()]
-    from tars_graph.code_analyzer import run as analyze_run
+    from tars_graph.code_analyzer import run_many
     print(f"[ingest] running code analysis for {len(repos)} repo(s) ...", flush=True)
-    for repo in repos:
-        try:
-            stats = analyze_run(repo, root=None, db_path=str(DATA_DIR / "graph.kuzu"), clone=True, branch="main")
-            print(f"[ingest] code analysis {repo}: {stats}", flush=True)
-        except Exception as e:
-            print(f"[ingest] code analysis failed for {repo}: {e}", flush=True)
+    try:
+        stats = run_many(repos, db_path=str(DATA_DIR / "graph.kuzu"), clone=True, branch="main")
+        for repo, s in stats.get("repos", {}).items():
+            print(f"[ingest] code analysis {repo}: {s}", flush=True)
+        print(f"[ingest] code analysis totals: files={stats['files']} imports={stats['imports']} ({stats['elapsed_s']}s)", flush=True)
+    except Exception as e:
+        print(f"[ingest] code analysis failed: {e}", flush=True)
     print("[ingest] code analysis complete", flush=True)
 
 

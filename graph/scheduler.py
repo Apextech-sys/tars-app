@@ -56,23 +56,27 @@ def _run_module(module: str, extra_args: list[str] | None = None, timeout: int =
 
 
 def fast_cycle() -> None:
-    _log("fast cycle start (knowledge + github + code-analysis)")
+    _log("fast cycle start (code-analysis + knowledge + github)")
+    # 1) Code analysis FIRST — LLM-free, short write lock. Single invocation
+    #    rebuilds the whole code graph (DROP + recreate) so blast-radius is
+    #    fresh and readable within seconds of the cycle starting.
+    repos = os.environ.get(
+        "TARS_CODE_REPOS", "Apextech-sys/tars-app,Apextech-sys/reflex-connect"
+    )
+    if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
+        _run_module(
+            "tars_graph.code_analyzer",
+            ["--repos", repos, "--clone", "--branch", "main"],
+            timeout=900,
+        )
+    else:
+        _log("code analysis skipped (no GH token)")
+    # 2) Knowledge ingestion — fast, hash-guarded (skips when yamls unchanged).
     _run_module("tars_graph.knowledge_ingestion")
+    # 3) GitHub discovery LAST — the slow writer; runs after the code graph is
+    #    already fresh so a long discovery write doesn't delay blast-radius.
     if os.environ.get("TARS_SKIP_GITHUB", "0") != "1":
         _run_module("tars_graph.github_discovery")
-    # Code analysis is LLM-free; analyze the tracked repos directly.
-    repos = [
-        r.strip() for r in os.environ.get(
-            "TARS_CODE_REPOS", "Apextech-sys/tars-app,Apextech-sys/reflex-connect"
-        ).split(",") if r.strip()
-    ]
-    if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
-        for repo in repos:
-            _run_module(
-                "tars_graph.code_analyzer",
-                ["--repo", repo, "--clone", "--branch", "main"],
-                timeout=600,
-            )
     _log("fast cycle done")
 
 

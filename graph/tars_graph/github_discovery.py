@@ -182,7 +182,27 @@ async def discover():
             untagged.append(r)
     log.info(f'with .tars.yaml: {len(with_tars_yaml)} | untagged: {len(untagged)}')
 
+    # Skip the costly graph re-write (one embedding per repo, all under the
+    # single Kuzu writer lock) when the repo set + metadata is unchanged since
+    # the last run. Keeps the writer lock window tiny on idle cycles so the
+    # read-only blast-radius server stays responsive. Force with --force.
+    import hashlib as _hashlib, sys as _sys
+    from pathlib import Path as _Path
+    _fp = _hashlib.sha256()
+    for _r in sorted(all_repos, key=lambda x: x['nameWithOwner']):
+        _lang = (_r.get('primaryLanguage') or {}).get('name', '') or ''
+        _arch = '1' if _r.get('isArchived') else '0'
+        _fp.update((_r['nameWithOwner'] + '|' + _lang + '|' + _arch).encode())
+        _fp.update(b'\x00')
+    _gh_hash = _fp.hexdigest()
+    _gh_marker = _Path(os.environ.get('TARS_DATA_DIR', '/data')) / '.last_github_hash'
+    if _gh_marker.exists() and _gh_marker.read_text().strip() == _gh_hash and '--force' not in _sys.argv:
+        elapsed = time.time() - started
+        log.info(f'GitHub repo set unchanged (hash match) - skipping graph write in {elapsed:.1f}s')
+        return
+
     # 3. write into graph
+
     async with TarsGraph() as g:
         for r in all_repos:
             full_name = r['nameWithOwner']
@@ -202,7 +222,8 @@ async def discover():
             project = await g.upsert_project(
                 name=project_name,
                 kind=tars.get('kind', 'product'),  # default
-                customer=tars.get('customer', 'unknown'),
+                business=tars.get('business', 'apex-poc'),
+                visibility=tars.get('visibility', 'work'),
             )
             repo_node = await g.upsert_repo(
                 full_name=full_name,
@@ -218,6 +239,7 @@ async def discover():
             )
             log.info(f'  linked {project_name} OWNS {full_name}')
 
+    _gh_marker.write_text(_gh_hash)
     elapsed = time.time() - started
     log.info(f'GitHub discovery complete in {elapsed:.1f}s — {len(all_repos)} repos, {len(with_tars_yaml)} tagged')
 

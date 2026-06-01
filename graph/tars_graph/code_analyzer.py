@@ -337,32 +337,39 @@ def _fid(repo: str, path: str) -> str:
     return f"{repo}::{path}"
 
 
-def ensure_schema(conn) -> None:
+def rebuild_schema(conn) -> None:
+    """Full rebuild: DROP the code-graph tables and recreate them fresh.
+
+    Why DROP instead of MATCH...DELETE: Kuzu 0.11.3 raises `unordered_map::at`
+    when deleting node rows from a table whose statistics were checkpointed in
+    a previous session/process. Dropping + recreating sidesteps that bug and
+    keeps re-runs deterministic. The code graph is cheap to rebuild in full
+    (a few seconds for all tracked repos), so a full rebuild per run is fine.
+    DROP order: rel tables first (they depend on File), then File.
+    """
+    for tbl in ("IMPORTS", "CALLS"):
+        try:
+            conn.execute(f"DROP TABLE {tbl}")
+        except Exception:
+            pass
+    try:
+        conn.execute("DROP TABLE File")
+    except Exception:
+        pass
     for _name, ddl in DDL:
         conn.execute(ddl)
 
 
-def persist(conn, repo: str, infos: dict[str, FileInfo]) -> dict:
-    """Idempotent re-population for a single repo. Deletes this repo's edges +
-    File rows, then re-inserts. Other repos' rows are untouched."""
-    # delete edges first (both directions), then nodes, scoped to this repo
-    conn.execute(
-        "MATCH (a:File {repo: $repo})-[r:IMPORTS]->() DELETE r", {"repo": repo})
-    conn.execute(
-        "MATCH ()-[r:IMPORTS]->(b:File {repo: $repo}) DELETE r", {"repo": repo})
-    conn.execute(
-        "MATCH (a:File {repo: $repo})-[r:CALLS]->() DELETE r", {"repo": repo})
-    conn.execute(
-        "MATCH (a:File {repo: $repo}) DELETE a", {"repo": repo})
-
-    # insert File nodes
+def insert_repo(conn, repo: str, infos: dict[str, FileInfo]) -> dict:
+    """Insert one repo's File nodes + IMPORTS edges into the (already created)
+    code-graph tables. Assumes a fresh/rebuilt schema (no pre-existing rows
+    for this repo)."""
     for rel, info in infos.items():
         conn.execute(
             "CREATE (f:File {id: $id, repo: $repo, path: $path, language: $lang, symbol_count: 0})",
             {"id": _fid(repo, rel), "repo": repo, "path": rel, "lang": info.language},
         )
 
-    # insert IMPORTS edges (only when both endpoints exist in this repo)
     edge_count = 0
     paths = set(infos.keys())
     for rel, info in infos.items():
@@ -393,45 +400,89 @@ def shallow_clone(repo: str, dest: Path, branch: str = "main") -> None:
 
 # ---- CLI --------------------------------------------------------------------
 
-def run(repo: str, root: Optional[str], db_path: str, clone: bool, branch: str) -> dict:
+def _analyze_source(repo: str, root: Optional[str], clone: bool, branch: str) -> dict[str, FileInfo]:
+    """Resolve the source for one repo (clone or local) and analyze it.
+    Does NOT touch Kuzu — the heavy work happens outside the write lock."""
+    if clone or not root:
+        with tempfile.TemporaryDirectory(prefix="tars-code-") as td:
+            dest = Path(td) / "repo"
+            shallow_clone(repo, dest, branch)
+            return analyze_repo(dest)
+    return analyze_repo(Path(root))
+
+
+def run_many(repos: list[str], db_path: str, clone: bool, branch: str,
+             roots: Optional[dict[str, str]] = None) -> dict:
+    """Analyze several repos and rebuild the WHOLE code graph in one short
+    write transaction. The clone+parse (slow, network/CPU) happens BEFORE the
+    Kuzu connection is opened, so the exclusive write lock is held only for the
+    fast insert phase (sub-second per repo) — minimizing the window during
+    which the read-only HTTP server can't serve blast-radius."""
     import kuzu
     started = time.time()
-    tmp: Optional[tempfile.TemporaryDirectory] = None
-    if clone or not root:
-        tmp = tempfile.TemporaryDirectory(prefix="tars-code-")
-        dest = Path(tmp.name) / "repo"
-        shallow_clone(repo, dest, branch)
-        scan_root = dest
-    else:
-        scan_root = Path(root)
+    roots = roots or {}
 
-    infos = analyze_repo(scan_root)
+    # 1) clone + parse every repo first (no Kuzu lock held)
+    analyzed: dict[str, dict[str, FileInfo]] = {}
+    for repo in repos:
+        try:
+            analyzed[repo] = _analyze_source(repo, roots.get(repo), clone, branch)
+        except Exception as e:  # noqa: BLE001
+            print(f"[code-analyzer] analyze failed {repo}: {e}", file=sys.stderr)
 
+    # 2) one short write transaction: DROP + recreate + insert all
     db = kuzu.Database(db_path)
     conn = kuzu.Connection(db)
-    ensure_schema(conn)
-    stats = persist(conn, repo, infos)
+    rebuild_schema(conn)
+    per_repo = {}
+    for repo, infos in analyzed.items():
+        per_repo[repo] = insert_repo(conn, repo, infos)
+    try:
+        conn.execute("CHECKPOINT")
+    except Exception:
+        pass
     conn.close()
     db.close()
 
-    if tmp:
-        tmp.cleanup()
+    total_files = sum(s["files"] for s in per_repo.values())
+    total_imports = sum(s["imports"] for s in per_repo.values())
+    return {
+        "repos": per_repo,
+        "files": total_files,
+        "imports": total_imports,
+        "elapsed_s": round(time.time() - started, 1),
+    }
 
-    stats["repo"] = repo
-    stats["elapsed_s"] = round(time.time() - started, 1)
-    return stats
+
+def run(repo: str, root: Optional[str], db_path: str, clone: bool, branch: str) -> dict:
+    """Single-repo entry — kept for ad-hoc use. Rebuilds the whole code graph
+    with just this one repo (DROP + recreate). For multi-repo population use
+    run_many()."""
+    roots = {repo: root} if root else None
+    stats = run_many([repo], db_path, clone, branch, roots=roots)
+    rs = stats["repos"].get(repo, {"files": 0, "imports": 0})
+    return {"files": rs["files"], "imports": rs["imports"], "repo": repo,
+            "elapsed_s": stats["elapsed_s"]}
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--repo", required=True, help="owner/repo (used as File.repo key)")
-    ap.add_argument("--root", default=None, help="local checkout path to analyze")
-    ap.add_argument("--clone", action="store_true", help="shallow-clone via GH_TOKEN instead of --root")
+    ap.add_argument("--repo", help="single owner/repo (File.repo key)")
+    ap.add_argument("--repos", help="comma-separated owner/repo list (rebuilds whole graph)")
+    ap.add_argument("--root", default=None, help="local checkout path (single-repo only)")
+    ap.add_argument("--clone", action="store_true", help="shallow-clone via GH_TOKEN")
     ap.add_argument("--branch", default="main")
     ap.add_argument("--db", default=DEFAULT_DB_PATH)
     args = ap.parse_args()
-    stats = run(args.repo, args.root, args.db, args.clone, args.branch)
-    print(f"[code-analyzer] {stats}", flush=True)
+    if args.repos:
+        repos = [r.strip() for r in args.repos.split(",") if r.strip()]
+        stats = run_many(repos, args.db, args.clone or not args.root, args.branch)
+        print(f"[code-analyzer] {stats}", flush=True)
+    elif args.repo:
+        stats = run(args.repo, args.root, args.db, args.clone, args.branch)
+        print(f"[code-analyzer] {stats}", flush=True)
+    else:
+        ap.error("one of --repo or --repos is required")
 
 
 if __name__ == "__main__":

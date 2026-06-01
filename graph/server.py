@@ -25,6 +25,28 @@ sys.path.insert(0, str(Path(__file__).parent))
 GRAPH_PATH = os.environ.get("TARS_GRAPH_PATH", "/data/graph.kuzu")
 PORT = int(os.environ.get("TARS_GRAPH_PORT", "8765"))
 
+def _open_ro(retries: int = 8, delay: float = 0.4):
+    """Open the Kuzu DB read-only, retrying briefly on lock contention.
+
+    A discovery/code-analysis writer holds an exclusive lock for short bursts;
+    we retry so a blast-radius read lands as soon as the writer releases,
+    instead of failing with available:false. Total wait ~3s by default.
+    """
+    import kuzu
+    last = None
+    for _ in range(retries):
+        try:
+            db = kuzu.Database(GRAPH_PATH, read_only=True)
+            return kuzu.Connection(db), db
+        except Exception as e:  # noqa: BLE001
+            last = e
+            if "lock" in str(e).lower():
+                time.sleep(delay)
+                continue
+            raise
+    raise last if last else RuntimeError("could not open graph")
+
+
 
 def query_callers(repo: str, file: str) -> dict:
     """Blast-radius via the deterministic code graph (File + IMPORTS/CALLS).
@@ -38,8 +60,7 @@ def query_callers(repo: str, file: str) -> dict:
         return {"available": False, "callers": [], "openPrs": [], "notes": f"kuzu not importable: {e}"}
 
     try:
-        db = kuzu.Database(GRAPH_PATH, read_only=True)
-        conn = kuzu.Connection(db)
+        conn, db = _open_ro()
     except Exception as e:
         return {
             "available": False,
@@ -99,9 +120,8 @@ def get_graph_stats() -> dict:
     try:
         import kuzu  # type: ignore
         if not Path(GRAPH_PATH).exists():
-            return {"nodes": 0, "edges": 0, "db_exists": False}
-        db = kuzu.Database(GRAPH_PATH, read_only=True)
-        conn = kuzu.Connection(db)
+            return {"nodes": 0, "edges": 0, "files": 0, "db_exists": False}
+        conn, db = _open_ro(retries=4, delay=0.3)
         nodes, edges = -1, -1
         try:
             res = conn.execute("MATCH (n:Entity) RETURN count(*)")
