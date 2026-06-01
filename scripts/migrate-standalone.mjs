@@ -8,8 +8,8 @@
  * output (/app/node_modules). The 'pg' npm package is NOT available — use 'postgres'.
  */
 
-import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -20,8 +20,7 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const MIGRATIONS_DIR =
-  process.env.MIGRATIONS_DIR ?? join(__dirname, "drizzle");
+const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? join(__dirname, "drizzle");
 
 async function applyMigrations() {
   let sql;
@@ -49,7 +48,9 @@ async function applyMigrations() {
         `[migrate] connection attempt ${attempt}/${MAX_RETRIES} failed — retrying in 5s: ${err.message}`
       );
       if (sql) {
-        try { await sql.end(); } catch {}
+        try {
+          await sql.end();
+        } catch {}
         sql = null;
       }
       await new Promise((r) => setTimeout(r, 5000));
