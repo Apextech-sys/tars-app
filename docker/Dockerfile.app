@@ -64,6 +64,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static       ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public             ./public
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle            ./drizzle
 
+# @workflow/world is a runtime peer dep of @workflow/world-postgres but is not
+# automatically traced by the Next.js standalone bundler (it is resolved via
+# ESM dynamic import inside world-postgres at request time). Copy it explicitly
+# so the server can resolve it from node_modules at runtime.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@workflow/world     ./node_modules/@workflow/world
+
 # Migration runner: standalone ESM script using the pg package already present
 # in the standalone output's node_modules.
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-standalone.mjs ./migrate.js
