@@ -78,10 +78,42 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrate-standalone.mjs ./
 COPY --from=builder --chown=nextjs:nodejs /app/docker/migrate-and-start.sh ./entrypoint.sh
 RUN chmod +x ./entrypoint.sh
 
-# Install @workflow/world-postgres + its runtime deps so the WDK can load
-# them at runtime. --ignore-scripts avoids running gyp/native build scripts
-# that aren't available in slim. These packages are pure-JS.
-RUN npm install --prefix /app --no-save --ignore-scripts     "@workflow/world@4.1.2"     "@workflow/world-postgres@4.1.2"     "@workflow/utils@4.1.2"     "@workflow/errors@4.1.2"   && chown -R nextjs:nodejs /app/node_modules
+# @workflow packages are resolved dynamically by the WDK runtime and are not
+# traced by Next.js standalone. Copy them directly from the pnpm virtual store
+# in the builder stage, preserving the flat resolved package contents (not the
+# symlinks). We copy the concrete package directories from inside the .pnpm
+# virtual store to avoid broken relative symlinks.
+#
+# Also copy zod (peer dep of @workflow/world) and other small runtime peers.
+# Most deps (drizzle-orm, pg, graphile-worker) are already in the pnpm store
+# from the builder and are accessible via direct copy.
+
+# @workflow packages: copy actual package content from .pnpm store
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/@workflow+world@4.1.2_zod@4.3.6/node_modules/@workflow/world      ./node_modules/@workflow/world
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/@workflow+world-postgres@4.1.2_@opentelemetry+api@1.9.0_@types+pg@8.20.0_kysely@0.28.17_postgres@3.4.9_typescript@5.9.3/node_modules/@workflow/world-postgres      ./node_modules/@workflow/world-postgres
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/@workflow+utils@4.1.2/node_modules/@workflow/utils      ./node_modules/@workflow/utils
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/@workflow+world-local@4.1.2_@opentelemetry+api@1.9.0/node_modules/@workflow/world-local      ./node_modules/@workflow/world-local
+
+# zod is a peer dep of @workflow/world (4.1.2 needs zod@4.3.6). Copy from pnpm store.
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/zod@4.3.6/node_modules/zod      ./node_modules/zod
+
+# @workflow/errors is a dep of world-postgres
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/@workflow+errors@4.1.2/node_modules/@workflow/errors      ./node_modules/@workflow/errors
+
+# ulid is a dep of @workflow/world
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/ulid@3.0.2/node_modules/ulid      ./node_modules/ulid
+
+# cbor-x is a dep of world-postgres (binary serialisation)
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/cbor-x@1.6.0/node_modules/cbor-x      ./node_modules/cbor-x
+
+# graphile-worker is a dep of world-postgres
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/graphile-worker@0.16.6_typescript@5.9.3/node_modules/graphile-worker      ./node_modules/graphile-worker
+
+# pg is needed by world-postgres and graphile-worker
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/pg@8.20.0/node_modules/pg      ./node_modules/pg
+
+# @vercel/queue is a dep of world-postgres
+COPY --from=builder --chown=nextjs:nodejs      /app/node_modules/.pnpm/@vercel+queue@0.1.7/node_modules/@vercel/queue      ./node_modules/@vercel/queue
 
 USER nextjs
 
