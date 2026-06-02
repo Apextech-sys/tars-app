@@ -22,21 +22,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+# Graphiti's DB (Entity / RelatesToNode_ stats only).
 GRAPH_PATH = os.environ.get("TARS_GRAPH_PATH", "/data/graph.kuzu")
+# Dedicated code-graph DB (File / IMPORTS / CALLS) — SOLE-writer code analyzer,
+# separate from Graphiti so per-row incremental updates are stable. Blast-radius
+# reads come from HERE. Falls back to GRAPH_PATH for legacy shared deployments.
+CODE_GRAPH_PATH = os.environ.get("TARS_CODE_GRAPH_PATH", "/data/code-graph.kuzu")
 PORT = int(os.environ.get("TARS_GRAPH_PORT", "8765"))
 
-def _open_ro(retries: int = 8, delay: float = 0.4):
-    """Open the Kuzu DB read-only, retrying briefly on lock contention.
+def _open_ro(path: str = CODE_GRAPH_PATH, retries: int = 8, delay: float = 0.4):
+    """Open a Kuzu DB read-only, retrying briefly on lock contention.
 
-    A discovery/code-analysis writer holds an exclusive lock for short bursts;
-    we retry so a blast-radius read lands as soon as the writer releases,
-    instead of failing with available:false. Total wait ~3s by default.
+    A writer holds an exclusive lock for short bursts; we retry so a read lands
+    as soon as the writer releases, instead of failing. Total wait ~3s default.
+    Defaults to the code-graph DB (the blast-radius source).
     """
     import kuzu
     last = None
     for _ in range(retries):
         try:
-            db = kuzu.Database(GRAPH_PATH, read_only=True)
+            db = kuzu.Database(path, read_only=True)
             return kuzu.Connection(db), db
         except Exception as e:  # noqa: BLE001
             last = e
@@ -117,34 +122,59 @@ def query_callers(repo: str, file: str) -> dict:
 
 
 def get_graph_stats() -> dict:
+    """Health stats: Entity/edge counts from Graphiti's DB; File/IMPORTS counts
+    from the dedicated code-graph DB. Each opened independently and soft-fails."""
     try:
         import kuzu  # type: ignore
-        if not Path(GRAPH_PATH).exists():
-            return {"nodes": 0, "edges": 0, "files": 0, "db_exists": False}
-        conn, db = _open_ro(retries=4, delay=0.3)
-        nodes, edges = -1, -1
-        try:
-            res = conn.execute("MATCH (n:Entity) RETURN count(*)")
-            if res.has_next():
-                nodes = res.get_next()[0] or 0
-        except Exception:
-            pass
-        try:
-            res = conn.execute("MATCH (r:RelatesToNode_) RETURN count(*)")
-            if res.has_next():
-                edges = res.get_next()[0] or 0
-        except Exception:
-            pass
-        files = -1
-        try:
-            res = conn.execute("MATCH (f:File) RETURN count(*)")
-            if res.has_next():
-                files = res.get_next()[0] or 0
-        except Exception:
-            files = -1
-        return {"nodes": nodes, "edges": edges, "files": files, "db_exists": True}
     except Exception as e:
-        return {"nodes": -1, "edges": -1, "db_exists": Path(GRAPH_PATH).exists(), "error": str(e)}
+        return {"nodes": -1, "edges": -1, "files": -1, "db_exists": False, "error": str(e)}
+
+    nodes, edges, files, imports = -1, -1, -1, -1
+    graphiti_exists = Path(GRAPH_PATH).exists()
+    code_exists = Path(CODE_GRAPH_PATH).exists()
+
+    # Graphiti DB — Entity nodes + RelatesToNode_ edges
+    if graphiti_exists:
+        try:
+            conn, db = _open_ro(GRAPH_PATH, retries=4, delay=0.3)
+            try:
+                res = conn.execute("MATCH (n:Entity) RETURN count(*)")
+                if res.has_next():
+                    nodes = res.get_next()[0] or 0
+            except Exception:
+                pass
+            try:
+                res = conn.execute("MATCH (r:RelatesToNode_) RETURN count(*)")
+                if res.has_next():
+                    edges = res.get_next()[0] or 0
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    # Code-graph DB — File nodes + IMPORTS edges
+    if code_exists:
+        try:
+            conn, db = _open_ro(CODE_GRAPH_PATH, retries=4, delay=0.3)
+            try:
+                res = conn.execute("MATCH (f:File) RETURN count(*)")
+                if res.has_next():
+                    files = res.get_next()[0] or 0
+            except Exception:
+                files = -1
+            try:
+                res = conn.execute("MATCH (:File)-[i:IMPORTS]->() RETURN count(i)")
+                if res.has_next():
+                    imports = res.get_next()[0] or 0
+            except Exception:
+                imports = -1
+        except Exception:
+            pass
+
+    return {
+        "nodes": nodes, "edges": edges, "files": files, "imports": imports,
+        "db_exists": graphiti_exists, "code_graph_exists": code_exists,
+    }
 
 
 class GraphHandler(BaseHTTPRequestHandler):
@@ -167,10 +197,13 @@ class GraphHandler(BaseHTTPRequestHandler):
             self.send_json(200, {
                 "status": "ok",
                 "graph_path": GRAPH_PATH,
+                "code_graph_path": CODE_GRAPH_PATH,
                 "db_exists": stats.get("db_exists", False),
+                "code_graph_exists": stats.get("code_graph_exists", False),
                 "nodes": stats.get("nodes", -1),
                 "edges": stats.get("edges", -1),
                 "files": stats.get("files", -1),
+                "imports": stats.get("imports", -1),
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
         else:
@@ -198,9 +231,11 @@ class GraphHandler(BaseHTTPRequestHandler):
 
 def main() -> None:
     print(f"[tars-graph] Starting HTTP API on port {PORT}", flush=True)
-    print(f"[tars-graph] Kuzu DB path: {GRAPH_PATH}", flush=True)
+    print(f"[tars-graph] Graphiti DB: {GRAPH_PATH}", flush=True)
+    print(f"[tars-graph] Code-graph DB: {CODE_GRAPH_PATH}", flush=True)
     stats = get_graph_stats()
-    print(f"[tars-graph] DB exists: {stats['db_exists']}, nodes: {stats['nodes']}, edges: {stats['edges']}", flush=True)
+    print(f"[tars-graph] nodes: {stats['nodes']}, edges: {stats['edges']}, "
+          f"files: {stats['files']}, imports: {stats['imports']}", flush=True)
     server = HTTPServer(("0.0.0.0", PORT), GraphHandler)
     print(f"[tars-graph] Listening on 0.0.0.0:{PORT}", flush=True)
     server.serve_forever()

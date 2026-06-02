@@ -53,6 +53,8 @@ ENV TARS_GRAPH_PATH=/data/graph.kuzu \
     TARS_LOG_PATH=/data/discovery.log \
     TARS_DATA_DIR=/data \
     TARS_GRAPH_PORT=8765 \
+    TARS_CODE_GRAPH_PATH=/data/code-graph.kuzu \
+    TARS_CODE_STATE_PATH=/data/code-graph.state.json \
     GRAPHITI_TELEMETRY_ENABLED=false \
     PYTHONUNBUFFERED=1
 

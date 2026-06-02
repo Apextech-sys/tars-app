@@ -57,16 +57,19 @@ def _run_module(module: str, extra_args: list[str] | None = None, timeout: int =
 
 def fast_cycle() -> None:
     _log("fast cycle start (code-analysis + knowledge + github)")
-    # 1) Code analysis FIRST — LLM-free, short write lock. Single invocation
-    #    rebuilds the whole code graph (DROP + recreate) so blast-radius is
-    #    fresh and readable within seconds of the cycle starting.
+    # 1) Code analysis FIRST — LLM-free, short write lock. INCREMENTAL update:
+    #    diffs each repo's last-analyzed commit -> HEAD and re-parses only the
+    #    changed files (seconds), instead of a full DROP+recreate every run.
+    #    First run (no baseline) full-parses once, then subsequent runs diff.
+    #    Writes the dedicated code-graph.kuzu (sole writer) so per-row updates
+    #    are safe across process restarts.
     repos = os.environ.get(
         "TARS_CODE_REPOS", "Apextech-sys/tars-app,Apextech-sys/reflex-connect"
     )
     if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
         _run_module(
             "tars_graph.code_analyzer",
-            ["--repos", repos, "--clone", "--branch", "main"],
+            ["update", "--repos", repos, "--clone", "--branch", "main"],
             timeout=900,
         )
     else:

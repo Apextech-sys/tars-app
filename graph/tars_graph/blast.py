@@ -27,7 +27,14 @@ import json
 import sys
 import os
 
-GRAPH_PATH = os.environ.get("TARS_GRAPH_PATH", "/data/graph.kuzu")
+# Blast-radius queries the dedicated code-graph DB (File + IMPORTS/CALLS),
+# which is the SOLE-writer code-analyzer DB — separate from Graphiti's
+# graph.kuzu. Falls back to TARS_GRAPH_PATH only if the code-graph path is
+# unset (legacy shared-DB deployments).
+GRAPH_PATH = os.environ.get(
+    "TARS_CODE_GRAPH_PATH",
+    os.environ.get("TARS_GRAPH_PATH", "/data/code-graph.kuzu"),
+)
 
 
 def query_callers(repo: str, file: str) -> dict:
