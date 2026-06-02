@@ -75,11 +75,15 @@ async def run_github_discovery() -> None:
 
 
 async def run_code_analysis() -> None:
-    """Build the deterministic code graph (File + IMPORTS) for tracked repos.
+    """Build/refresh the deterministic code graph (File + IMPORTS) for tracked
+    repos in the DEDICATED code-graph DB.
 
     LLM-free: tree-sitter import-graph only, no embeddings, no OpenAI cost.
-    Repos come from TARS_CODE_REPOS (comma-separated owner/repo), default the
-    repos that matter for blast-radius. Each repo is shallow-cloned via GH_TOKEN.
+    Uses the INCREMENTAL `update_many` entrypoint: on first run (no state) it
+    full-parses once and records a baseline; subsequent runs diff each repo's
+    last-analyzed commit -> HEAD and touch only changed files. Writes the
+    dedicated code-graph.kuzu (sole writer), never Graphiti's graph.kuzu.
+    Repos come from TARS_CODE_REPOS (comma-separated owner/repo).
     """
     if os.environ.get("TARS_SKIP_CODE_ANALYSIS", "0") == "1":
         print("[ingest] TARS_SKIP_CODE_ANALYSIS=1, skipping code analysis", flush=True)
@@ -92,13 +96,13 @@ async def run_code_analysis() -> None:
         "Apextech-sys/tars-app,Apextech-sys/reflex-connect",
     )
     repos = [r.strip() for r in repos_env.split(",") if r.strip()]
-    from tars_graph.code_analyzer import run_many
-    print(f"[ingest] running code analysis for {len(repos)} repo(s) ...", flush=True)
+    from tars_graph.code_analyzer import update_many, DEFAULT_DB_PATH
+    print(f"[ingest] running code analysis (incremental) for {len(repos)} repo(s) ...", flush=True)
     try:
-        stats = run_many(repos, db_path=str(DATA_DIR / "graph.kuzu"), clone=True, branch="main")
+        stats = update_many(repos, db_path=DEFAULT_DB_PATH, clone=True, branch="main")
         for repo, s in stats.get("repos", {}).items():
             print(f"[ingest] code analysis {repo}: {s}", flush=True)
-        print(f"[ingest] code analysis totals: files={stats['files']} imports={stats['imports']} ({stats['elapsed_s']}s)", flush=True)
+        print(f"[ingest] code analysis done ({stats.get('elapsed_s')}s)", flush=True)
     except Exception as e:
         print(f"[ingest] code analysis failed: {e}", flush=True)
     print("[ingest] code analysis complete", flush=True)
