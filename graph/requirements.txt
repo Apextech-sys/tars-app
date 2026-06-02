@@ -11,3 +11,6 @@ anyio==4.13.0
 # Code-understanding layer (Phase 1) — tree-sitter import-graph analyzer (LLM-free)
 tree-sitter==0.25.2
 tree-sitter-language-pack==1.8.1
+
+# AWS read-only connector (Phase 1) — resource inventory + cost
+boto3>=1.34

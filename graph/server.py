@@ -215,6 +215,70 @@ def docs_for_file(repo: str, file: str) -> dict:
     return {"available": True, "file": file, "docs": docs, "notes": ""}
 
 
+def list_aws_resources() -> dict:
+    """AWS resources discovered into the code-graph (account 140138661997 scope)."""
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:
+        return {"available": False, "resources": [], "notes": f"graph open soft-fail: {e}"}
+    out: list[dict] = []
+    try:
+        res = conn.execute(
+            "MATCH (x:AwsResource) RETURN x.arn, x.service, x.restype, x.region, "
+            "x.stage, x.app, x.name ORDER BY x.service, x.name LIMIT 2000")
+        while res.has_next():
+            row = res.get_next()
+            out.append({"arn": row[0], "service": row[1], "type": row[2],
+                        "region": row[3], "stage": row[4], "app": row[5], "name": row[6]})
+    except Exception as e:
+        return {"available": True, "resources": [], "notes": f"aws not ingested yet: {e}"}
+    return {"available": True, "count": len(out), "resources": out, "notes": ""}
+
+
+def list_aws_accounts() -> dict:
+    """AWS accounts TARS can see + resource counts per account."""
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:
+        return {"available": False, "accounts": [], "notes": f"graph open soft-fail: {e}"}
+    out: list[dict] = []
+    try:
+        res = conn.execute(
+            "MATCH (a:AwsAccount) OPTIONAL MATCH (r:AwsResource)-[:RESOURCE_IN_ACCOUNT]->(a) "
+            "RETURN a.account_id, a.alias, count(DISTINCT r) ORDER BY a.account_id")
+        while res.has_next():
+            row = res.get_next()
+            out.append({"accountId": row[0], "alias": row[1], "resourceCount": row[2] or 0})
+    except Exception as e:
+        return {"available": True, "accounts": [], "notes": f"aws not ingested yet: {e}"}
+    return {"available": True, "accounts": out, "notes": ""}
+
+
+def aws_cost() -> dict:
+    """Month-to-date AWS cost by service (descending) + total."""
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:
+        return {"available": False, "services": [], "notes": f"graph open soft-fail: {e}"}
+    services: list[dict] = []
+    total = 0.0
+    period = {"start": "", "end": ""}
+    try:
+        res = conn.execute(
+            "MATCH (c:AwsCost) RETURN c.service, c.amount, c.currency, c.period_start, "
+            "c.period_end ORDER BY c.amount DESC")
+        while res.has_next():
+            row = res.get_next()
+            amt = float(row[1] or 0)
+            services.append({"service": row[0], "amount": round(amt, 2), "currency": row[2]})
+            total += amt
+            period = {"start": row[3], "end": row[4]}
+    except Exception as e:
+        return {"available": True, "services": [], "notes": f"aws cost not ingested yet: {e}"}
+    return {"available": True, "currency": "USD", "total": round(total, 2),
+            "period": period, "services": services, "notes": ""}
+
+
 def get_graph_stats() -> dict:
     """Health stats: Entity/edge counts from Graphiti's DB; File/IMPORTS counts
     from the dedicated code-graph DB. Each opened independently and soft-fails."""
@@ -319,6 +383,12 @@ class GraphHandler(BaseHTTPRequestHandler):
                 self.send_json(400, {"error": "id query param required"})
                 return
             self.send_json(200, get_doc(nid))
+        elif route == "/aws/resources":
+            self.send_json(200, list_aws_resources())
+        elif route == "/aws/accounts":
+            self.send_json(200, list_aws_accounts())
+        elif route == "/aws/cost":
+            self.send_json(200, aws_cost())
         else:
             self.send_json(404, {"error": "not found"})
 

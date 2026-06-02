@@ -91,12 +91,13 @@ def fast_cycle() -> None:
 
 
 def slow_cycle() -> None:
-    _log("slow cycle start (linear/vercel/supabase/slack)")
+    _log("slow cycle start (linear/vercel/supabase/slack/aws)")
     for mod, env_needed in (
         ("tars_graph.linear_discovery", "LINEAR_API_KEY"),
         ("tars_graph.vercel_discovery", "VERCEL_API_TOKEN"),
         ("tars_graph.supabase_discovery", "SUPABASE_ACCESS_TOKEN"),
         ("tars_graph.slack_discovery", "SLACK_BOT_TOKEN"),
+        ("tars_graph.aws_discovery", "AWS_ACCESS_KEY_ID"),
     ):
         if os.environ.get(env_needed) or (
             mod.endswith("slack_discovery") and os.environ.get("SLACK_USER_TOKEN")
