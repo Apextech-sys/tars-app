@@ -76,6 +76,13 @@ def fast_cycle() -> None:
         _log("code analysis skipped (no GH token)")
     # 2) Knowledge ingestion — fast, hash-guarded (skips when yamls unchanged).
     _run_module("tars_graph.knowledge_ingestion")
+    # 2b) Notion ingestion — INCREMENTAL: lists pages, (re)ingests only those
+    #     whose last_edited_time changed, removes deleted. A no-change run is a
+    #     cheap list-only no-op. Skipped entirely when NOTION_API_KEY is absent.
+    if os.environ.get("NOTION_API_KEY"):
+        _run_module("tars_graph.notion_ingestion", timeout=600)
+    else:
+        _log("notion ingestion skipped (NOTION_API_KEY not set)")
     # 3) GitHub discovery LAST — the slow writer; runs after the code graph is
     #    already fresh so a long discovery write doesn't delay blast-radius.
     if os.environ.get("TARS_SKIP_GITHUB", "0") != "1":

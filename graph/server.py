@@ -121,6 +121,100 @@ def query_callers(repo: str, file: str) -> dict:
     return {"available": True, "callers": callers, "openPrs": [], "notes": note}
 
 
+def list_docs() -> dict:
+    """All ingested Notion docs + per-doc link counts (files/tickets/repos).
+    Reads the code-graph DB (where Doc nodes live)."""
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:
+        return {"available": False, "docs": [], "notes": f"graph open soft-fail: {e}"}
+    docs: list[dict] = []
+    try:
+        res = conn.execute(
+            "MATCH (d:Doc) "
+            "OPTIONAL MATCH (d)-[:MENTIONS_FILE]->(f:File) "
+            "OPTIONAL MATCH (d)-[:MENTIONS_TICKET]->(t:Ticket) "
+            "OPTIONAL MATCH (d)-[:MENTIONS_REPO]->(r:DocRepo) "
+            "RETURN d.notion_id, d.title, d.url, d.last_edited, d.ingested_at, "
+            "count(DISTINCT f), count(DISTINCT t), count(DISTINCT r) "
+            "ORDER BY d.ingested_at DESC LIMIT 500"
+        )
+        while res.has_next():
+            row = res.get_next()
+            docs.append({
+                "notionId": row[0], "title": row[1], "url": row[2],
+                "lastEdited": row[3], "ingestedAt": row[4],
+                "fileCount": row[5] or 0, "ticketCount": row[6] or 0,
+                "repoCount": row[7] or 0,
+            })
+    except Exception as e:
+        return {"available": True, "docs": [], "notes": f"docs not ingested yet: {e}"}
+    return {"available": True, "docs": docs, "notes": ""}
+
+
+def get_doc(notion_id: str) -> dict:
+    """One doc + its linked code files, tickets, and repos."""
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:
+        return {"available": False, "notes": f"graph open soft-fail: {e}"}
+    doc_id = f"notion::{notion_id}"
+    try:
+        head = conn.execute(
+            "MATCH (d:Doc {id:$id}) RETURN d.notion_id, d.title, d.url, "
+            "d.last_edited, d.ingested_at", {"id": doc_id})
+        if not head.has_next():
+            return {"available": True, "found": False, "notes": "doc not found"}
+        h = head.get_next()
+        doc = {"notionId": h[0], "title": h[1], "url": h[2],
+               "lastEdited": h[3], "ingestedAt": h[4]}
+        files, tickets, repos = [], [], []
+        rf = conn.execute(
+            "MATCH (d:Doc {id:$id})-[:MENTIONS_FILE]->(f:File) "
+            "RETURN f.repo, f.path ORDER BY f.path", {"id": doc_id})
+        while rf.has_next():
+            row = rf.get_next()
+            files.append({"repo": row[0], "path": row[1]})
+        rt = conn.execute(
+            "MATCH (d:Doc {id:$id})-[:MENTIONS_TICKET]->(t:Ticket) "
+            "RETURN t.identifier, t.team, t.title, t.url ORDER BY t.identifier",
+            {"id": doc_id})
+        while rt.has_next():
+            row = rt.get_next()
+            tickets.append({"identifier": row[0], "team": row[1],
+                            "title": row[2], "url": row[3]})
+        rr = conn.execute(
+            "MATCH (d:Doc {id:$id})-[:MENTIONS_REPO]->(r:DocRepo) "
+            "RETURN r.full_name, r.url ORDER BY r.full_name", {"id": doc_id})
+        while rr.has_next():
+            row = rr.get_next()
+            repos.append({"fullName": row[0], "url": row[1]})
+        return {"available": True, "found": True, "doc": doc,
+                "files": files, "tickets": tickets, "repos": repos}
+    except Exception as e:
+        return {"available": True, "found": False, "notes": f"query soft-fail: {e}"}
+
+
+def docs_for_file(repo: str, file: str) -> dict:
+    """Docs that explicitly mention a given code file (reverse of get_doc)."""
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:
+        return {"available": False, "docs": [], "notes": f"graph open soft-fail: {e}"}
+    fid = f"{repo}::{file}"
+    docs: list[dict] = []
+    try:
+        res = conn.execute(
+            "MATCH (d:Doc)-[:MENTIONS_FILE]->(f:File {id:$f}) "
+            "RETURN d.notion_id, d.title, d.url ORDER BY d.title", {"f": fid})
+        while res.has_next():
+            row = res.get_next()
+            docs.append({"notionId": row[0], "title": row[1], "url": row[2]})
+    except Exception as e:
+        return {"available": True, "docs": [], "notes": f"docs not ingested yet: {e}"}
+    return {"available": True, "file": file, "docs": docs, "notes": ""}
+
+
 def get_graph_stats() -> dict:
     """Health stats: Entity/edge counts from Graphiti's DB; File/IMPORTS counts
     from the dedicated code-graph DB. Each opened independently and soft-fails."""
@@ -192,8 +286,17 @@ class GraphHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path == "/health":
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        route = parsed.path
+        if route == "/health":
             stats = get_graph_stats()
+            docs_count = -1
+            try:
+                dl = list_docs()
+                docs_count = len(dl.get("docs", [])) if dl.get("available") else -1
+            except Exception:
+                pass
             self.send_json(200, {
                 "status": "ok",
                 "graph_path": GRAPH_PATH,
@@ -204,8 +307,18 @@ class GraphHandler(BaseHTTPRequestHandler):
                 "edges": stats.get("edges", -1),
                 "files": stats.get("files", -1),
                 "imports": stats.get("imports", -1),
+                "docs": docs_count,
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             })
+        elif route == "/docs":
+            self.send_json(200, list_docs())
+        elif route == "/doc":
+            qs = parse_qs(parsed.query)
+            nid = (qs.get("id") or [""])[0]
+            if not nid:
+                self.send_json(400, {"error": "id query param required"})
+                return
+            self.send_json(200, get_doc(nid))
         else:
             self.send_json(404, {"error": "not found"})
 
@@ -223,6 +336,18 @@ class GraphHandler(BaseHTTPRequestHandler):
                 result = query_callers(repo, file)
                 result["file"] = file
                 self.send_json(200, result)
+            except Exception as e:
+                self.send_json(500, {"error": str(e)})
+        elif self.path == "/file-docs":
+            try:
+                length = int(self.headers.get("Content-Length", 0))
+                data = json.loads(self.rfile.read(length))
+                repo = data.get("repo", "")
+                file = data.get("file", "")
+                if not repo or not file:
+                    self.send_json(400, {"error": "repo and file are required"})
+                    return
+                self.send_json(200, docs_for_file(repo, file))
             except Exception as e:
                 self.send_json(500, {"error": str(e)})
         else:
