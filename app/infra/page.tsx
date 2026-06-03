@@ -26,8 +26,6 @@ export default async function InfraPage() {
     );
   }
 
-  const acct = infra.accounts[0];
-
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -36,8 +34,9 @@ export default async function InfraPage() {
             <Cloud className="size-5 text-[#00d4a0]" /> Infrastructure
           </h1>
           <p className="text-muted-foreground text-sm">
-            AWS read-only · account {acct?.accountId ?? "—"} (dev + staging).
-            Prod is a separate account — not yet connected.
+            AWS read-only · {infra.accounts.length} account
+            {infra.accounts.length === 1 ? "" : "s"} across the org · dev,
+            staging &amp; production
           </p>
         </div>
         <span className="rounded-full border border-[#00d4a0]/30 bg-[#00d4a0]/10 px-3 py-1 text-[#00d4a0] text-sm">
@@ -83,6 +82,23 @@ export default async function InfraPage() {
           </a>
         </div>
       </div>
+
+      <section>
+        <h2 className="mb-2 font-medium text-sm">Accounts</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {infra.accounts.map((a) => (
+            <div className="rounded-xl border bg-card p-4" key={a.accountId}>
+              <div className="font-medium text-sm">
+                {a.alias || a.accountId}
+              </div>
+              <div className="text-muted-foreground text-xs">{a.accountId}</div>
+              <div className="mt-1 font-semibold text-lg">
+                {a.resourceCount} resources
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <div className="flex flex-wrap gap-2">
         {infra.byStage.map((s) => (
