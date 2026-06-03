@@ -246,7 +246,7 @@ def temporal_workflows() -> dict:
 
     async def fetch(client):
         out = []
-        async for w in client.list_workflows(query="ORDER BY StartTime DESC"):
+        async for w in client.list_workflows():
             out.append({
                 "id": w.id, "runId": w.run_id, "type": w.workflow_type,
                 "status": (w.status.name if w.status else ""),
