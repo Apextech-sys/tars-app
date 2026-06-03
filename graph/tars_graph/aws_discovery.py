@@ -1,39 +1,41 @@
 """
-TARS AWS read-only discovery worker.
+TARS AWS read-only discovery worker — MULTI-ACCOUNT.
 
 INCREMENTAL by design (see memory `graph-updates-must-be-incremental`): each run
-lists the CURRENT tagged-resource set (per region) + current-period cost-by-service
-and reconciles the graph (adds new, removes vanished). The graph IS the state —
-no separate state file. New resources get their account/repo edges; existing ones
-only have properties refreshed (so edges are never duplicated); vanished ones are
-deleted with their edges.
+lists the CURRENT tagged-resource set + current-period cost-by-service PER ACCOUNT
+and reconciles the graph (adds new, removes vanished) scoped to that account. The
+graph IS the state — no separate state file. New resources get their account/repo
+edges; existing ones only refresh properties (no duplicate edges); vanished ones
+are deleted with their edges.
 
-READ-ONLY: uses the dedicated `tars-readonly` IAM creds (ReadOnlyAccess managed
-policy). Never writes to AWS. Scope = whatever the creds can see — currently
-account 140138661997 (dev + staging SST stages). Prod (156460612806) is a
-separate account; cross-account read is not yet wired (see task #123) so it is
-simply absent here, not faked.
+READ-ONLY: each account is read via a dedicated `tars-readonly` IAM user
+(ReadOnlyAccess). Never writes to AWS. Accounts (org o-xm11h9g5so):
+  - default creds (AWS_ACCESS_KEY_ID)        -> 140138661997 Apextech (dev+staging)
+  - prod creds   (AWS_PROD_ACCESS_KEY_ID)    -> 781133583483 Konverge Production
+Add more accounts by adding AWS_<LABEL>_ACCESS_KEY_ID / _SECRET_ACCESS_KEY pairs
+to TARS_AWS_EXTRA_LABELS.
 
-STORAGE: the dedicated code-graph.kuzu (same DB as File / IMPORTS / Doc) so AWS
-infra links deterministically to code — an AwsResource tagged `sst:app=<x>` links
-to the mapped repo (DocRepo). No OpenAI / embeddings — deterministic facts only.
+STORAGE: dedicated code-graph.kuzu (same DB as File/IMPORTS/Doc) so AWS infra links
+deterministically to code — an AwsResource tagged `sst:app=<x>` links to the mapped
+repo (DocRepo). No OpenAI / embeddings — deterministic facts only.
 
-  Node  AwsAccount(id, account_id, alias, ingested_at)                  PK id (=aws::<acct>)
-  Node  AwsResource(id, arn, service, restype, region, stage, app,
-                    name, ingested_at)                                  PK id (=arn)
-  Node  AwsCost(id, account_id, service, amount, currency,
-                period_start, period_end, ingested_at)                  PK id
-  Rel   RESOURCE_IN_ACCOUNT(AwsResource -> AwsAccount)
-  Rel   RESOURCE_FOR_REPO(AwsResource -> DocRepo)     via the sst:app tag
+  Node AwsAccount(id, account_id, alias, ingested_at)                       PK id (=aws::<acct>)
+  Node AwsResource(id, arn, account_id, service, restype, region, stage,
+                   app, name, ingested_at)                                  PK id (=arn)
+  Node AwsCost(id, account_id, service, amount, currency,
+               period_start, period_end, ingested_at)                       PK id
+  Rel  RESOURCE_IN_ACCOUNT(AwsResource -> AwsAccount)
+  Rel  RESOURCE_FOR_REPO(AwsResource -> DocRepo)   via the sst:app tag
 
 Env:
-  AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION   (required)
-  TARS_AWS_REGIONS      comma list of regions to scan (default eu-west-1,us-east-1)
-  TARS_AWS_APP_REPOS    "app=owner/repo,..." map sst:app -> repo
-                        (default reflex-connect=Apextech-Dev/reflex-connect-v2)
-  TARS_CODE_GRAPH_PATH  default /data/code-graph.kuzu
+  AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_DEFAULT_REGION   (required, acct1)
+  AWS_PROD_ACCESS_KEY_ID / AWS_PROD_SECRET_ACCESS_KEY              (optional, prod)
+  TARS_AWS_EXTRA_LABELS   comma list of extra creds labels (each AWS_<LABEL>_ACCESS_KEY_ID/_SECRET_ACCESS_KEY)
+  TARS_AWS_REGIONS        regions to scan (default eu-west-1,us-east-1)
+  TARS_AWS_APP_REPOS      "app=owner/repo,..." (default reflex-connect=Apextech-Dev/reflex-connect-v2)
+  TARS_CODE_GRAPH_PATH    default /data/code-graph.kuzu
 
-Run:  python3 -m tars_graph.aws_discovery   (skips cleanly if AWS creds absent)
+Run:  python3 -m tars_graph.aws_discovery   (skips cleanly if no AWS creds)
 """
 from __future__ import annotations
 
@@ -41,11 +43,12 @@ import json
 import os
 import sys
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 DEFAULT_DB_PATH = os.environ.get("TARS_CODE_GRAPH_PATH", "/data/code-graph.kuzu")
 REGIONS = [r.strip() for r in os.environ.get(
     "TARS_AWS_REGIONS", "eu-west-1,us-east-1").split(",") if r.strip()]
+DEFAULT_REGION = os.environ.get("AWS_DEFAULT_REGION", "eu-west-1")
 
 DDL = [
     ("AwsAccount",
@@ -54,8 +57,8 @@ DDL = [
      "PRIMARY KEY (id))"),
     ("AwsResource",
      "CREATE NODE TABLE IF NOT EXISTS AwsResource("
-     "id STRING, arn STRING, service STRING, restype STRING, region STRING, "
-     "stage STRING, app STRING, name STRING, ingested_at STRING, "
+     "id STRING, arn STRING, account_id STRING, service STRING, restype STRING, "
+     "region STRING, stage STRING, app STRING, name STRING, ingested_at STRING, "
      "PRIMARY KEY (id))"),
     ("AwsCost",
      "CREATE NODE TABLE IF NOT EXISTS AwsCost("
@@ -70,8 +73,6 @@ DDL = [
 
 
 def ensure_schema(conn) -> None:
-    # DocRepo is the FK target for RESOURCE_FOR_REPO; ensure it exists even if
-    # Notion ingestion has never run (idempotent — identical DDL to notion).
     conn.execute(
         "CREATE NODE TABLE IF NOT EXISTS DocRepo("
         "id STRING, full_name STRING, url STRING, PRIMARY KEY (id))")
@@ -94,8 +95,7 @@ def _app_repo_map() -> dict:
     return out
 
 
-def _arn_parts(arn: str) -> tuple[str, str, str, str]:
-    """arn:partition:service:region:account:resourcetype/id (or :id)."""
+def _arn_parts(arn: str) -> tuple[str, str, str]:
     p = arn.split(":", 5)
     service = p[2] if len(p) > 2 else ""
     region = p[3] if len(p) > 3 else ""
@@ -104,14 +104,33 @@ def _arn_parts(arn: str) -> tuple[str, str, str, str]:
     return service, region, restype
 
 
-# ---- AWS reads (boto3) ------------------------------------------------------
-
-def discover_resources(regions: list[str]) -> dict:
-    """arn -> {'tags': {...}, 'region': r}  across all scanned regions."""
+def _sessions() -> list:
+    """Build (label, boto3.Session) per configured account."""
     import boto3
+    out = []
+    if os.environ.get("AWS_ACCESS_KEY_ID"):
+        out.append(("default", boto3.Session()))
+    extra = [("PROD", "prod")]
+    for label in os.environ.get("TARS_AWS_EXTRA_LABELS", "").split(","):
+        label = label.strip()
+        if label:
+            extra.append((label.upper(), label.lower()))
+    for envlabel, name in extra:
+        ak = os.environ.get(f"AWS_{envlabel}_ACCESS_KEY_ID")
+        sk = os.environ.get(f"AWS_{envlabel}_SECRET_ACCESS_KEY")
+        if ak and sk:
+            out.append((name, boto3.Session(
+                aws_access_key_id=ak, aws_secret_access_key=sk,
+                region_name=DEFAULT_REGION)))
+    return out
+
+
+# ---- AWS reads (per session) -----------------------------------------------
+
+def discover_resources(session, regions: list[str]) -> dict:
     out: dict = {}
     for region in regions:
-        client = boto3.client("resourcegroupstaggingapi", region_name=region)
+        client = session.client("resourcegroupstaggingapi", region_name=region)
         token = None
         while True:
             kw = {"ResourcesPerPage": 100}
@@ -128,11 +147,8 @@ def discover_resources(regions: list[str]) -> dict:
     return out
 
 
-def cost_by_service() -> list[dict]:
-    """Month-to-date cost by service (UnblendedCost). On the 1st of the month,
-    falls back to the previous full month so there is always a result."""
-    import boto3
-    ce = boto3.client("ce", region_name="us-east-1")
+def cost_by_service(session) -> list[dict]:
+    ce = session.client("ce", region_name="us-east-1")
     now = datetime.now(timezone.utc)
     first = now.replace(day=1)
     if now.day == 1:
@@ -187,13 +203,14 @@ def _upsert_account(conn, account_id: str, alias: str, ts: str) -> str:
 def _upsert_resource(conn, rec: dict, exists: bool) -> None:
     if exists:
         conn.execute(
-            "MATCH (r:AwsResource {id:$id}) SET r.service=$service, r.restype=$restype, "
-            "r.region=$region, r.stage=$stage, r.app=$app, r.name=$name, r.ingested_at=$ts",
-            rec)
+            "MATCH (r:AwsResource {id:$id}) SET r.account_id=$account_id, r.service=$service, "
+            "r.restype=$restype, r.region=$region, r.stage=$stage, r.app=$app, "
+            "r.name=$name, r.ingested_at=$ts", rec)
     else:
         conn.execute(
-            "CREATE (r:AwsResource {id:$id, arn:$arn, service:$service, restype:$restype, "
-            "region:$region, stage:$stage, app:$app, name:$name, ingested_at:$ts})", rec)
+            "CREATE (r:AwsResource {id:$id, arn:$arn, account_id:$account_id, service:$service, "
+            "restype:$restype, region:$region, stage:$stage, app:$app, name:$name, "
+            "ingested_at:$ts})", rec)
 
 
 def _merge_docrepo(conn, full_name: str) -> None:
@@ -216,45 +233,24 @@ def _link_repo(conn, rid: str, repo_id: str) -> None:
         "CREATE (r)-[:RESOURCE_FOR_REPO]->(d)", {"r": rid, "d": repo_id})
 
 
-# ---- main ingest ------------------------------------------------------------
-
-def ingest(db_path: str = DEFAULT_DB_PATH) -> dict:
-    import kuzu
-    started = time.time()
-    ts = _now()
-
-    import boto3
-    account_id = boto3.client("sts").get_caller_identity()["Account"]
+def _ingest_account(conn, label: str, session, app_map: dict, ts: str) -> dict:
+    account_id = session.client("sts").get_caller_identity()["Account"]
     try:
-        alias = (boto3.client("iam").list_account_aliases().get("AccountAliases") or [""])[0]
+        alias = (session.client("iam").list_account_aliases()
+                 .get("AccountAliases") or [""])[0]
     except Exception:
         alias = ""
-
-    resources = discover_resources(REGIONS)
+    resources = discover_resources(session, REGIONS)
     try:
-        costs = cost_by_service()
+        costs = cost_by_service(session)
     except Exception as e:  # noqa: BLE001
         costs = []
-        print(f"[aws] cost read warn: {e}", file=sys.stderr, flush=True)
+        print(f"[aws:{label}] cost read warn: {e}", file=sys.stderr, flush=True)
 
-    app_map = _app_repo_map()
-
-    conn = db = None
-    for _ in range(15):
-        try:
-            db = kuzu.Database(db_path)
-            conn = kuzu.Connection(db)
-            break
-        except Exception as e:  # noqa: BLE001
-            if "lock" in str(e).lower():
-                time.sleep(1)
-                continue
-            raise
-    ensure_schema(conn)
     aid = _upsert_account(conn, account_id, alias, ts)
 
     prior: set = set()
-    r = conn.execute("MATCH (x:AwsResource) RETURN x.id")
+    r = conn.execute("MATCH (x:AwsResource {account_id:$a}) RETURN x.id", {"a": account_id})
     while r.has_next():
         prior.add(r.get_next()[0])
 
@@ -266,8 +262,8 @@ def ingest(db_path: str = DEFAULT_DB_PATH) -> dict:
         service, region, restype = _arn_parts(arn)
         region = region or meta["region"]
         rec = {
-            "id": arn, "arn": arn, "service": service, "restype": restype,
-            "region": region, "stage": tags.get("sst:stage", ""),
+            "id": arn, "arn": arn, "account_id": account_id, "service": service,
+            "restype": restype, "region": region, "stage": tags.get("sst:stage", ""),
             "app": tags.get("sst:app", ""),
             "name": tags.get("Name", "") or tags.get("sst:component", ""),
             "ts": ts,
@@ -288,7 +284,6 @@ def ingest(db_path: str = DEFAULT_DB_PATH) -> dict:
     for rid in removed:
         _delete_resource(conn, rid)
 
-    # cost: replace this account's snapshot wholesale (cheap, current-period only)
     conn.execute("MATCH (c:AwsCost {account_id:$a}) DELETE c", {"a": account_id})
     for row in costs:
         cid = f"awscost::{account_id}::{row['start']}::{row['service']}"
@@ -298,23 +293,50 @@ def ingest(db_path: str = DEFAULT_DB_PATH) -> dict:
             {"id": cid, "a": account_id, "s": row["service"], "amt": row["amount"],
              "cur": row["currency"], "ps": row["start"], "pe": row["end"], "ts": ts})
 
-    stats = {
-        "account": account_id, "alias": alias, "resources": len(current),
-        "new": new_count, "removed": len(removed), "repo_links": repo_links,
-        "cost_rows": len(costs), "regions": REGIONS,
-        "secs": round(time.time() - started, 1),
-    }
+    return {"label": label, "account": account_id, "alias": alias,
+            "resources": len(current), "new": new_count, "removed": len(removed),
+            "repo_links": repo_links, "cost_rows": len(costs)}
+
+
+def ingest(db_path: str = DEFAULT_DB_PATH) -> dict:
+    import kuzu
+    started = time.time()
+    ts = _now()
+    sessions = _sessions()
+    app_map = _app_repo_map()
+
+    conn = db = None
+    for _ in range(15):
+        try:
+            db = kuzu.Database(db_path)
+            conn = kuzu.Connection(db)
+            break
+        except Exception as e:  # noqa: BLE001
+            if "lock" in str(e).lower():
+                time.sleep(1)
+                continue
+            raise
+    ensure_schema(conn)
+
+    per_account = []
+    for label, sess in sessions:
+        try:
+            per_account.append(_ingest_account(conn, label, sess, app_map, ts))
+        except Exception as e:  # noqa: BLE001
+            print(f"[aws:{label}] account ingest failed: {e}", file=sys.stderr, flush=True)
+            per_account.append({"label": label, "error": str(e)[:160]})
+
     del conn
     del db
-    return stats
+    return {"accounts": per_account, "secs": round(time.time() - started, 1)}
 
 
 def main() -> None:
-    if not os.environ.get("AWS_ACCESS_KEY_ID"):
-        print("[aws] AWS_ACCESS_KEY_ID not set — skipping discovery", flush=True)
+    if not (os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_PROD_ACCESS_KEY_ID")):
+        print("[aws] no AWS creds set — skipping discovery", flush=True)
         return
     stats = ingest()
-    print(f"[aws] {json.dumps(stats)[:800]}", flush=True)
+    print(f"[aws] {json.dumps(stats)[:900]}", flush=True)
 
 
 if __name__ == "__main__":
