@@ -13,6 +13,7 @@ import {
   Server,
   ShieldCheck,
   Webhook,
+  Workflow,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/pr-runs", label: "PR Runs", icon: GitPullRequest },
   { href: "/knowledge", label: "Knowledge", icon: Network },
   { href: "/infra", label: "Infrastructure", icon: Server },
+  { href: "/temporal", label: "Temporal", icon: Workflow },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/briefs", label: "Briefs", icon: BookOpen },
   { href: "/audit", label: "Audit", icon: ShieldCheck },
