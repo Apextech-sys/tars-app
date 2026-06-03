@@ -215,6 +215,82 @@ def docs_for_file(repo: str, file: str) -> dict:
     return {"available": True, "file": file, "docs": docs, "notes": ""}
 
 
+def _temporal_run(coro_fn):
+    """Connect to Temporal Cloud (API key + TLS) and run coro_fn(client).
+    Returns (result, None) or (None, error_dict). New connection per call —
+    fine for a low-traffic read panel."""
+    import asyncio
+    addr = os.environ.get("TEMPORAL_ADDRESS")
+    ns = os.environ.get("TEMPORAL_NAMESPACE")
+    key = os.environ.get("TEMPORAL_API_KEY")
+    if not (addr and ns and key):
+        return None, {"notes": "temporal creds not set"}
+    try:
+        from temporalio.client import Client
+    except Exception as e:  # noqa: BLE001
+        return None, {"notes": f"temporalio import failed: {e}"}
+
+    async def _run():
+        client = await Client.connect(addr, namespace=ns, api_key=key, tls=True)
+        return await coro_fn(client)
+
+    try:
+        return asyncio.run(_run()), None
+    except Exception as e:  # noqa: BLE001
+        return None, {"notes": str(e)[:240]}
+
+
+def temporal_workflows() -> dict:
+    """Most-recent workflow executions in the namespace (read-only)."""
+    ns = os.environ.get("TEMPORAL_NAMESPACE", "")
+
+    async def fetch(client):
+        out = []
+        async for w in client.list_workflows(query="ORDER BY StartTime DESC"):
+            out.append({
+                "id": w.id, "runId": w.run_id, "type": w.workflow_type,
+                "status": (w.status.name if w.status else ""),
+                "start": (w.start_time.isoformat() if w.start_time else ""),
+                "close": (w.close_time.isoformat() if w.close_time else ""),
+            })
+            if len(out) >= 75:
+                break
+        return out
+
+    res, err = _temporal_run(fetch)
+    if err is not None:
+        return {"available": False, "workflows": [], "notes": err["notes"]}
+    return {"available": True, "namespace": ns, "count": len(res),
+            "workflows": res, "notes": ""}
+
+
+def temporal_summary() -> dict:
+    """Counts of workflow executions by status (read-only)."""
+    ns = os.environ.get("TEMPORAL_NAMESPACE", "")
+
+    async def fetch(client):
+        stats = {}
+        for label, q in (
+            ("running", 'ExecutionStatus="Running"'),
+            ("failed", 'ExecutionStatus="Failed"'),
+            ("completed", 'ExecutionStatus="Completed"'),
+            ("terminated", 'ExecutionStatus="Terminated"'),
+            ("timedOut", 'ExecutionStatus="TimedOut"'),
+            ("canceled", 'ExecutionStatus="Canceled"'),
+        ):
+            try:
+                c = await client.count_workflows(query=q)
+                stats[label] = int(c.count)
+            except Exception:  # noqa: BLE001
+                stats[label] = -1
+        return stats
+
+    res, err = _temporal_run(fetch)
+    if err is not None:
+        return {"available": False, "notes": err["notes"]}
+    return {"available": True, "namespace": ns, "counts": res, "notes": ""}
+
+
 def list_aws_resources() -> dict:
     """AWS resources discovered into the code-graph (account 140138661997 scope)."""
     try:
@@ -389,6 +465,10 @@ class GraphHandler(BaseHTTPRequestHandler):
             self.send_json(200, list_aws_accounts())
         elif route == "/aws/cost":
             self.send_json(200, aws_cost())
+        elif route == "/temporal/workflows":
+            self.send_json(200, temporal_workflows())
+        elif route == "/temporal/summary":
+            self.send_json(200, temporal_summary())
         else:
             self.send_json(404, {"error": "not found"})
 

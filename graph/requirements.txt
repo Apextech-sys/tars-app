@@ -14,3 +14,6 @@ tree-sitter-language-pack==1.8.1
 
 # AWS read-only connector (Phase 1) — resource inventory + cost
 boto3>=1.34
+
+# Temporal Cloud read-only workflows view (SDK, API-key auth)
+temporalio>=1.7,<2
