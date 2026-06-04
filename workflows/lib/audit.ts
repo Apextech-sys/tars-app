@@ -30,7 +30,7 @@ export interface AuditEntry {
   data?: Record<string, unknown>;
 }
 
-async function ensureSchema(sql: any) {
+async function ensureSchema(sql: SqlClient) {
   await sql /* sql */`
     create table if not exists audit_log (
       id            bigserial primary key,
@@ -178,7 +178,7 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
         ${entry.repo ?? null},
         ${entry.prNumber ?? null},
         ${entry.message ?? null},
-        ${sql.json((entry.data ?? {}) as any)}
+        ${sql.json((entry.data ?? {}) as Parameters<typeof sql.json>[0])}
       )
     `;
   } catch (err) {

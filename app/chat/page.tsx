@@ -16,6 +16,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,26 @@ interface StreamingMessage {
   role: "assistant";
   parts: MessagePart[];
   isStreaming: boolean;
+}
+
+/** Replace the single text part (if any) with `text`, keeping non-text parts. */
+function upsertTextPart(parts: MessagePart[], text: string): MessagePart[] {
+  const nonText = parts.filter((p) => p.type !== "text");
+  return [...nonText, { type: "text", text }];
+}
+
+/**
+ * Replace any existing part with the same `type`+`toolCallId` and append the
+ * new one, so a re-emitted tool-call/result updates in place.
+ */
+function upsertToolPart(
+  parts: MessagePart[],
+  part: MessagePart
+): MessagePart[] {
+  const filtered = parts.filter(
+    (p) => p.type !== part.type || p.toolCallId !== part.toolCallId
+  );
+  return [...filtered, part];
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -201,6 +222,7 @@ function MessageBubble({
             return (
               <div
                 className="whitespace-pre-wrap"
+                // biome-ignore lint/suspicious/noArrayIndexKey: message text parts have no stable id; parts are append-only during streaming (never reordered), so the positional index is a stable key.
                 key={`text-${part.toolCallId ?? ""}-${i}`}
               >
                 {part.text}
@@ -249,6 +271,48 @@ function SessionSidebar({
   onDelete: (id: string) => void;
   loading: boolean;
 }) {
+  let sessionList: ReactNode;
+  if (loading) {
+    sessionList = (
+      <div className="flex items-center justify-center p-4">
+        <Loader2 className="h-4 w-4 animate-spin text-white/40" />
+      </div>
+    );
+  } else if (sessions.length === 0) {
+    sessionList = (
+      <div className="p-4 text-center text-white/30 text-xs">
+        No conversations yet
+      </div>
+    );
+  } else {
+    sessionList = sessions.map((s) => (
+      <button
+        className={cn(
+          "group flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-xs transition-all",
+          activeId === s.id
+            ? "border border-[#00d4a0]/30 bg-[#00d4a0]/15 text-white"
+            : "border border-transparent text-white/60 hover:bg-white/5 hover:text-white/90"
+        )}
+        key={s.id}
+        onClick={() => onSelect(s.id)}
+        type="button"
+      >
+        <span className="flex-1 truncate">{s.title ?? "New conversation"}</span>
+        <button
+          className="mt-0.5 flex-shrink-0 text-white/30 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(s.id);
+          }}
+          title="Archive"
+          type="button"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
+      </button>
+    ));
+  }
+
   return (
     <div className="flex h-full w-64 flex-shrink-0 flex-col border-white/10 border-r bg-black/30 backdrop-blur-sm">
       <div className="flex items-center justify-between border-white/10 border-b p-4">
@@ -267,46 +331,7 @@ function SessionSidebar({
         </Button>
       </div>
 
-      <div className="flex-1 space-y-1 overflow-y-auto p-2">
-        {loading ? (
-          <div className="flex items-center justify-center p-4">
-            <Loader2 className="h-4 w-4 animate-spin text-white/40" />
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="p-4 text-center text-white/30 text-xs">
-            No conversations yet
-          </div>
-        ) : (
-          sessions.map((s) => (
-            <button
-              className={cn(
-                "group flex w-full items-start justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-xs transition-all",
-                activeId === s.id
-                  ? "border border-[#00d4a0]/30 bg-[#00d4a0]/15 text-white"
-                  : "border border-transparent text-white/60 hover:bg-white/5 hover:text-white/90"
-              )}
-              key={s.id}
-              onClick={() => onSelect(s.id)}
-              type="button"
-            >
-              <span className="flex-1 truncate">
-                {s.title ?? "New conversation"}
-              </span>
-              <button
-                className="mt-0.5 flex-shrink-0 text-white/30 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(s.id);
-                }}
-                title="Archive"
-                type="button"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </button>
-          ))
-        )}
-      </div>
+      <div className="flex-1 space-y-1 overflow-y-auto p-2">{sessionList}</div>
     </div>
   );
 }
@@ -399,6 +424,7 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `messages` and `streaming` are intentional triggers so the view scrolls to the bottom whenever new content arrives; the body only calls scrollToBottom(). Removing them would break auto-scroll.
   useEffect(() => {
     scrollToBottom();
   }, [messages, streaming, scrollToBottom]);
@@ -458,6 +484,7 @@ export default function ChatPage() {
     setSessions((prev) => prev.filter((s) => s.id !== id));
   };
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: SSE streaming consumer — a single read loop dispatching on event code (text/tool-call/tool-result/metadata/error) while keeping local closure state in sync with React for a documented batching reason (see finally block). Part-upsert logic is already extracted to helpers; threading the closure state + setters through a further extraction would risk the streaming/commit ordering.
   const sendMessage = async (text: string) => {
     if (isLoading) {
       return;
@@ -566,16 +593,11 @@ export default function ChatPage() {
                 { type: "text", text: fullText },
               ];
             }
-            setStreaming((prev) => {
-              if (!prev) {
-                return prev;
-              }
-              const textParts = prev.parts.filter((p) => p.type !== "text");
-              return {
-                ...prev,
-                parts: [...textParts, { type: "text", text: fullText }],
-              };
-            });
+            setStreaming((prev) =>
+              prev
+                ? { ...prev, parts: upsertTextPart(prev.parts, fullText) }
+                : prev
+            );
           } else if (code === "9") {
             // tool call
             const tc = parsed as {
@@ -590,21 +612,12 @@ export default function ChatPage() {
               args: tc.args,
             };
             toolCallsMap.set(tc.toolCallId, toolPart);
-            currentParts = [
-              ...currentParts.filter(
-                (p) => p.type !== "tool-call" || p.toolCallId !== tc.toolCallId
-              ),
-              toolPart,
-            ];
-            setStreaming((prev) => {
-              if (!prev) {
-                return prev;
-              }
-              const filtered = prev.parts.filter(
-                (p) => p.type !== "tool-call" || p.toolCallId !== tc.toolCallId
-              );
-              return { ...prev, parts: [...filtered, toolPart] };
-            });
+            currentParts = upsertToolPart(currentParts, toolPart);
+            setStreaming((prev) =>
+              prev
+                ? { ...prev, parts: upsertToolPart(prev.parts, toolPart) }
+                : prev
+            );
           } else if (code === "a") {
             // tool result
             const tr = parsed as { toolCallId: string; result: string };
@@ -614,23 +627,12 @@ export default function ChatPage() {
               result: tr.result,
             };
             toolResultsMap.set(tr.toolCallId, resultPart);
-            currentParts = [
-              ...currentParts.filter(
-                (p) =>
-                  p.type !== "tool-result" || p.toolCallId !== tr.toolCallId
-              ),
-              resultPart,
-            ];
-            setStreaming((prev) => {
-              if (!prev) {
-                return prev;
-              }
-              const filtered = prev.parts.filter(
-                (p) =>
-                  p.type !== "tool-result" || p.toolCallId !== tr.toolCallId
-              );
-              return { ...prev, parts: [...filtered, resultPart] };
-            });
+            currentParts = upsertToolPart(currentParts, resultPart);
+            setStreaming((prev) =>
+              prev
+                ? { ...prev, parts: upsertToolPart(prev.parts, resultPart) }
+                : prev
+            );
           } else if (code === "d") {
             // metadata
             const meta = parsed as {
@@ -778,6 +780,7 @@ export default function ChatPage() {
           ))}
 
           {streaming && (
+            // biome-ignore lint/a11y/useValidAriaRole: `role` is a MessageBubble component prop ("user" | "assistant"), not a DOM ARIA role; removing it would break the bubble's styling/layout.
             <MessageBubble
               isStreaming={streaming.isStreaming}
               parts={streaming.parts}

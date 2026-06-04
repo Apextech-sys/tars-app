@@ -28,6 +28,7 @@ export class Heartbeat {
     this.timer.unref?.();
   }
 
+  // biome-ignore lint/suspicious/useAwait: keeps a Promise-returning contract symmetric with start(); callers await stop()
   async stop(): Promise<void> {
     if (this.timer) {
       clearInterval(this.timer);

@@ -7,6 +7,7 @@ import {
   isNull,
   lte,
   or,
+  type SQL,
   sql,
 } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
@@ -25,33 +26,50 @@ const querySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+// Build the status filter condition(s) from a comma-separated status param.
+// Returns the condition(s) to push, or nothing when there's no status filter.
+function buildStatusCondition(status: string | undefined): SQL | undefined {
+  if (!status) {
+    return undefined;
+  }
+  const statuses = status.split(",").map((s) => s.trim());
+  if (statuses.length === 1) {
+    return eq(prReviewRuns.status, statuses[0]);
+  }
+  return or(...statuses.map((s) => eq(prReviewRuns.status, s)));
+}
+
+// Build owner/repo conditions from a "owner/repo" or bare "repo" param.
+function buildRepoConditions(repoParam: string | undefined): SQL[] {
+  if (!repoParam) {
+    return [];
+  }
+  const [owner, repo] = repoParam.includes("/")
+    ? repoParam.split("/", 2)
+    : [undefined, repoParam];
+  const out: SQL[] = [];
+  if (owner) {
+    out.push(eq(prReviewRuns.owner, owner));
+  }
+  if (repo) {
+    out.push(eq(prReviewRuns.repo, repo));
+  }
+  return out;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const sp = Object.fromEntries(req.nextUrl.searchParams.entries());
     const params = querySchema.parse(sp);
 
-    const conditions = [];
+    const conditions: (SQL | undefined)[] = [];
 
-    if (params.status) {
-      const statuses = params.status.split(",").map((s) => s.trim());
-      if (statuses.length === 1) {
-        conditions.push(eq(prReviewRuns.status, statuses[0]));
-      } else {
-        conditions.push(or(...statuses.map((s) => eq(prReviewRuns.status, s))));
-      }
+    const statusCondition = buildStatusCondition(params.status);
+    if (statusCondition) {
+      conditions.push(statusCondition);
     }
 
-    if (params.repo) {
-      const [owner, repo] = params.repo.includes("/")
-        ? params.repo.split("/", 2)
-        : [undefined, params.repo];
-      if (owner) {
-        conditions.push(eq(prReviewRuns.owner, owner));
-      }
-      if (repo) {
-        conditions.push(eq(prReviewRuns.repo, repo));
-      }
-    }
+    conditions.push(...buildRepoConditions(params.repo));
 
     if (params.from) {
       conditions.push(gte(prReviewRuns.createdAt, new Date(params.from)));

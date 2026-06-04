@@ -86,6 +86,7 @@ interface Unit {
   failure: string;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: breadth-heavy switch mapping each Temporal history event type to a timeline unit; one case per event keeps the state machine cohesive and splitting it would risk behavior.
 function groupEvents(events: HistoryEvent[]): {
   units: Unit[];
   taskCycles: number;
@@ -272,7 +273,15 @@ function dotClass(unit: Unit): string {
   return "bg-sky-500";
 }
 
-function Stat({ label, value, cls }: { label: string; value: string; cls?: string }) {
+function Stat({
+  label,
+  value,
+  cls,
+}: {
+  label: string;
+  value: string;
+  cls?: string;
+}) {
   return (
     <div className="rounded-xl border bg-card px-4 py-3">
       <div className="text-muted-foreground text-xs uppercase tracking-wide">
@@ -283,6 +292,7 @@ function Stat({ label, value, cls }: { label: string; value: string; cls?: strin
   );
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: breadth-heavy presentational page (data prep + multiple conditional sections of JSX); complexity is from rendering branches, not control-flow logic, and extraction would only relocate it.
 export default async function WorkflowDetailPage({
   params,
   searchParams,
@@ -295,7 +305,7 @@ export default async function WorkflowDetailPage({
   const runId = sp.runId ?? "";
   const d = await getWorkflowDetail(id, runId);
 
-  if (!d.available || !d.info.type) {
+  if (!(d.available && d.info.type)) {
     return (
       <div className="p-6">
         <Link
@@ -384,7 +394,9 @@ export default async function WorkflowDetailPage({
       {topFailure && (
         <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
           <div className="mb-1 font-medium text-red-400 text-sm">Failure</div>
-          <div className="break-words text-red-300/90 text-sm">{topFailure}</div>
+          <div className="break-words text-red-300/90 text-sm">
+            {topFailure}
+          </div>
         </div>
       )}
 
@@ -450,14 +462,17 @@ export default async function WorkflowDetailPage({
             const ms = durMs(u.start, u.end);
             const dur = durStr(ms);
             const barPct =
-              u.kind === "activity" && ms ? Math.max(3, (ms / maxActMs) * 100) : 0;
+              u.kind === "activity" && ms
+                ? Math.max(3, (ms / maxActMs) * 100)
+                : 0;
             const hasDetail =
               Boolean(u.failure) ||
-              (u.detail && Object.keys(u.detail as object).length > 0);
+              Boolean(u.detail && Object.keys(u.detail as object).length > 0);
             return (
+              // biome-ignore lint/suspicious/noArrayIndexKey: Unit has no unique id; index disambiguates units that share the same kind+start timestamp, and the list is render-only (never reordered/mutated client-side).
               <li className="relative pl-6" key={`${u.kind}:${idx}:${u.start}`}>
                 <span
-                  className={`-left-[7px] absolute top-2 size-3 rounded-full ring-4 ring-background ${dotClass(u)}`}
+                  className={`absolute top-2 -left-[7px] size-3 rounded-full ring-4 ring-background ${dotClass(u)}`}
                 />
                 <div className="rounded-lg border bg-card">
                   <div className="flex items-center gap-2 px-3 py-2">

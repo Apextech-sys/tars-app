@@ -13,7 +13,10 @@ describe("dispatch / queue plumbing", () => {
   });
 
   it("fires pg_notify('tars_jobs_new', id) on INSERT", async () => {
-    const url = process.env.TARS_APP_DB_URL!;
+    const url = process.env.TARS_APP_DB_URL;
+    if (!url) {
+      throw new Error("TARS_APP_DB_URL not set for tests");
+    }
     const listener = new Client({ connectionString: url });
     await listener.connect();
     await listener.query("LISTEN tars_jobs_new");

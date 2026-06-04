@@ -5,6 +5,29 @@ import { prReviewRuns } from "@/lib/db/tars-schema";
 
 export const dynamic = "force-dynamic";
 
+interface ActivityBucket {
+  hour: string;
+  completed: number;
+  error: number;
+  blocked: number;
+  disagreed: number;
+  started: number;
+  skipped: number;
+}
+
+// Map a run status to the numeric Bucket field it increments. Any status not
+// listed here falls back to "skipped" (matching the original else branch).
+const STATUS_TO_BUCKET_FIELD: Record<
+  string,
+  Exclude<keyof ActivityBucket, "hour">
+> = {
+  completed: "completed",
+  error: "error",
+  "blocked-konverge": "blocked",
+  disagreed: "disagreed",
+  started: "started",
+};
+
 export async function GET(req: NextRequest) {
   try {
     const hoursParam = req.nextUrl.searchParams.get("hours") ?? "24";
@@ -23,17 +46,7 @@ export async function GET(req: NextRequest) {
       .where(gte(prReviewRuns.createdAt, since));
 
     // Build hourly buckets
-    interface Bucket {
-      hour: string;
-      completed: number;
-      error: number;
-      blocked: number;
-      disagreed: number;
-      started: number;
-      skipped: number;
-    }
-
-    const buckets = new Map<string, Bucket>();
+    const buckets = new Map<string, ActivityBucket>();
     const nowMs = Date.now();
 
     for (let i = hours - 1; i >= 0; i--) {
@@ -58,19 +71,8 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
-      if (row.status === "completed") {
-        bucket.completed++;
-      } else if (row.status === "error") {
-        bucket.error++;
-      } else if (row.status === "blocked-konverge") {
-        bucket.blocked++;
-      } else if (row.status === "disagreed") {
-        bucket.disagreed++;
-      } else if (row.status === "started") {
-        bucket.started++;
-      } else {
-        bucket.skipped++;
-      }
+      const field = STATUS_TO_BUCKET_FIELD[row.status ?? ""] ?? "skipped";
+      bucket[field]++;
     }
 
     return NextResponse.json({

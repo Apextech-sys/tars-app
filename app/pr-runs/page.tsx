@@ -11,6 +11,7 @@ import {
   ShieldQuestion,
 } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
@@ -86,11 +87,17 @@ function relativeTime(iso: string): string {
   const then = new Date(iso).getTime();
   const now = Date.now();
   const s = Math.max(0, Math.round((now - then) / 1000));
-  if (s < 60) return `${s}s ago`;
+  if (s < 60) {
+    return `${s}s ago`;
+  }
   const m = Math.round(s / 60);
-  if (m < 60) return `${m}m ago`;
+  if (m < 60) {
+    return `${m}m ago`;
+  }
   const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) {
+    return `${h}h ago`;
+  }
   return `${Math.round(h / 24)}d ago`;
 }
 
@@ -108,6 +115,93 @@ const TONE: Record<string, string> = {
   warn: "text-amber-400",
   bad: "text-red-400",
 };
+
+function RunsTable({
+  loading,
+  filtered,
+  maxFindings,
+}: {
+  loading: boolean;
+  filtered: RunRow[];
+  maxFindings: number;
+}): ReactNode {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
+        <Loader2 className="size-4 animate-spin" /> Loading reviews…
+      </div>
+    );
+  }
+  if (filtered.length === 0) {
+    return (
+      <div className="py-16 text-center text-muted-foreground text-sm">
+        No reviews match the current filter.
+      </div>
+    );
+  }
+  return (
+    <div className="divide-y">
+      {filtered.map((r) => {
+        const meta = statusMeta(r.status);
+        return (
+          <Link
+            className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/40"
+            href={`/pr-runs/${r.runId}`}
+            key={r.runId}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium">
+                  {r.prTitle ?? `${r.repo} #${r.prNumber}`}
+                </span>
+                {r.prSha ? (
+                  <span className="shrink-0 font-mono text-muted-foreground text-xs">
+                    {r.prSha.slice(0, 7)}
+                  </span>
+                ) : null}
+              </div>
+              <div className="truncate text-muted-foreground text-xs">
+                {r.repo} #{r.prNumber} · {r.owner}
+                {r.senderLogin ? ` · @${r.senderLogin}` : ""} ·{" "}
+                {relativeTime(r.updatedAt)}
+              </div>
+            </div>
+            {r.findingsCount > 0 ? (
+              <div className="hidden w-24 shrink-0 sm:block">
+                <div className="flex items-center justify-end gap-1.5">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-amber-400/70"
+                      style={{
+                        width: `${(r.findingsCount / maxFindings) * 100}%`,
+                      }}
+                    />
+                  </div>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {r.findingsCount}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <span className="hidden w-24 shrink-0 text-right text-muted-foreground text-xs sm:block">
+                no findings
+              </span>
+            )}
+            <span
+              className={cn(
+                "shrink-0 rounded-full border px-2.5 py-0.5 text-xs",
+                meta.cls
+              )}
+            >
+              {meta.label}
+            </span>
+            <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function PrRunsPage() {
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -141,12 +235,18 @@ export default function PrRunsPage() {
       error: 0,
       findings: 0,
     };
+    const statusKey: Record<string, keyof typeof c> = {
+      "pending-approval": "pending",
+      disagreed: "disagreed",
+      "skipped-no-findings": "clean",
+      started: "running",
+      error: "error",
+    };
     for (const r of runs) {
-      if (r.status === "pending-approval") c.pending += 1;
-      else if (r.status === "disagreed") c.disagreed += 1;
-      else if (r.status === "skipped-no-findings") c.clean += 1;
-      else if (r.status === "started") c.running += 1;
-      else if (r.status === "error") c.error += 1;
+      const key = statusKey[r.status];
+      if (key) {
+        c[key] += 1;
+      }
       c.findings += r.findingsCount || 0;
     }
     return c;
@@ -203,14 +303,20 @@ export default function PrRunsPage() {
 
   const repos = useMemo(() => {
     const set = new Set<string>();
-    for (const r of runs) set.add(`${r.owner}/${r.repo}`);
+    for (const r of runs) {
+      set.add(`${r.owner}/${r.repo}`);
+    }
     return [...set].sort();
   }, [runs]);
 
   const filtered = useMemo(() => {
     return runs.filter((r) => {
-      if (statusFilter.size > 0 && !statusFilter.has(r.status)) return false;
-      if (repoFilter && `${r.owner}/${r.repo}` !== repoFilter) return false;
+      if (statusFilter.size > 0 && !statusFilter.has(r.status)) {
+        return false;
+      }
+      if (repoFilter && `${r.owner}/${r.repo}` !== repoFilter) {
+        return false;
+      }
       return true;
     });
   }, [runs, statusFilter, repoFilter]);
@@ -220,9 +326,13 @@ export default function PrRunsPage() {
       const next = new Set(prev);
       const allOn = statuses.every((s) => next.has(s));
       if (allOn) {
-        for (const s of statuses) next.delete(s);
+        for (const s of statuses) {
+          next.delete(s);
+        }
       } else {
-        for (const s of statuses) next.add(s);
+        for (const s of statuses) {
+          next.add(s);
+        }
       }
       return next;
     });
@@ -256,9 +366,7 @@ export default function PrRunsPage() {
       {/* Hero tiles */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map((t) => {
-          const active =
-            t.filter !== undefined &&
-            t.filter.every((s) => statusFilter.has(s));
+          const active = t.filter?.every((s) => statusFilter.has(s)) ?? false;
           return (
             <button
               className={cn(
@@ -355,76 +463,11 @@ export default function PrRunsPage() {
 
       {/* Runs table */}
       <div className="overflow-hidden rounded-xl border bg-card">
-        {loading ? (
-          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
-            <Loader2 className="size-4 animate-spin" /> Loading reviews…
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground text-sm">
-            No reviews match the current filter.
-          </div>
-        ) : (
-          <div className="divide-y">
-            {filtered.map((r) => {
-              const meta = statusMeta(r.status);
-              return (
-                <Link
-                  className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/40"
-                  href={`/pr-runs/${r.runId}`}
-                  key={r.runId}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-medium">
-                        {r.prTitle ?? `${r.repo} #${r.prNumber}`}
-                      </span>
-                      {r.prSha ? (
-                        <span className="shrink-0 font-mono text-muted-foreground text-xs">
-                          {r.prSha.slice(0, 7)}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="truncate text-muted-foreground text-xs">
-                      {r.repo} #{r.prNumber} · {r.owner}
-                      {r.senderLogin ? ` · @${r.senderLogin}` : ""} ·{" "}
-                      {relativeTime(r.updatedAt)}
-                    </div>
-                  </div>
-                  {r.findingsCount > 0 ? (
-                    <div className="hidden w-24 shrink-0 sm:block">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-amber-400/70"
-                            style={{
-                              width: `${(r.findingsCount / maxFindings) * 100}%`,
-                            }}
-                          />
-                        </div>
-                        <span className="text-muted-foreground text-xs tabular-nums">
-                          {r.findingsCount}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <span className="hidden w-24 shrink-0 text-right text-muted-foreground text-xs sm:block">
-                      no findings
-                    </span>
-                  )}
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full border px-2.5 py-0.5 text-xs",
-                      meta.cls
-                    )}
-                  >
-                    {meta.label}
-                  </span>
-                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
-                </Link>
-              );
-            })}
-          </div>
-        )}
+        <RunsTable
+          filtered={filtered}
+          loading={loading}
+          maxFindings={maxFindings}
+        />
       </div>
       <p className="text-muted-foreground text-xs">
         Showing {filtered.length} of {runs.length} live reviews. Click a row for

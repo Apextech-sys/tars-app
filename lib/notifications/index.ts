@@ -40,7 +40,7 @@ export async function requestPermission(): Promise<NotificationPermission> {
   if (Notification.permission !== "default") {
     return Notification.permission;
   }
-  return Notification.requestPermission();
+  return await Notification.requestPermission();
 }
 
 export interface FireNotificationOptions {

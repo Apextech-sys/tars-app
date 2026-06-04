@@ -116,12 +116,16 @@ describe.skipIf(!RUN)("brief workflow — live (tars-app HTTP)", () => {
       await sql.end({ timeout: 5 }).catch(() => {});
     }
     expect(runId, "no adhoc brief row appeared").toBeTruthy();
+    if (!runId) {
+      throw new Error("no adhoc brief row appeared");
+    }
 
-    const final = await pollBriefStatus(runId!);
+    const final = await pollBriefStatus(runId);
 
     if (final.status === "ready") {
-      expect(final.body_markdown).toBeTruthy();
-      expect(final.body_markdown!.length).toBeGreaterThan(50);
+      const bodyMarkdown = final.body_markdown;
+      expect(bodyMarkdown).toBeTruthy();
+      expect((bodyMarkdown ?? "").length).toBeGreaterThan(50);
       // insights is a jsonb blob — must at least parse as an object with
       // the expected keys.
       const insights = final.insights as {
@@ -131,10 +135,10 @@ describe.skipIf(!RUN)("brief workflow — live (tars-app HTTP)", () => {
         questions?: unknown[];
       } | null;
       expect(insights).not.toBeNull();
-      expect(typeof insights!.summary).toBe("string");
-      expect(Array.isArray(insights!.insights)).toBe(true);
-      expect(Array.isArray(insights!.next_actions)).toBe(true);
-      expect(Array.isArray(insights!.questions)).toBe(true);
+      expect(typeof insights?.summary).toBe("string");
+      expect(Array.isArray(insights?.insights)).toBe(true);
+      expect(Array.isArray(insights?.next_actions)).toBe(true);
+      expect(Array.isArray(insights?.questions)).toBe(true);
     } else {
       // Failure path: must surface a real error, not silent dormancy.
       expect(

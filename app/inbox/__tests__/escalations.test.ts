@@ -96,7 +96,11 @@ describe("snoozeEscalation", () => {
 
     expect(row.status).toBe("snoozed");
     expect(row.snoozedUntil).not.toBeNull();
-    const delta = row.snoozedUntil!.getTime() - before.getTime();
+    const snoozedUntil = row.snoozedUntil;
+    if (snoozedUntil == null) {
+      throw new Error("snoozedUntil should be set after snoozing");
+    }
+    const delta = snoozedUntil.getTime() - before.getTime();
     expect(delta).toBeGreaterThan(3_590_000);
     expect(delta).toBeLessThan(3_610_000);
   });
@@ -110,7 +114,11 @@ describe("snoozeEscalation", () => {
       .from(escalations)
       .where(eq(escalations.id, id));
 
-    const delta = row.snoozedUntil!.getTime() - Date.now();
+    const snoozedUntil = row.snoozedUntil;
+    if (snoozedUntil == null) {
+      throw new Error("snoozedUntil should be set after snoozing");
+    }
+    const delta = snoozedUntil.getTime() - Date.now();
     expect(delta).toBeGreaterThan(23 * 3_600_000);
   });
 });

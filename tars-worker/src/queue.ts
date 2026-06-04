@@ -8,7 +8,7 @@ import type { JobRow } from "./types.js";
 
 const { Client } = pg;
 
-export async function claimNextJob(workerId: string): Promise<JobRow | null> {
+export function claimNextJob(workerId: string): Promise<JobRow | null> {
   return withTx(async (client) => {
     const claimSql = `
       WITH next AS (

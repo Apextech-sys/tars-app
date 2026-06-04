@@ -82,7 +82,8 @@ function ReviewerColumn({
             )}
             {!!position.retracted && (
               <span className="inline-flex items-center gap-1 text-zinc-400">
-                <MinusCircle className="size-3" /> {position.retracted} retracted
+                <MinusCircle className="size-3" /> {position.retracted}{" "}
+                retracted
               </span>
             )}
           </div>
@@ -216,7 +217,9 @@ export function DebatePanel({ debate }: { debate: DebateTranscript }) {
               (max {debate.maxRounds})
             </span>
           </p>
-          <p className={cn("text-xs leading-relaxed", stop.cls)}>{stop.label}</p>
+          <p className={cn("text-xs leading-relaxed", stop.cls)}>
+            {stop.label}
+          </p>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Codex and Claude review independently, then exchange findings each
             round — endorsing what they now agree is real and retracting what

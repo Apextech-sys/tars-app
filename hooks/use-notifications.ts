@@ -84,6 +84,7 @@ export function useNotifications(): UseNotificationsReturn {
   // Also persist to app_settings on the server (best-effort, non-blocking)
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `settings` is intentionally the trigger that re-arms the debounce; the timer reads the freshest value via settingsRef.current. Removing it would stop server-side persistence from re-firing on change.
   useEffect(() => {
     const t = setTimeout(() => {
       fetch("/api/settings/notifications", {

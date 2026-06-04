@@ -45,8 +45,11 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
   const input = ReviewInputSchema.parse(ctx.job.payload);
 
   const env = { ...process.env } as Record<string, string | undefined>;
-  delete env.OPENAI_API_KEY;
-  delete env.OPENAI_BASE_URL;
+  // Strip OpenAI API auth so the Codex SDK uses ChatGPT-login auth instead.
+  // These are filtered out below (only string values are copied), so setting
+  // them to undefined is equivalent to deleting the keys.
+  env.OPENAI_API_KEY = undefined;
+  env.OPENAI_BASE_URL = undefined;
   const filteredEnv: Record<string, string> = {};
   for (const [k, v] of Object.entries(env)) {
     if (typeof v === "string") {

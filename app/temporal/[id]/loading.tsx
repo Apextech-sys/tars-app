@@ -15,7 +15,7 @@ export default function Loading() {
       <ol className="ml-2 space-y-3 border-border border-l">
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <li className="relative pl-6" key={i}>
-            <span className="-left-[7px] absolute top-2 size-3 animate-pulse rounded-full bg-muted" />
+            <span className="absolute top-2 -left-[7px] size-3 animate-pulse rounded-full bg-muted" />
             <div className="h-12 animate-pulse rounded-lg border bg-card" />
           </li>
         ))}

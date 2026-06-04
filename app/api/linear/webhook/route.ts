@@ -52,6 +52,7 @@ interface LinearWebhookPayload {
 
 const TARS_TRIGGER_RE = /(^|\s)@tars(\b|\s|:|,)/i;
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: webhook entrypoint is a linear guard chain (config -> signature -> json -> type/action -> self/trigger filters -> issue id) where each early-return is load-bearing; flattening it would not lower real complexity and risks the verification/ack contract.
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const webhookSecret = process.env.LINEAR_WEBHOOK_SECRET;
   const apiKey = process.env.LINEAR_API_KEY;
@@ -156,6 +157,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Background the heavy work — Linear retries on non-2xx; we ack fast.
   // The IIFE catches its own errors internally; the outer .catch() exists
   // only to satisfy lint (every promise must be observed).
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: background worker runs the full inbound->fetch->firewall->run->reply->audit pipeline; the branches are the persona/visibility/protect-mode firewall rules and must stay together to preserve the audit/firewall behavior.
   (async () => {
     try {
       const issueCtx = await fetchLinearIssueContext({

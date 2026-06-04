@@ -64,10 +64,46 @@ export interface RunChatTurnResult {
   finishReason: string;
 }
 
+interface AssistantContentBlock {
+  type: string;
+  text?: string;
+  id?: string;
+  name?: string;
+  input?: unknown;
+}
+
+/**
+ * Append the parts from one assistant message's content blocks into `out`,
+ * mirroring the streaming route's handling. Returns the text of the last
+ * text block seen (so the caller can track `fullText`), or undefined if the
+ * message contained no text block.
+ */
+function appendAssistantBlocks(
+  content: AssistantContentBlock[],
+  out: Record<string, unknown>[]
+): string | undefined {
+  let latestText: string | undefined;
+  for (const block of content) {
+    if (block.type === "text" && block.text) {
+      out.push({ type: "text", text: block.text });
+      latestText = block.text;
+    } else if (block.type === "tool_use") {
+      out.push({
+        type: "tool-call",
+        toolCallId: block.id,
+        toolName: block.name,
+        args: block.input,
+      });
+    }
+  }
+  return latestText;
+}
+
 /**
  * Non-streaming chat turn. Persists user + assistant messages, then returns
  * the full assistant text once generation completes.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: linear SDK-stream consumer that interleaves async DB writes (session create/resume, message persist) with branch-per-message-type handling; pure block-parsing already extracted, and further splitting would fracture the streaming/persistence ordering.
 export async function runChatTurn(
   input: RunChatTurnInput
 ): Promise<RunChatTurnResult> {
@@ -165,29 +201,13 @@ export async function runChatTurn(
     }
 
     if (msg.type === "assistant") {
-      const m = msg as {
-        message: {
-          content: Array<{
-            type: string;
-            text?: string;
-            id?: string;
-            name?: string;
-            input?: unknown;
-          }>;
-        };
-      };
-      for (const block of m.message.content) {
-        if (block.type === "text" && block.text) {
-          assistantParts.push({ type: "text", text: block.text });
-          fullText = block.text;
-        } else if (block.type === "tool_use") {
-          assistantParts.push({
-            type: "tool-call",
-            toolCallId: block.id,
-            toolName: block.name,
-            args: block.input,
-          });
-        }
+      const m = msg as { message: { content: AssistantContentBlock[] } };
+      const latestText = appendAssistantBlocks(
+        m.message.content,
+        assistantParts
+      );
+      if (latestText !== undefined) {
+        fullText = latestText;
       }
       continue;
     }

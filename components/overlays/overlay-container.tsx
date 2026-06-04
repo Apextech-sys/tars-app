@@ -155,6 +155,7 @@ function DesktopOverlayContainer() {
   });
 
   // Measure content height when it changes, reset on fresh open
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `stack` is the intentional trigger so the height is re-measured on every push/pop (content changes); the body reads it only via refs. Removing it would stop re-measuring during stack changes.
   useLayoutEffect(() => {
     const isFreshOpen = isOpen && !wasOpenRef.current;
     wasOpenRef.current = isOpen;
@@ -315,6 +316,7 @@ function MobileOverlayContainer() {
   const currentIndex = renderStack.length - 1;
 
   // Measure content height when it changes, reset on fresh open
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `stack` is the intentional trigger so the height is re-measured on every push/pop (content changes); the body reads it only via refs. Removing it would stop re-measuring during stack changes.
   useLayoutEffect(() => {
     const isFreshOpen = isOpen && !wasOpenRef.current;
     wasOpenRef.current = isOpen;

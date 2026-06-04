@@ -207,6 +207,43 @@ export async function buildGraphSnapshot(): Promise<GraphSnapshot> {
   });
 }
 
+// Fields we expect a healthy project to have populated.
+const EXPECTED_PROJECT_FIELDS = [
+  "linear_team",
+  "slack",
+  "vercel_project",
+  "supabase_project",
+  "aws_account",
+];
+
+/**
+ * Classify a single projects.yaml entry. Returns null for entries that should
+ * not count toward the summary (non-objects or explicit `kind: skip`), else the
+ * project's visibility bucket and any missing expected fields. Pure helper —
+ * extracted so buildProjectsYamlSummary stays within the cognitive-complexity
+ * budget without changing the step's behavior.
+ */
+function summarizeProject(
+  proj: unknown
+): { visibility: string; missing: string[] } | null {
+  if (typeof proj !== "object" || proj === null) {
+    return null;
+  }
+  const record = proj as Record<string, unknown>;
+  if (record.kind === "skip") {
+    return null;
+  }
+  const visibility = String(record.visibility ?? "unknown");
+  const missing: string[] = [];
+  for (const f of EXPECTED_PROJECT_FIELDS) {
+    const v = record[f];
+    if (v === undefined || v === null || v === "") {
+      missing.push(f);
+    }
+  }
+  return { visibility, missing };
+}
+
 /**
  * Parse /home/shaun/.tars-state/knowledge/projects.yaml and emit a structural
  * summary. We do not need every field — just enough for the model to spot
@@ -248,38 +285,18 @@ export async function buildProjectsYamlSummary(): Promise<ProjectsYamlSummary> {
 
   const byVisibility: Record<string, number> = {};
   const gaps: Array<{ project: string; missing_fields: string[] }> = [];
-  // Fields we expect a healthy project to have populated.
-  const expected = [
-    "linear_team",
-    "slack",
-    "vercel_project",
-    "supabase_project",
-    "aws_account",
-  ];
 
   let total = 0;
   for (const [key, proj] of Object.entries(parsed)) {
-    if (typeof proj !== "object" || proj === null) {
-      continue;
-    }
-    if ((proj as Record<string, unknown>).kind === "skip") {
+    const summary = summarizeProject(proj);
+    if (summary === null) {
       continue;
     }
     total++;
-    const visibility = String(
-      (proj as Record<string, unknown>).visibility ?? "unknown"
-    );
-    byVisibility[visibility] = (byVisibility[visibility] ?? 0) + 1;
-
-    const missing: string[] = [];
-    for (const f of expected) {
-      const v = (proj as Record<string, unknown>)[f];
-      if (v === undefined || v === null || v === "") {
-        missing.push(f);
-      }
-    }
-    if (missing.length > 0) {
-      gaps.push({ project: key, missing_fields: missing });
+    byVisibility[summary.visibility] =
+      (byVisibility[summary.visibility] ?? 0) + 1;
+    if (summary.missing.length > 0) {
+      gaps.push({ project: key, missing_fields: summary.missing });
     }
   }
 

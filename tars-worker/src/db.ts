@@ -1,5 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
+// biome-ignore lint/performance/noNamespaceImport: drizzle() needs the full schema namespace object and `typeof schema` is used as a generic arg; named imports cannot express this
 import * as schema from "../../lib/db/worker-schema.js";
 import type { Config } from "./config.js";
 

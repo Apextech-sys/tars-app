@@ -215,6 +215,7 @@ export function GET(): NextResponse {
 
 // --- POST -- main handler ----------------------------------------------------
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: GitHub webhook entrypoint is a strict ordered pipeline (secret -> HMAC -> parse -> watchlist -> done-on-merge -> PR-action filter -> draft skip -> policy -> trigger -> audit); the ordering is security-load-bearing (HMAC before parse) and each numbered step has its own audit + early return, so decomposing it risks the verification/202-ack contract.
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const secret = process.env.GITHUB_WEBHOOK_SECRET;
   if (!secret) {

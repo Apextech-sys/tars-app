@@ -7,7 +7,7 @@ const connectionString =
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET(request: Request) {
+export function GET(request: Request) {
   const encoder = new TextEncoder();
   const abort = request.signal;
 

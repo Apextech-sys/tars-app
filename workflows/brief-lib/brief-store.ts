@@ -10,6 +10,7 @@
  * workflow lib accesses Postgres — see workflows/lib/audit.ts.
  */
 
+import type { JSONValue } from "postgres";
 import type { BriefKind, BriefOutput } from "../../lib/tars/brief/schema";
 
 async function makeSql() {
@@ -46,7 +47,7 @@ export async function insertPendingBrief(
         ${args.date},
         ${args.kind},
         'pending',
-        ${sql.json(args.sourceContext as any)}
+        ${sql.json(args.sourceContext as unknown as JSONValue)}
       )
       on conflict (run_id) do update set
         source_context = excluded.source_context,
@@ -104,7 +105,7 @@ export async function finalizeBrief(args: FinalizeBriefArgs): Promise<void> {
         status        = 'ready',
         summary       = ${args.summary},
         body_markdown = ${args.bodyMarkdown},
-        insights      = ${sql.json(args.output as any)},
+        insights      = ${sql.json(args.output as unknown as JSONValue)},
         updated_at    = now(),
         completed_at  = now(),
         error_text    = null

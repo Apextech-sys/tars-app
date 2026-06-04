@@ -75,6 +75,7 @@ function stripBotMention(text: string, botUserId?: string | null): string {
   return text.replace(/<@[A-Z0-9]+>/g, "").trim();
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Slack events entrypoint is a linear guard chain (config -> signature -> json -> url_verification -> event_callback -> bot-echo/subtype/type/field/allowlist filters); each early-return enforces a distinct Slack contract rule and flattening it does not reduce real complexity.
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   const botToken = process.env.SLACK_BOT_TOKEN;

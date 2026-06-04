@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   try {
     const windowParam = req.nextUrl.searchParams.get("window") ?? "7d";
-    const days = windowParam === "7d" ? 7 : windowParam === "30d" ? 30 : 7;
+    // Map the window param to a day count; anything unrecognized defaults to 7.
+    const windowDaysByParam: Record<string, number> = { "7d": 7, "30d": 30 };
+    const days = windowDaysByParam[windowParam] ?? 7;
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const [inFlight, pendingApprovalRows, fixActiveRows, recent] =

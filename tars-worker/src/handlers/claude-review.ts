@@ -62,6 +62,7 @@ SCOPE — these are hard constraints, not suggestions:
 - Do NOT suggest scope-expanding refactors, style preferences, or "while you're here" improvements. Only report real defects that were introduced or directly touched by this PR's changed lines.
 - Every finding's "file"/"line" MUST point at a line this PR actually changed. If you cannot tie a finding to a changed line, do not report it.`;
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: linear SDK-streaming handler — each branch handles one message subtype; extracting them would scatter the single streaming loop without reducing real complexity
 export const claudeReviewHandler: JobHandler = async (ctx) => {
   const input = ReviewInputSchema.parse(ctx.job.payload);
 

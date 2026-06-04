@@ -86,8 +86,18 @@ function durationStr(start: string, close: string): string {
 }
 
 const FILTERS: { key: string; label: string; cls: string; ring: string }[] = [
-  { key: "RUNNING", label: "Running", cls: "text-sky-400", ring: "ring-sky-500/40" },
-  { key: "FAILED", label: "Failed", cls: "text-red-400", ring: "ring-red-500/50" },
+  {
+    key: "RUNNING",
+    label: "Running",
+    cls: "text-sky-400",
+    ring: "ring-sky-500/40",
+  },
+  {
+    key: "FAILED",
+    label: "Failed",
+    cls: "text-red-400",
+    ring: "ring-red-500/50",
+  },
   {
     key: "COMPLETED",
     label: "Completed",
@@ -170,9 +180,9 @@ export function TemporalWorkflowsView({
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-[200px] flex-1">
-          <Search className="-translate-y-1/2 absolute top-1/2 left-3 size-4 text-muted-foreground" />
+          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            className="h-9 w-full rounded-lg border bg-background pl-9 pr-3 text-sm outline-none focus:border-[#00d4a0]/50"
+            className="h-9 w-full rounded-lg border bg-background pr-3 pl-9 text-sm outline-none focus:border-[#00d4a0]/50"
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by workflow id or type…"
             value={query}

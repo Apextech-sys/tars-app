@@ -41,6 +41,37 @@ function normalizeFinding(f: FindingItem): {
   };
 }
 
+interface DisagreementActionResult {
+  ok?: boolean;
+  error?: string;
+  commentUrl?: string;
+  findingsPosted?: number;
+}
+
+function showActionSuccessToast(
+  action: "post-codex" | "post-claude" | "post-merged" | "dismiss",
+  data: DisagreementActionResult
+) {
+  if (action === "dismiss") {
+    toast.success("Dismissed as noise.", { duration: 4000 });
+    return;
+  }
+  if (data.commentUrl) {
+    const url = data.commentUrl;
+    const plural = data.findingsPosted === 1 ? "" : "s";
+    const count = data.findingsPosted ?? 0;
+    toast.success(`Posted ${count} finding${plural} to PR.`, {
+      duration: 5000,
+      action: {
+        label: "View comment",
+        onClick: () => window.open(url, "_blank"),
+      },
+    });
+    return;
+  }
+  toast.success("Action recorded.", { duration: 4000 });
+}
+
 function FindingsList({ findings }: { findings: FindingItem[] }) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
@@ -60,6 +91,7 @@ function FindingsList({ findings }: { findings: FindingItem[] }) {
         return (
           <div
             className="rounded-md border border-border bg-card/50"
+            // biome-ignore lint/suspicious/noArrayIndexKey: findings list is static (from the disagreement payload, never reordered/filtered) and has no stable id; index also keys the expand/collapse state
             key={`${norm.filePath}-${norm.line}-${i}`}
           >
             <button
@@ -177,7 +209,7 @@ export function DisagreementPanel({
   const overlapBelowThreshold =
     overlapPct !== null && overlapPct / 100 < threshold;
 
-  async function handleAction(
+  function handleAction(
     action: "post-codex" | "post-claude" | "post-merged" | "dismiss"
   ) {
     startTransition(async () => {
@@ -187,12 +219,7 @@ export function DisagreementPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ runId, action }),
         });
-        const data = (await res.json()) as {
-          ok?: boolean;
-          error?: string;
-          commentUrl?: string;
-          findingsPosted?: number;
-        };
+        const data = (await res.json()) as DisagreementActionResult;
         if (!res.ok) {
           toast.error(data.error ?? "Action failed");
           return;
@@ -200,25 +227,7 @@ export function DisagreementPanel({
         // Only flip the local disabled state once the backend confirms the
         // action landed (Octokit post succeeded OR dismiss recorded).
         setLocalAction(action);
-        if (action === "dismiss") {
-          toast.success("Dismissed as noise.", { duration: 4000 });
-        } else if (data.commentUrl) {
-          const url = data.commentUrl;
-          toast.success(
-            `Posted ${data.findingsPosted ?? 0} finding${
-              data.findingsPosted === 1 ? "" : "s"
-            } to PR.`,
-            {
-              duration: 5000,
-              action: {
-                label: "View comment",
-                onClick: () => window.open(url, "_blank"),
-              },
-            }
-          );
-        } else {
-          toast.success("Action recorded.", { duration: 4000 });
-        }
+        showActionSuccessToast(action, data);
       } catch {
         toast.error("Network error — try again");
       }

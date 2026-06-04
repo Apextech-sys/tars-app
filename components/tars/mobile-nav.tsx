@@ -98,6 +98,7 @@ export function MobileDrawer({
   const pathname = usePathname();
 
   // Close on route change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `pathname` is intentionally the trigger that closes the drawer on navigation; the body only calls onClose(). Removing it would stop the drawer closing on route change.
   useEffect(() => {
     onClose();
   }, [pathname, onClose]);

@@ -33,6 +33,7 @@ export type ProjectsMap = Record<string, ProjectPolicy>;
 // Simple cache to avoid re-reading on every hot render
 let _cache: { mtime: number; data: ProjectsMap } | null = null;
 
+// biome-ignore lint/suspicious/useAwait: "use server" exports must be async Server Actions even when the body is synchronous.
 export async function invalidateCache() {
   _cache = null;
 }
@@ -56,6 +57,7 @@ export async function loadProjectsYaml(): Promise<{
   }
 }
 
+// biome-ignore lint/suspicious/useAwait: "use server" exports must be async Server Actions; callers await the returned Promise.
 export async function saveProjectsYaml(
   yamlText: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {

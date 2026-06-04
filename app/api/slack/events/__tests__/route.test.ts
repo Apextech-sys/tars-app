@@ -130,7 +130,7 @@ describe("POST /api/slack/events", () => {
   });
 
   it("routes app_mention through chat handler and posts response", async () => {
-    getAppSettingMock.mockImplementation(async (k: string) => {
+    getAppSettingMock.mockImplementation((k: string) => {
       if (k === "slack_allowed_channels") {
         return ["C123"];
       }
@@ -169,7 +169,7 @@ describe("POST /api/slack/events", () => {
   });
 
   it("routes DM even without allowlist", async () => {
-    getAppSettingMock.mockImplementation(async (k: string) => {
+    getAppSettingMock.mockImplementation((k: string) => {
       if (k === "slack_allowed_channels") {
         return [];
       }
@@ -203,7 +203,7 @@ describe("POST /api/slack/events", () => {
   });
 
   it("ignores mention in non-allowed channel", async () => {
-    getAppSettingMock.mockImplementation(async (k: string) => {
+    getAppSettingMock.mockImplementation((k: string) => {
       if (k === "slack_allowed_channels") {
         return ["C-allowed"];
       }
@@ -235,7 +235,7 @@ describe("POST /api/slack/events", () => {
   });
 
   it("ignores echoes from the bot itself", async () => {
-    getAppSettingMock.mockImplementation(async (k: string) => {
+    getAppSettingMock.mockImplementation((k: string) => {
       if (k === "slack_allowed_channels") {
         return ["C123"];
       }

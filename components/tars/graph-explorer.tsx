@@ -101,7 +101,7 @@ function nodeStyle(type: string, isCenter: boolean): CSSProperties {
 
 function propRows(
   type: string,
-  props: Record<string, unknown>,
+  props: Record<string, unknown>
 ): [string, string][] {
   const want: Record<string, string[]> = {
     AwsResource: ["service", "region", "stage", "restype"],
@@ -117,6 +117,47 @@ function propRows(
     .map(([k, v]) => [k, String(v)] as [string, string]);
 }
 
+function buildGraph(data: NodeData | null): { nodes: Node[]; edges: Edge[] } {
+  const ns: Node[] = [];
+  const es: Edge[] = [];
+  const center = data?.node;
+  if (!center) {
+    return { nodes: ns, edges: es };
+  }
+  ns.push({
+    id: center.id,
+    position: { x: 0, y: 0 },
+    data: { label: pretty(center.type, center.label) },
+    style: nodeStyle(center.type, true),
+  });
+  const neigh = (data?.neighbors ?? []).slice(0, 40);
+  const count = neigh.length || 1;
+  const twoRings = count > 16;
+  neigh.forEach((nb, i) => {
+    const ring = twoRings && i % 2 === 1 ? 1 : 0;
+    const radius = 290 + ring * 160;
+    const angle = (i / count) * 2 * Math.PI;
+    ns.push({
+      id: nb.id,
+      position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
+      data: { label: pretty(nb.type, nb.label) },
+      style: nodeStyle(nb.type, false),
+    });
+    const out = nb.dir === "out";
+    es.push({
+      id: `${center.id}__${nb.id}__${nb.rel}__${nb.dir}`,
+      source: out ? center.id : nb.id,
+      target: out ? nb.id : center.id,
+      label: REL_LABEL[nb.rel] ?? nb.rel.toLowerCase(),
+      style: { stroke: "#52525b" },
+      labelStyle: { fill: "#a1a1aa", fontSize: 9 },
+      labelBgStyle: { fill: "#18181b" },
+    });
+  });
+  return { nodes: ns, edges: es };
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: breadth-heavy presentational component (18 vs 15) — the count is driven by inline JSX conditional rendering for the search box, results dropdown, back/loading overlays, and sidebar. Graph-building was already extracted to buildGraph(); further splitting the JSX into sub-components risks the ReactFlow/state wiring for a marginal score gain.
 export function GraphExplorer({ initialId }: { initialId: string }) {
   const [centerId, setCenterId] = useState(initialId);
   const [data, setData] = useState<NodeData | null>(null);
@@ -159,15 +200,16 @@ export function GraphExplorer({ initialId }: { initialId: string }) {
       setResults([]);
       setQ("");
     },
-    [centerId],
+    [centerId]
   );
 
   const back = useCallback(() => {
     setHistory((h) => {
-      if (h.length === 0) {
+      const last = h.at(-1);
+      if (last === undefined) {
         return h;
       }
-      setCenterId(h[h.length - 1]);
+      setCenterId(last);
       return h.slice(0, -1);
     });
   }, []);
@@ -191,45 +233,7 @@ export function GraphExplorer({ initialId }: { initialId: string }) {
     }, 250);
   }, []);
 
-  const { nodes, edges } = useMemo(() => {
-    const ns: Node[] = [];
-    const es: Edge[] = [];
-    const center = data?.node;
-    if (!center) {
-      return { nodes: ns, edges: es };
-    }
-    ns.push({
-      id: center.id,
-      position: { x: 0, y: 0 },
-      data: { label: pretty(center.type, center.label) },
-      style: nodeStyle(center.type, true),
-    });
-    const neigh = (data?.neighbors ?? []).slice(0, 40);
-    const count = neigh.length || 1;
-    const twoRings = count > 16;
-    neigh.forEach((nb, i) => {
-      const ring = twoRings && i % 2 === 1 ? 1 : 0;
-      const radius = 290 + ring * 160;
-      const angle = (i / count) * 2 * Math.PI;
-      ns.push({
-        id: nb.id,
-        position: { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius },
-        data: { label: pretty(nb.type, nb.label) },
-        style: nodeStyle(nb.type, false),
-      });
-      const out = nb.dir === "out";
-      es.push({
-        id: `${center.id}__${nb.id}__${nb.rel}__${nb.dir}`,
-        source: out ? center.id : nb.id,
-        target: out ? nb.id : center.id,
-        label: REL_LABEL[nb.rel] ?? nb.rel.toLowerCase(),
-        style: { stroke: "#52525b" },
-        labelStyle: { fill: "#a1a1aa", fontSize: 9 },
-        labelBgStyle: { fill: "#18181b" },
-      });
-    });
-    return { nodes: ns, edges: es };
-  }, [data]);
+  const { nodes, edges } = useMemo(() => buildGraph(data), [data]);
 
   const onNodeClick = useCallback(
     (_evt: unknown, node: Node) => {
@@ -237,7 +241,7 @@ export function GraphExplorer({ initialId }: { initialId: string }) {
         recenter(node.id);
       }
     },
-    [centerId, recenter],
+    [centerId, recenter]
   );
 
   const center = data?.node;
@@ -386,7 +390,9 @@ export function GraphExplorer({ initialId }: { initialId: string }) {
                       {TYPE_LABEL[rs.type] ?? rs.type}
                     </span>
                     <span className="text-muted-foreground tabular-nums">
-                      {rs.shown < rs.count ? `${rs.shown} / ${rs.count}` : rs.count}
+                      {rs.shown < rs.count
+                        ? `${rs.shown} / ${rs.count}`
+                        : rs.count}
                     </span>
                   </div>
                 ))}

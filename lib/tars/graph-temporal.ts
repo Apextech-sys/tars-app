@@ -94,7 +94,9 @@ export async function getTemporal(): Promise<TemporalView> {
     namespace: sum?.namespace || wf?.namespace || "",
     counts: sum?.counts ?? {},
     workflows,
-    notes: available ? undefined : sum?.notes || wf?.notes || "tars-graph unreachable",
+    notes: available
+      ? undefined
+      : sum?.notes || wf?.notes || "tars-graph unreachable",
   };
 }
 
@@ -150,7 +152,7 @@ export async function getWorkflowDetail(
   const data = (await graphFetch(
     `/temporal/workflow?id=${encodeURIComponent(id)}&runId=${encodeURIComponent(runId)}`
   )) as Partial<WorkflowDetail> | null;
-  if (!(data && data.info)) {
+  if (!data?.info) {
     return { ...empty, notes: "workflow not found or tars-graph unreachable" };
   }
   return {

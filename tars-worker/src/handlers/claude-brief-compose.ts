@@ -100,6 +100,7 @@ RULES:
 - Be honest about gaps. If the graph or audit window is empty, SAY SO and
   emit fewer insights rather than inventing.`;
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: linear SDK-streaming handler — each branch handles one message subtype; extracting them would scatter the single streaming loop without reducing real complexity
 export const claudeBriefComposeHandler: JobHandler = async (ctx) => {
   const input = BriefComposeInputSchema.parse(ctx.job.payload);
 
@@ -214,6 +215,7 @@ function buildUserPrompt(
   return lines.join("\n");
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: a deliberate ladder of JSON-recovery fallbacks (raw -> fenced -> re-escaped -> surrogate-stripped -> brace-slice); the breadth is the feature and each rung is a trivial tryParse
 async function parseBriefOutput(text: string): Promise<BriefOutput> {
   const tryParse = (s: string): BriefOutput | null => {
     try {
@@ -234,10 +236,12 @@ async function parseBriefOutput(text: string): Promise<BriefOutput> {
    * (`\"`); we honor that and only flip in/out of string mode on
    * unescaped quotes.
    */
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: a hand-rolled char-state machine for escaping bare control chars inside JSON string literals; the branches ARE the state transitions and cannot be collapsed without losing correctness
   const reescapeNewlines = (s: string): string => {
     let out = "";
     let inString = false;
     let escaped = false;
+    // biome-ignore lint/style/useForOf: intentionally walks UTF-16 code units (s[i]) rather than code points; for...of would chunk surrogate pairs and is not equivalent here
     for (let i = 0; i < s.length; i++) {
       const ch = s[i];
       if (inString) {

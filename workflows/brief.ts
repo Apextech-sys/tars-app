@@ -87,6 +87,7 @@ function computeWindow(
   };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WDK "use workflow" durable orchestration — the complexity is breadth (many sequentially-audited context/dispatch steps), not nesting. Extracting steps into helpers would cross WDK step/workflow boundaries and risk replay determinism, which the brief is explicit must not change.
 export async function briefWorkflow(
   input: BriefWorkflowInput
 ): Promise<BriefWorkflowResult> {

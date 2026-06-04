@@ -128,6 +128,7 @@ async function writeAuditRow(args: {
   });
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: adjudication handler is a strict ordered guard chain (parse -> load -> state -> idempotency -> protect-mode -> dismiss fast-path -> payload -> action switch -> post -> persist -> audit); each branch enforces a documented invariant and the ordering is load-bearing for idempotency/audit, so splitting it risks the post-once contract.
 export async function POST(req: NextRequest) {
   let parsed: z.infer<typeof bodySchema>;
   try {
@@ -248,6 +249,11 @@ export async function POST(req: NextRequest) {
         ...pickFindings(payload, "claude"),
       ]);
       break;
+    default:
+      // Unreachable: "dismiss" returns earlier and the schema enum is closed.
+      // Guard the impossible state explicitly so `findings` stays definitely
+      // assigned and a future enum addition fails loudly instead of silently.
+      throw new Error(`Unhandled adjudication action: ${action as string}`);
   }
 
   const body = renderAdjudicatedComment({

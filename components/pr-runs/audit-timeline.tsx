@@ -72,6 +72,20 @@ function isDataFlat(data: unknown): boolean {
   return vals.every((v) => typeof v !== "object" || v === null);
 }
 
+function FlatCellValue({ val }: { val: unknown }) {
+  if (val === null) {
+    return <span className="text-zinc-600">null</span>;
+  }
+  if (typeof val === "boolean") {
+    return (
+      <span className={val ? "text-emerald-400" : "text-red-400"}>
+        {String(val)}
+      </span>
+    );
+  }
+  return <>{String(val)}</>;
+}
+
 function FlatDataTable({ data }: { data: Record<string, unknown> }) {
   return (
     <table className="w-full text-xs">
@@ -82,15 +96,7 @@ function FlatDataTable({ data }: { data: Record<string, unknown> }) {
               {key}
             </td>
             <td className="break-all py-1 font-mono text-zinc-300">
-              {val === null ? (
-                <span className="text-zinc-600">null</span>
-              ) : typeof val === "boolean" ? (
-                <span className={val ? "text-emerald-400" : "text-red-400"}>
-                  {String(val)}
-                </span>
-              ) : (
-                String(val)
-              )}
+              <FlatCellValue val={val} />
             </td>
           </tr>
         ))}

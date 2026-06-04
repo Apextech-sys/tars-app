@@ -141,6 +141,42 @@ export async function fetchRecentIssues(args: {
   }
 }
 
+interface CommitSearchItem {
+  repository?: { full_name?: string };
+  sha?: string;
+  commit?: { message?: string };
+  author?: { login?: string } | null;
+}
+
+/**
+ * Fold a single commit-search item into the per-repo tally. Increments an
+ * existing repo's count, or registers a new repo (subject to the maxRepos
+ * cap). Pure helper extracted from fetchCommitActivity to keep that step
+ * within the cognitive-complexity budget; behavior is unchanged.
+ */
+function accumulateCommit(
+  byRepo: Map<string, CommitActivity>,
+  commit: CommitSearchItem,
+  maxRepos: number
+): void {
+  const repo = commit.repository?.full_name ?? "(unknown)";
+  const existing = byRepo.get(repo);
+  if (existing) {
+    existing.commits += 1;
+    return;
+  }
+  if (byRepo.size >= maxRepos) {
+    return;
+  }
+  byRepo.set(repo, {
+    repo,
+    commits: 1,
+    latest_sha: commit.sha,
+    latest_title: commit.commit?.message?.split("\n")[0]?.slice(0, 140),
+    author: commit.author?.login ?? undefined,
+  });
+}
+
 /**
  * Aggregate commits across owners since windowStart, returning a per-repo
  * tally. We use the search API again because cross-repo commit listings
@@ -167,28 +203,8 @@ export async function fetchCommitActivity(args: {
         q,
         per_page: 100,
       });
-      for (const commit of (r.data.items ?? []) as Array<{
-        repository?: { full_name?: string };
-        sha?: string;
-        commit?: { message?: string };
-        author?: { login?: string } | null;
-      }>) {
-        const repo = commit.repository?.full_name ?? "(unknown)";
-        const existing = byRepo.get(repo);
-        if (existing) {
-          existing.commits += 1;
-        } else {
-          if (byRepo.size >= maxRepos) {
-            continue;
-          }
-          byRepo.set(repo, {
-            repo,
-            commits: 1,
-            latest_sha: commit.sha,
-            latest_title: commit.commit?.message?.split("\n")[0]?.slice(0, 140),
-            author: commit.author?.login ?? undefined,
-          });
-        }
+      for (const commit of (r.data.items ?? []) as CommitSearchItem[]) {
+        accumulateCommit(byRepo, commit, maxRepos);
       }
     }
     const items = Array.from(byRepo.values()).sort(

@@ -110,6 +110,34 @@ function normalizeIssueTracker(value: unknown): "linear" | "github" | "none" {
 }
 
 /**
+ * Find the projects.yaml entry whose `repos` list contains fullName
+ * (case-insensitive). Returns the matched key + project, or nulls when no
+ * project owns the repo. Pure helper extracted from resolvePolicy to keep that
+ * step within the cognitive-complexity budget; matching behavior is unchanged.
+ */
+function findMatchingProject(
+  projects: Record<string, Record<string, unknown>>,
+  fullName: string
+): { key: string; project: Record<string, unknown> } | null {
+  for (const [key, project] of Object.entries(projects)) {
+    if (!project || typeof project !== "object") {
+      continue;
+    }
+    const repos = (project as { repos?: unknown }).repos;
+    if (!Array.isArray(repos)) {
+      continue;
+    }
+    const owns = repos.some(
+      (r) => typeof r === "string" && r.toLowerCase() === fullName
+    );
+    if (owns) {
+      return { key, project: project as Record<string, unknown> };
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve the policy for a given repo (owner/repo).
  *
  * Marked `"use step"`. The workflow calls this once at the top of the
@@ -123,27 +151,9 @@ export async function resolvePolicy(
   const fullName = `${owner}/${repo}`.toLowerCase();
   const projects = await loadProjects();
 
-  let matchedKey: string | null = null;
-  let matchedProject: Record<string, unknown> | null = null;
-  for (const [key, project] of Object.entries(projects)) {
-    if (!project || typeof project !== "object") {
-      continue;
-    }
-    const repos = (project as { repos?: unknown }).repos;
-    if (!Array.isArray(repos)) {
-      continue;
-    }
-    for (const r of repos) {
-      if (typeof r === "string" && r.toLowerCase() === fullName) {
-        matchedKey = key;
-        matchedProject = project as Record<string, unknown>;
-        break;
-      }
-    }
-    if (matchedKey) {
-      break;
-    }
-  }
+  const match = findMatchingProject(projects, fullName);
+  const matchedKey = match?.key ?? null;
+  const matchedProject = match?.project ?? null;
 
   if (!matchedProject) {
     return {

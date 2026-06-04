@@ -469,6 +469,7 @@ async function runDebate(ctx: {
  * Main workflow entry point. "use workflow" at the top of the function so
  * the TypeScript plugin registers it as a durable workflow.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: WDK "use workflow" durable orchestration — complexity is the breadth of the review pipeline (routing, fetch, debate, approval/skip branches) plus the wrapping error-capture try/catch, not deep nesting. The audit closure, upsertPrReviewRun calls, and early returns are part of the durable replay sequence; extracting them across WDK step/workflow boundaries would risk replay determinism, which the brief is explicit must not change.
 export async function prReviewWorkflow(
   input: PRReviewInput
 ): Promise<PRReviewResult> {

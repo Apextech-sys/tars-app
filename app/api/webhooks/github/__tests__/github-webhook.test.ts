@@ -281,15 +281,13 @@ describe("POST /api/webhooks/github — route handler", () => {
     });
 
     let capturedBody: any;
-    const mockFetch = vi
-      .fn()
-      .mockImplementation(async (_url: string, opts: any) => {
-        capturedBody = JSON.parse(opts.body as string);
-        return {
-          ok: true,
-          json: async () => ({ workflowRunId: "wfr_konverge_guard" }),
-        };
+    const mockFetch = vi.fn().mockImplementation((_url: string, opts: any) => {
+      capturedBody = JSON.parse(opts.body as string);
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ workflowRunId: "wfr_konverge_guard" }),
       });
+    });
     vi.stubGlobal("fetch", mockFetch);
 
     const body = JSON.stringify({

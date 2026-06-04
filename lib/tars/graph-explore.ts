@@ -98,7 +98,7 @@ export async function searchGraph(q: string): Promise<SearchResult[]> {
 
 export async function getGraphNode(id: string): Promise<GraphNodeView> {
   const d = (await gfetch(
-    `/graph/node?id=${encodeURIComponent(id)}`,
+    `/graph/node?id=${encodeURIComponent(id)}`
   )) as Partial<GraphNodeView> | null;
   if (!d) {
     return {

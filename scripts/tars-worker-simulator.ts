@@ -68,7 +68,7 @@ async function processJob(
     const result = await dispatchKind(job.kind, job.payload);
     await sql /* sql */`
       update tars_jobs
-      set status='completed', completed_at=now(), result=${sql.json(result as any)}
+      set status='completed', completed_at=now(), result=${sql.json(result as Parameters<typeof sql.json>[0])}
       where job_id=${job.job_id}
     `;
     // Resume the workflow hook
@@ -148,11 +148,10 @@ async function callAnthropic(
       .map((c) => c.text)
       .join("\n");
     const jsonMatch = text.match(JSON_FENCE_RE) ?? text.match(JSON_OBJ_TAIL_RE);
-    const rawJson = jsonMatch
-      ? Array.isArray(jsonMatch)
-        ? (jsonMatch[1] ?? jsonMatch[0])
-        : jsonMatch
-      : text;
+    // .match() returns RegExpMatchArray | null, so a truthy jsonMatch is
+    // always an array — use the first capture group, falling back to the
+    // full match. (Flattened from a nested ternary; behavior preserved.)
+    const rawJson = jsonMatch ? (jsonMatch[1] ?? jsonMatch[0]) : text;
     return JSON.parse(rawJson as string);
   } catch (err) {
     vlog(

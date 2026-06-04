@@ -57,6 +57,72 @@ function relativeTime(iso: string): string {
   return `${Math.floor(m / 60)}h ${m % 60}m ago`;
 }
 
+function CompletedSummary({
+  run,
+  auditRows,
+}: {
+  run: PrRun;
+  auditRows: AuditLogRow[];
+}) {
+  const findings = extractFindingsFromAuditLog(auditRows);
+  if (findings.length === 0 && run.findingsCount > 0) {
+    return (
+      <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
+        <div className="flex items-center gap-2 text-emerald-400">
+          <CheckCircle2 className="size-4" />
+          <span className="font-medium text-sm">
+            {run.findingsCount} finding{run.findingsCount === 1 ? "" : "s"} —
+            review posted
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (findings.length === 0) {
+    return (
+      <div className="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">
+        <div className="flex items-center gap-2 text-zinc-400">
+          <CheckCircle2 className="size-4" />
+          <span className="text-sm">No findings extracted from audit log</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-muted-foreground text-xs">
+        {findings.length} finding{findings.length === 1 ? "" : "s"} surfaced
+      </p>
+      {findings.map((f, i) => {
+        const filePath = f.file ?? f.filePath ?? "unknown";
+        const line = String(f.line ?? f.lineNumber ?? "?");
+        const text =
+          f.suggestion ?? f.message ?? f.description ?? "(no detail)";
+        const severity = f.severity ?? "MINOR";
+
+        return (
+          <div
+            className="space-y-2 rounded-md border border-border bg-card/50 p-3"
+            // biome-ignore lint/suspicious/noArrayIndexKey: findings have no stable id and can share the same file:line; index is the only disambiguator and the list is render-only (never reordered)
+            key={`${filePath}-${line}-${i}`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <SeverityBadge severity={severity} />
+              <code className="font-mono text-muted-foreground text-xs">
+                {filePath}:{line}
+              </code>
+            </div>
+            <p className="text-foreground/80 text-sm leading-relaxed">{text}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: flat per-status dispatch — one distinct presentational arm per run.status (8 statuses); extracting further would add indirection without reducing real branching risk
 export function FindingsSummary({
   run,
   auditRows,
@@ -67,65 +133,7 @@ export function FindingsSummary({
   const policy = run.policy as PolicyConfig | null;
 
   if (run.status === "completed") {
-    const findings = extractFindingsFromAuditLog(auditRows);
-    if (findings.length === 0 && run.findingsCount > 0) {
-      return (
-        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4">
-          <div className="flex items-center gap-2 text-emerald-400">
-            <CheckCircle2 className="size-4" />
-            <span className="font-medium text-sm">
-              {run.findingsCount} finding{run.findingsCount === 1 ? "" : "s"} —
-              review posted
-            </span>
-          </div>
-        </div>
-      );
-    }
-
-    if (findings.length === 0) {
-      return (
-        <div className="rounded-lg border border-zinc-700 bg-zinc-900/30 p-4">
-          <div className="flex items-center gap-2 text-zinc-400">
-            <CheckCircle2 className="size-4" />
-            <span className="text-sm">
-              No findings extracted from audit log
-            </span>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-2">
-        <p className="text-muted-foreground text-xs">
-          {findings.length} finding{findings.length === 1 ? "" : "s"} surfaced
-        </p>
-        {findings.map((f, i) => {
-          const filePath = f.file ?? f.filePath ?? "unknown";
-          const line = String(f.line ?? f.lineNumber ?? "?");
-          const text =
-            f.suggestion ?? f.message ?? f.description ?? "(no detail)";
-          const severity = f.severity ?? "MINOR";
-
-          return (
-            <div
-              className="space-y-2 rounded-md border border-border bg-card/50 p-3"
-              key={`${filePath}-${line}-${i}`}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <SeverityBadge severity={severity} />
-                <code className="font-mono text-muted-foreground text-xs">
-                  {filePath}:{line}
-                </code>
-              </div>
-              <p className="text-foreground/80 text-sm leading-relaxed">
-                {text}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    );
+    return <CompletedSummary auditRows={auditRows} run={run} />;
   }
 
   if (run.status === "disagreed") {

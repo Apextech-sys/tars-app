@@ -160,26 +160,26 @@ export function renderBriefMarkdown(
   meta: { kind: BriefKind; date: string }
 ): string {
   const lines: string[] = [];
-  const heading =
-    meta.kind === "morning"
-      ? "TARS Morning Brief"
-      : meta.kind === "evening"
-        ? "TARS Evening Brief"
-        : "TARS Briefing";
+  const headingByKind: Record<BriefKind, string> = {
+    morning: "TARS Morning Brief",
+    evening: "TARS Evening Brief",
+    adhoc: "TARS Briefing",
+  };
+  const heading = headingByKind[meta.kind];
   lines.push(`# ${heading} — ${meta.date}`);
   lines.push("");
   lines.push(out.summary);
   lines.push("");
 
+  const tagBySeverity: Record<InsightSeverity, string> = {
+    act: "**[ACT]**",
+    watch: "**[watch]**",
+    info: "[info]",
+  };
   if (out.insights.length > 0) {
     lines.push("## Insights");
     for (const i of out.insights) {
-      const tag =
-        i.severity === "act"
-          ? "**[ACT]**"
-          : i.severity === "watch"
-            ? "**[watch]**"
-            : "[info]";
+      const tag = tagBySeverity[i.severity];
       lines.push(`- ${tag} **${i.title}** — ${i.detail}`);
       lines.push(`  - _source:_ ${i.citation}`);
     }

@@ -104,6 +104,51 @@ export async function fetchPRFiles(
   return files;
 }
 
+interface SynthesizedDiffFile {
+  filename: string;
+  status: string;
+  patch?: string;
+  additions: number;
+  deletions: number;
+}
+
+/**
+ * Assemble a unified diff from per-file patches, capped at maxBytes. Pure
+ * string assembly extracted from fetchPRDiff so that step stays within the
+ * cognitive-complexity budget; behavior (header format, no-patch fallback,
+ * byte cap, truncation note) is unchanged.
+ */
+function synthesizeUnifiedDiff(
+  files: SynthesizedDiffFile[],
+  maxBytes: number
+): string {
+  const sections: string[] = [];
+  sections.push(
+    `# Synthesized diff — original diff exceeded GitHub's 300-file limit.\n# ${files.length} files changed.\n`
+  );
+  let bytesUsed = sections[0].length;
+  let truncated = false;
+  for (const f of files) {
+    const header = `diff --git a/${f.filename} b/${f.filename}\n--- a/${f.filename}\n+++ b/${f.filename}\n`;
+    const body =
+      f.patch ??
+      `# (no patch available — status=${f.status}, +${f.additions}/-${f.deletions})\n`;
+    const section = `${header + body}\n`;
+    if (bytesUsed + section.length > maxBytes) {
+      truncated = true;
+      break;
+    }
+    sections.push(section);
+    bytesUsed += section.length;
+  }
+  if (truncated) {
+    sections.push(
+      `\n[synthesized diff truncated at ~${maxBytes} bytes — ${files.length} total files in PR]\n`
+    );
+  }
+  return sections.join("");
+}
+
 /**
  * Fetch the unified diff for a PR.
  *
@@ -168,13 +213,7 @@ export async function fetchPRDiff(
   }
 
   // Synthesize a unified diff from per-file patches.
-  const files: Array<{
-    filename: string;
-    status: string;
-    patch?: string;
-    additions: number;
-    deletions: number;
-  }> = [];
+  const files: SynthesizedDiffFile[] = [];
   for await (const resp of octo.paginate.iterator(octo.pulls.listFiles, {
     owner,
     repo,
@@ -192,31 +231,7 @@ export async function fetchPRDiff(
     }
   }
 
-  const sections: string[] = [];
-  sections.push(
-    `# Synthesized diff — original diff exceeded GitHub's 300-file limit.\n# ${files.length} files changed.\n`
-  );
-  let bytesUsed = sections[0].length;
-  let truncated = false;
-  for (const f of files) {
-    const header = `diff --git a/${f.filename} b/${f.filename}\n--- a/${f.filename}\n+++ b/${f.filename}\n`;
-    const body =
-      f.patch ??
-      `# (no patch available — status=${f.status}, +${f.additions}/-${f.deletions})\n`;
-    const section = `${header + body}\n`;
-    if (bytesUsed + section.length > MAX_DIFF_BYTES) {
-      truncated = true;
-      break;
-    }
-    sections.push(section);
-    bytesUsed += section.length;
-  }
-  if (truncated) {
-    sections.push(
-      `\n[synthesized diff truncated at ~${MAX_DIFF_BYTES} bytes — ${files.length} total files in PR]\n`
-    );
-  }
-  return sections.join("");
+  return synthesizeUnifiedDiff(files, MAX_DIFF_BYTES);
 }
 
 export interface PostPrCommentResult {

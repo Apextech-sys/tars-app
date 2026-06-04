@@ -88,8 +88,11 @@ describe("no-op job round-trip", () => {
       await new Promise((r) => setTimeout(r, 100));
     }
 
-    expect(captured.find((c) => c.jobId === id)).toBeDefined();
-    const cb = captured.find((c) => c.jobId === id)!;
+    const cb = captured.find((c) => c.jobId === id);
+    expect(cb).toBeDefined();
+    if (!cb) {
+      throw new Error("callback for job was not captured");
+    }
 
     const expectedSig = createHmac("sha256", cfg.TARS_WORKER_CALLBACK_SECRET)
       .update(cb.rawBody)

@@ -10,6 +10,8 @@
  * All Node imports are lazy so the WDK static analyzer doesn't reject them.
  */
 
+import type { JSONValue } from "postgres";
+
 export interface DispatchOptions {
   idempotencyKey?: string;
   callbackUrl?: string;
@@ -65,7 +67,7 @@ export async function dispatchJob(
       values (
         ${jobId},
         ${kind},
-        ${sql.json(payload as any)},
+        ${sql.json(payload as unknown as JSONValue)},
         ${opts.idempotencyKey ?? null},
         ${opts.callbackUrl ?? null},
         ${opts.maxAttempts ?? 3}

@@ -98,6 +98,7 @@ interface Block {
   lang?: string;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: single-pass markdown block tokenizer — one branch per construct (fence/blank/hr/heading/blockquote/list/paragraph), each advancing the shared line index. Splitting branches into helpers would not reduce real complexity and would risk the index-advancement correctness this loop guarantees.
 function parseBlocks(raw: string): Block[] {
   const lines = raw.replace(CRLF_RE, "\n").split("\n");
   const blocks: Block[] = [];
@@ -165,10 +166,13 @@ function parseBlocks(raw: string): Block[] {
           break;
         }
         const indent = m[1].length;
-        items.push({
-          depth: indent >= 4 ? 2 : indent >= 2 ? 1 : 0,
-          text: m[3],
-        });
+        let depth = 0;
+        if (indent >= 4) {
+          depth = 2;
+        } else if (indent >= 2) {
+          depth = 1;
+        }
+        items.push({ depth, text: m[3] });
         i++;
       }
       blocks.push({ type: isOrdered ? "ol" : "ul", items });
@@ -192,6 +196,61 @@ function parseBlocks(raw: string): Block[] {
     blocks.push({ type: "paragraph", text: buf.join(" ") });
   }
   return blocks;
+}
+
+function renderListBlock(block: Block, key: number): ReactNode {
+  const Tag = block.type === "ol" ? "ol" : "ul";
+  // We only respect depth==0 vs depth>0 by emitting a nested list of
+  // the same kind directly under the previous top-level <li>.
+  const items = block.items ?? [];
+  const nodes: ReactNode[] = [];
+  let currentTopIdx = -1;
+  const nested: Array<Array<{ text: string }>> = [];
+  for (const it of items) {
+    if (it.depth === 0) {
+      currentTopIdx = nested.length;
+      nested.push([]);
+    } else if (currentTopIdx >= 0) {
+      nested[currentTopIdx].push({ text: it.text });
+    }
+  }
+  let topIdx = 0;
+  for (const it of items) {
+    if (it.depth !== 0) {
+      continue;
+    }
+    const subItems = nested[topIdx] ?? [];
+    nodes.push(
+      <li className="brief-li" key={`${key}-${topIdx}`}>
+        <span
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
+          dangerouslySetInnerHTML={{
+            __html: renderInline(escapeHtml(it.text)),
+          }}
+        />
+        {subItems.length > 0 && (
+          <ul className="brief-li-nested">
+            {subItems.map((s, j) => (
+              <li
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
+                dangerouslySetInnerHTML={{
+                  __html: renderInline(escapeHtml(s.text)),
+                }}
+                // biome-ignore lint/suspicious/noArrayIndexKey: nested markdown list items have no stable id; the list is purely positional and re-rendered only when source text changes, so the index-composite key is correct.
+                key={`${key}-${topIdx}-${j}`}
+              />
+            ))}
+          </ul>
+        )}
+      </li>
+    );
+    topIdx++;
+  }
+  return (
+    <Tag className="brief-list" key={key}>
+      {nodes}
+    </Tag>
+  );
 }
 
 function renderBlock(block: Block, key: number): ReactNode {
@@ -245,59 +304,8 @@ function renderBlock(block: Block, key: number): ReactNode {
         />
       );
     case "ul":
-    case "ol": {
-      const Tag = block.type === "ol" ? "ol" : "ul";
-      // We only respect depth==0 vs depth>0 by emitting a nested list of
-      // the same kind directly under the previous top-level <li>.
-      const items = block.items ?? [];
-      const nodes: ReactNode[] = [];
-      let currentTopIdx = -1;
-      const nested: Array<Array<{ text: string }>> = [];
-      items.forEach((it) => {
-        if (it.depth === 0) {
-          currentTopIdx = nested.length;
-          nested.push([]);
-        } else if (currentTopIdx >= 0) {
-          nested[currentTopIdx].push({ text: it.text });
-        }
-      });
-      let topIdx = 0;
-      items.forEach((it) => {
-        if (it.depth !== 0) {
-          return;
-        }
-        const subItems = nested[topIdx] ?? [];
-        nodes.push(
-          <li className="brief-li" key={`${key}-${topIdx}`}>
-            <span
-              // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
-              dangerouslySetInnerHTML={{
-                __html: renderInline(escapeHtml(it.text)),
-              }}
-            />
-            {subItems.length > 0 && (
-              <ul className="brief-li-nested">
-                {subItems.map((s, j) => (
-                  <li
-                    // biome-ignore lint/security/noDangerouslySetInnerHtml: contents pre-escaped
-                    dangerouslySetInnerHTML={{
-                      __html: renderInline(escapeHtml(s.text)),
-                    }}
-                    key={`${key}-${topIdx}-${j}`}
-                  />
-                ))}
-              </ul>
-            )}
-          </li>
-        );
-        topIdx++;
-      });
-      return (
-        <Tag className="brief-list" key={key}>
-          {nodes}
-        </Tag>
-      );
-    }
+    case "ol":
+      return renderListBlock(block, key);
     default:
       return null;
   }

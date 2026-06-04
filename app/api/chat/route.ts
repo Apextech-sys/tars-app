@@ -19,6 +19,21 @@ try {
   soulPrompt = "You are TARS, a helpful AI assistant.";
 }
 
+// Normalize a tool_result content block (string | array of text blocks |
+// other) into a plain string, preserving the original branching behavior.
+function toolResultToString(content: unknown): string {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return (content as Array<{ type: string; text: string }>)
+      .filter((b) => b.type === "text")
+      .map((b) => b.text)
+      .join("");
+  }
+  return String(content ?? "");
+}
+
 async function ensureAnonUser(userId: string) {
   try {
     // Use the postgres client directly for raw upsert
@@ -32,6 +47,7 @@ async function ensureAnonUser(userId: string) {
   }
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: breadth-heavy chat handler (session resolution + SSE streaming of multiple SDK message kinds); decomposing risks altering request/stream behavior.
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as {
     sessionId?: string;
@@ -85,6 +101,11 @@ export async function POST(req: NextRequest) {
     dbSessionId = inserted[0].id;
   }
 
+  // From here on dbSessionId is guaranteed to be a string. Use a
+  // non-optional alias so downstream code (incl. the stream closure)
+  // has a narrowed type without non-null assertions.
+  const resolvedSessionId: string = dbSessionId;
+
   // Build user-message parts. When a brief_reply metadata marker is
   // attached we record it alongside the text so the conversation history
   // shows what brief was being responded to. We also link the chat
@@ -114,7 +135,7 @@ export async function POST(req: NextRequest) {
     try {
       await migrationClient.unsafe(
         "UPDATE brief_replies SET chat_session_id = $1::uuid WHERE id = $2::uuid",
-        [dbSessionId!, metadata.briefReplyId]
+        [resolvedSessionId, metadata.briefReplyId]
       );
     } catch (err) {
       console.warn("[chat] brief_replies link failed", err);
@@ -123,6 +144,7 @@ export async function POST(req: NextRequest) {
 
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: SSE producer fans out over many distinct SDK message types (system/stream_event/assistant/user/result); the branch breadth is intrinsic and splitting it risks the streaming contract.
     async start(controller) {
       const send = (code: string, value: unknown) => {
         controller.enqueue(
@@ -179,7 +201,7 @@ export async function POST(req: NextRequest) {
               await db
                 .update(chatSessions)
                 .set({ claudeSessionId: newClaudeSessionId })
-                .where(eq(chatSessions.id, dbSessionId!));
+                .where(eq(chatSessions.id, resolvedSessionId));
             }
             send("d", {
               sessionId: dbSessionId,
@@ -246,20 +268,7 @@ export async function POST(req: NextRequest) {
                 content: unknown;
               }>) {
                 if (block.type === "tool_result") {
-                  const resultText =
-                    typeof block.content === "string"
-                      ? block.content
-                      : Array.isArray(block.content)
-                        ? (
-                            block.content as Array<{
-                              type: string;
-                              text: string;
-                            }>
-                          )
-                            .filter((b) => b.type === "text")
-                            .map((b) => b.text)
-                            .join("")
-                        : String(block.content ?? "");
+                  const resultText = toolResultToString(block.content);
                   send("a", {
                     toolCallId: block.tool_use_id,
                     result: resultText.slice(0, 4000),
@@ -303,7 +312,7 @@ export async function POST(req: NextRequest) {
               ? assistantParts
               : [{ type: "text", text: fullText }];
           await db.insert(chatMessages).values({
-            sessionId: dbSessionId!,
+            sessionId: resolvedSessionId,
             role: "assistant",
             parts,
             content: fullText,
@@ -321,7 +330,7 @@ export async function POST(req: NextRequest) {
         await db
           .update(chatSessions)
           .set(updateData)
-          .where(eq(chatSessions.id, dbSessionId!));
+          .where(eq(chatSessions.id, resolvedSessionId));
       } catch (err) {
         const errMsg = err instanceof Error ? err.message : String(err);
         send("3", errMsg);

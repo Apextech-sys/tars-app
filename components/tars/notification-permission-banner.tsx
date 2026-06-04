@@ -40,6 +40,7 @@ export function NotificationPermissionBanner({ onRequest }: Props) {
   }
 
   return (
+    // biome-ignore lint/a11y/useSemanticElements: explicit role="banner" guarantees the landmark regardless of where this strip is mounted; a native <header> only maps to banner when not nested in section/article/main/nav, so swapping it could silently drop the landmark.
     <div
       aria-label="Enable desktop notifications"
       className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm"
