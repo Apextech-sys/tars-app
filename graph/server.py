@@ -215,6 +215,110 @@ def docs_for_file(repo: str, file: str) -> dict:
     return {"available": True, "file": file, "docs": docs, "notes": ""}
 
 
+_OPS_CACHE = {"ts": 0.0, "data": None}
+
+
+def _ops_sessions():
+    import os
+    import boto3
+    out = []
+    if os.environ.get("AWS_ACCESS_KEY_ID"):
+        out.append(("apextech", boto3.Session()))
+    pak = os.environ.get("AWS_PROD_ACCESS_KEY_ID")
+    psk = os.environ.get("AWS_PROD_SECRET_ACCESS_KEY")
+    if pak and psk:
+        out.append(("konverge-prod", boto3.Session(
+            aws_access_key_id=pak, aws_secret_access_key=psk, region_name="eu-west-1")))
+    return out
+
+
+def _ops_for_session(label, sess):
+    import datetime
+    reg = "eu-west-1"
+    res = {"label": label, "accountId": "",
+           "alarms": {"OK": 0, "ALARM": 0, "INSUFFICIENT_DATA": 0, "firing": []},
+           "services": [], "rds": [], "costTrend": []}
+    try:
+        res["accountId"] = sess.client("sts").get_caller_identity()["Account"]
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        cw = sess.client("cloudwatch", region_name=reg)
+        for pg in cw.get_paginator("describe_alarms").paginate():
+            for a in pg.get("MetricAlarms", []) + pg.get("CompositeAlarms", []):
+                sv = a.get("StateValue", "")
+                res["alarms"][sv] = res["alarms"].get(sv, 0) + 1
+                if sv == "ALARM" and len(res["alarms"]["firing"]) < 50:
+                    res["alarms"]["firing"].append({
+                        "name": a["AlarmName"],
+                        "reason": (a.get("StateReason", "") or "")[:200],
+                    })
+    except Exception as e:  # noqa: BLE001
+        res["alarms"]["error"] = str(e)[:140]
+    try:
+        ecs = sess.client("ecs", region_name=reg)
+        for c in ecs.list_clusters().get("clusterArns", []):
+            cn = c.split("/")[-1]
+            arns = []
+            for x in ecs.get_paginator("list_services").paginate(cluster=c):
+                arns += x.get("serviceArns", [])
+            for i in range(0, len(arns), 10):
+                for sv in ecs.describe_services(
+                        cluster=c, services=arns[i:i + 10]).get("services", []):
+                    res["services"].append({
+                        "cluster": cn, "name": sv["serviceName"],
+                        "running": sv["runningCount"], "desired": sv["desiredCount"],
+                        "status": sv["status"],
+                    })
+    except Exception as e:  # noqa: BLE001
+        res["servicesError"] = str(e)[:140]
+    try:
+        for x in sess.client("rds", region_name=reg).describe_db_instances().get("DBInstances", []):
+            res["rds"].append({
+                "id": x["DBInstanceIdentifier"], "status": x["DBInstanceStatus"],
+                "engine": x.get("Engine", ""),
+            })
+    except Exception as e:  # noqa: BLE001
+        res["rdsError"] = str(e)[:140]
+    try:
+        ce = sess.client("ce", region_name="us-east-1")
+        end = datetime.date.today()
+        start = end - datetime.timedelta(days=14)
+        r = ce.get_cost_and_usage(
+            TimePeriod={"Start": start.isoformat(), "End": end.isoformat()},
+            Granularity="DAILY", Metrics=["UnblendedCost"])
+        for p in r.get("ResultsByTime", []):
+            res["costTrend"].append({
+                "date": p["TimePeriod"]["Start"],
+                "amount": round(float(p["Total"]["UnblendedCost"]["Amount"]), 2),
+            })
+    except Exception as e:  # noqa: BLE001
+        res["costError"] = str(e)[:140]
+    return res
+
+
+def aws_ops():
+    """Live operational snapshot per account — alarms, ECS health, RDS, cost trend.
+    60s in-memory cache (the boto3 fan-out is several seconds)."""
+    import os
+    import time as _t
+    if not (os.environ.get("AWS_ACCESS_KEY_ID") or os.environ.get("AWS_PROD_ACCESS_KEY_ID")):
+        return {"available": False, "notes": "aws creds not set"}
+    now = _t.time()
+    if _OPS_CACHE["data"] is not None and now - _OPS_CACHE["ts"] < 60:
+        return _OPS_CACHE["data"]
+    accounts = []
+    for label, sess in _ops_sessions():
+        try:
+            accounts.append(_ops_for_session(label, sess))
+        except Exception as e:  # noqa: BLE001
+            accounts.append({"label": label, "error": str(e)[:160]})
+    data = {"available": True, "accounts": accounts, "notes": ""}
+    _OPS_CACHE["ts"] = now
+    _OPS_CACHE["data"] = data
+    return data
+
+
 def _temporal_run(coro_fn):
     """Connect to Temporal Cloud (API key + TLS) and run coro_fn(client).
     Returns (result, None) or (None, error_dict). New connection per call —
@@ -538,6 +642,8 @@ class GraphHandler(BaseHTTPRequestHandler):
             self.send_json(200, list_aws_accounts())
         elif route == "/aws/cost":
             self.send_json(200, aws_cost())
+        elif route == "/aws/ops":
+            self.send_json(200, aws_ops())
         elif route == "/temporal/workflows":
             self.send_json(200, temporal_workflows())
         elif route == "/temporal/summary":
