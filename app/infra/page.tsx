@@ -8,13 +8,21 @@ import {
   DollarSign,
   GitFork,
   Layers,
-  Server,
+  type Server,
   ShieldAlert,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { getInfra, getOps, type OpsAccount } from "@/lib/tars/graph-aws";
+import {
+  ENV_NONPROD,
+  ENV_PROD,
+  type EnvBreakdown,
+  envForAccount,
+  getInfra,
+  getOps,
+  type OpsAccount,
+} from "@/lib/tars/graph-aws";
 
 export const dynamic = "force-dynamic";
 
@@ -176,6 +184,107 @@ function StatTile({
   );
 }
 
+interface EnvSummary {
+  env: string;
+  accountId: string;
+  cost: number;
+  trend: { date: string; amount: number }[];
+  healthy: number;
+  totalSvc: number;
+  firing: number;
+  secFiring: number;
+  rdsCount: number;
+  rdsUnhealthy: number;
+  resourceCount: number;
+  inf?: EnvBreakdown;
+}
+
+function EnvCard({ data, currency }: { data: EnvSummary; currency: string }) {
+  const isProd = data.env === ENV_PROD;
+  const max = Math.max(1, ...data.trend.map((p) => p.amount));
+  const degraded = data.totalSvc - data.healthy;
+  let alarmColor = "";
+  if (data.secFiring > 0) {
+    alarmColor = "text-red-400";
+  } else if (data.firing > 0) {
+    alarmColor = "text-amber-400";
+  }
+  return (
+    <div
+      className={`rounded-xl border bg-card p-4 ${
+        isProd ? "border-[#00d4a0]/40" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span
+            className={`size-2.5 rounded-full ${
+              isProd ? "bg-[#00d4a0]" : "bg-sky-400"
+            }`}
+          />
+          <span className="font-semibold text-sm">{data.env}</span>
+        </div>
+        <span className="font-mono text-muted-foreground text-xs">
+          {data.accountId}
+        </span>
+      </div>
+
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-muted-foreground text-xs uppercase tracking-wide">
+            Spend (last {data.trend.length}d)
+          </div>
+          <div className="font-semibold text-2xl">
+            {money(data.cost, currency)}
+          </div>
+        </div>
+        {data.trend.length > 0 ? (
+          <div className="flex h-12 flex-1 items-end justify-end gap-px">
+            {data.trend.map((p) => (
+              <div
+                className="w-1.5 rounded-t bg-[#00d4a0]/70"
+                key={p.date}
+                style={{ height: `${Math.max(4, (p.amount / max) * 100)}%` }}
+                title={`${p.date}: ${money(p.amount, currency)}`}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+        <div>
+          <div className="text-muted-foreground text-xs">Services</div>
+          <div className={`font-medium ${degraded > 0 ? "text-red-400" : ""}`}>
+            {data.healthy}/{data.totalSvc}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground text-xs">Alarms</div>
+          <div className={`font-medium ${alarmColor}`}>
+            {data.firing}
+            {data.secFiring > 0 ? ` (${data.secFiring} sec)` : ""}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground text-xs">Databases</div>
+          <div
+            className={`font-medium ${
+              data.rdsUnhealthy > 0 ? "text-red-400" : ""
+            }`}
+          >
+            {data.rdsCount}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground text-xs">Resources</div>
+          <div className="font-medium">{data.resourceCount}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: presentational operator dashboard composing many independent read-only panels (status banner, hero stats, alerts, ECS service health, cost trend, RDS, inventory) — complexity is breadth of sections, not tangled control flow
 export default async function InfraPage() {
   const [infra, ops] = await Promise.all([getInfra(), getOps()]);
@@ -288,6 +397,37 @@ export default async function InfraPage() {
         : "all available";
   }
 
+  // Per-environment rollup: Dev+Staging (Apextech account) vs Production (Konverge account).
+  const envData: EnvSummary[] = [ENV_NONPROD, ENV_PROD]
+    .map((env) => {
+      const opsAcc = opsAccounts.find(
+        (a) => envForAccount(a.accountId, a.label) === env
+      );
+      const inf = infra.environments.find((e) => e.env === env);
+      const trend = opsAcc?.costTrend ?? [];
+      const services = opsAcc?.services ?? [];
+      const rds = opsAcc?.rds ?? [];
+      const secFiring = groupAlarms(opsAcc?.alarms?.firing ?? [])
+        .filter((g) => g.severity === "security")
+        .reduce((m, g) => m + g.count, 0);
+      return {
+        env,
+        accountId: opsAcc?.accountId ?? "",
+        cost: trend.reduce((n, p) => n + p.amount, 0),
+        trend,
+        healthy: services.filter(serviceHealthy).length,
+        totalSvc: services.length,
+        firing: opsAcc?.alarms?.ALARM ?? 0,
+        secFiring,
+        rdsCount: rds.length,
+        rdsUnhealthy: rds.filter((r) => r.status.toLowerCase() !== "available")
+          .length,
+        resourceCount: inf?.resourceCount ?? 0,
+        inf,
+      };
+    })
+    .filter((e) => e.accountId !== "" || e.resourceCount > 0);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
       {/* Header */}
@@ -388,6 +528,23 @@ export default async function InfraPage() {
         />
       </div>
 
+      {/* Environments: Dev+Staging vs Production */}
+      {envData.length > 0 && (
+        <section>
+          <h2 className="mb-2 flex items-center gap-2 font-medium text-sm">
+            <Layers className="size-4 text-[#00d4a0]" /> Environments
+            <span className="font-normal text-muted-foreground">
+              · spend, health, databases &amp; resources side by side
+            </span>
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {envData.map((d) => (
+              <EnvCard currency={infra.cost.currency} data={d} key={d.env} />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Alerts panel */}
       {totalFiring > 0 && (
         <section>
@@ -479,8 +636,11 @@ export default async function InfraPage() {
                 }
                 return (
                   <div key={a.accountId}>
-                    <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
-                      {a.label}
+                    <div className="mb-1.5 flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+                      {envForAccount(a.accountId, a.label)}
+                      <span className="font-mono lowercase opacity-70">
+                        {a.accountId}
+                      </span>
                     </div>
                     {[...byCluster.entries()].map(([cluster, svcs]) => (
                       <div className="mb-3" key={cluster}>
@@ -611,159 +771,162 @@ export default async function InfraPage() {
         </section>
       </div>
 
-      {/* Databases */}
+      {/* Databases — grouped by environment */}
       {allRds.length > 0 && (
         <section>
           <h2 className="mb-2 flex items-center gap-2 font-medium text-sm">
             <Database className="size-4 text-[#00d4a0]" /> Databases (RDS)
           </h2>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {allRds.map((r) => {
-              const ok = r.status.toLowerCase() === "available";
-              return (
-                <div
-                  className={`rounded-lg border px-3 py-2 ${
-                    ok ? "bg-card" : "border-red-500/40 bg-red-500/5"
-                  }`}
-                  key={`${r.account}-${r.id}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`size-2 rounded-full ${ok ? "bg-[#00d4a0]" : "bg-red-500"}`}
-                    />
-                    <span className="truncate font-medium text-sm">{r.id}</span>
+          <div className="space-y-4">
+            {opsAccounts
+              .filter((a) => (a.rds ?? []).length > 0)
+              .map((a) => (
+                <div key={a.accountId}>
+                  <div className="mb-1.5 flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+                    {envForAccount(a.accountId, a.label)}
+                    <span className="font-mono lowercase opacity-70">
+                      {a.accountId}
+                    </span>
                   </div>
-                  <div className="mt-0.5 text-muted-foreground text-xs">
-                    {r.engine} · {r.status} · {r.account}
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    {a.rds.map((r) => {
+                      const ok = r.status.toLowerCase() === "available";
+                      return (
+                        <div
+                          className={`rounded-lg border px-3 py-2 ${
+                            ok ? "bg-card" : "border-red-500/40 bg-red-500/5"
+                          }`}
+                          key={r.id}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`size-2 rounded-full ${
+                                ok ? "bg-[#00d4a0]" : "bg-red-500"
+                              }`}
+                            />
+                            <span className="truncate font-medium text-sm">
+                              {r.id}
+                            </span>
+                          </div>
+                          <div className="mt-0.5 text-muted-foreground text-xs">
+                            {r.engine} · {r.status}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
+              ))}
           </div>
         </section>
       )}
 
-      {/* Accounts */}
-      <section>
-        <h2 className="mb-2 flex items-center gap-2 font-medium text-sm">
-          <Server className="size-4 text-[#00d4a0]" /> Accounts
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {infra.accounts.map((acct) => {
-            const opsAcc = opsAccounts.find(
-              (o) => o.accountId === acct.accountId
-            );
-            return (
-              <div
-                className="rounded-xl border bg-card p-4"
-                key={acct.accountId}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-sm">
-                    {acct.alias || acct.accountId}
-                  </span>
-                  {opsAcc ? (
-                    <span className="text-muted-foreground text-xs">
-                      {opsAcc.services?.length ?? 0} svc ·{" "}
-                      {opsAcc.alarms?.ALARM ?? 0} firing
-                    </span>
-                  ) : null}
-                </div>
-                <div className="font-mono text-muted-foreground text-xs">
-                  {acct.accountId}
-                </div>
-                <div className="mt-1 font-semibold text-lg">
-                  {acct.resourceCount} resources
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Resource inventory */}
+      {/* Resource inventory — per environment */}
       <section>
         <h2 className="mb-2 flex items-center gap-2 font-medium text-sm">
           <Boxes className="size-4 text-[#00d4a0]" /> Resource inventory
+          <span className="font-normal text-muted-foreground">
+            · by environment
+          </span>
         </h2>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
-              By service
-            </div>
-            <div className="rounded-xl border bg-card">
-              {infra.byService.slice(0, 15).map((s) => {
-                const top = infra.byService[0]?.count || 1;
-                return (
-                  <div
-                    className="relative flex items-center justify-between border-b px-4 py-2 text-sm last:border-0"
-                    key={s.key}
-                  >
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 rounded-r bg-[#00d4a0]/10"
-                      style={{ width: `${(s.count / top) * 100}%` }}
-                    />
-                    <span className="relative truncate pr-3">{s.key}</span>
-                    <span className="relative font-medium text-muted-foreground tabular-nums">
-                      {s.count}
-                    </span>
+        <div className="space-y-6">
+          {infra.environments.map((e) => (
+            <div key={e.env}>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span
+                  className={`size-2.5 rounded-full ${
+                    e.env === ENV_PROD ? "bg-[#00d4a0]" : "bg-sky-400"
+                  }`}
+                />
+                <span className="font-medium text-sm">{e.env}</span>
+                <span className="text-muted-foreground text-xs">
+                  {e.resourceCount} resources · stages{" "}
+                  {e.stages.join(", ") || "—"}
+                </span>
+              </div>
+              <div className="grid gap-6 lg:grid-cols-2">
+                <div>
+                  <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+                    By service
                   </div>
-                );
-              })}
-            </div>
-          </div>
-          <div className="space-y-6">
-            <div>
-              <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
-                By stage
+                  <div className="rounded-xl border bg-card">
+                    {e.byService.slice(0, 12).map((s) => {
+                      const top = e.byService[0]?.count || 1;
+                      return (
+                        <div
+                          className="relative flex items-center justify-between border-b px-4 py-2 text-sm last:border-0"
+                          key={s.key}
+                        >
+                          <span
+                            aria-hidden
+                            className="absolute inset-y-0 left-0 rounded-r bg-[#00d4a0]/10"
+                            style={{ width: `${(s.count / top) * 100}%` }}
+                          />
+                          <span className="relative truncate pr-3">
+                            {s.key}
+                          </span>
+                          <span className="relative font-medium text-muted-foreground tabular-nums">
+                            {s.count}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-6">
+                  <div>
+                    <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+                      By stage
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {e.byStage.map((s) => (
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"
+                          key={s.key}
+                        >
+                          <Layers className="size-3.5 text-muted-foreground" />
+                          {s.key === "—" ? "untagged" : s.key}
+                          <span className="text-muted-foreground tabular-nums">
+                            {s.count}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
+                      By region
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {e.byRegion.map((s) => (
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"
+                          key={s.key}
+                        >
+                          {s.key === "—" ? "global" : s.key}
+                          <span className="text-muted-foreground tabular-nums">
+                            {s.count}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {infra.byStage.map((s) => (
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"
-                    key={s.key}
-                  >
-                    <Layers className="size-3.5 text-muted-foreground" />
-                    {s.key === "—" ? "untagged" : s.key}
-                    <span className="text-muted-foreground tabular-nums">
-                      {s.count}
-                    </span>
-                  </span>
-                ))}
-              </div>
             </div>
-            <div>
-              <div className="mb-1.5 text-muted-foreground text-xs uppercase tracking-wide">
-                By region
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {infra.byRegion.map((s) => (
-                  <span
-                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"
-                    key={s.key}
-                  >
-                    {s.key === "—" ? "global" : s.key}
-                    <span className="text-muted-foreground tabular-nums">
-                      {s.count}
-                    </span>
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border bg-card p-3 text-sm">
-              <GitFork className="size-4 text-[#00d4a0]" />
-              <span>Linked code:</span>
-              <a
-                className="text-[#00d4a0] hover:underline"
-                href="https://github.com/Apextech-Dev/reflex-connect-v2"
-                rel="noreferrer"
-                target="_blank"
-              >
-                Apextech-Dev/reflex-connect-v2 ↗
-              </a>
-            </div>
-          </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-2 rounded-xl border bg-card p-3 text-sm">
+          <GitFork className="size-4 text-[#00d4a0]" />
+          <span>Linked code:</span>
+          <a
+            className="text-[#00d4a0] hover:underline"
+            href="https://github.com/Apextech-Dev/reflex-connect-v2"
+            rel="noreferrer"
+            target="_blank"
+          >
+            Apextech-Dev/reflex-connect-v2 ↗
+          </a>
         </div>
       </section>
     </div>

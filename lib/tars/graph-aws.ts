@@ -39,6 +39,14 @@ export interface CountRow {
   key: string;
   count: number;
 }
+export interface EnvBreakdown {
+  env: string; // "Dev + Staging" | "Production"
+  stages: string[]; // stage tags that map into this environment
+  resourceCount: number;
+  byService: CountRow[];
+  byStage: CountRow[];
+  byRegion: CountRow[];
+}
 export interface InfraSummary {
   available: boolean;
   accounts: AwsAccount[];
@@ -46,6 +54,7 @@ export interface InfraSummary {
   byService: CountRow[];
   byStage: CountRow[];
   byRegion: CountRow[];
+  environments: EnvBreakdown[];
   cost: {
     available: boolean;
     total: number;
@@ -54,6 +63,21 @@ export interface InfraSummary {
     services: AwsCostService[];
   };
   notes?: string;
+}
+
+export const ENV_PROD = "Production";
+export const ENV_NONPROD = "Dev + Staging";
+const RE_PROD_LABEL = /prod/i;
+/** A resource's stage tag → which environment bucket it belongs to. */
+export function envForStage(stage: string): string {
+  return stage === "prod" ? ENV_PROD : ENV_NONPROD;
+}
+/** An AWS account → environment (prod is its own Konverge account; dev+staging share the Apextech account). */
+export function envForAccount(accountId: string, label: string): string {
+  if (accountId === "781133583483" || RE_PROD_LABEL.test(label)) {
+    return ENV_PROD;
+  }
+  return ENV_NONPROD;
 }
 
 async function graphFetch(path: string): Promise<unknown | null> {
@@ -115,6 +139,29 @@ export async function getInfra(): Promise<InfraSummary> {
   const available = Boolean(accData || resData || costData);
   const resources = Array.isArray(resData?.resources) ? resData.resources : [];
 
+  const envBuckets = new Map<string, AwsResource[]>();
+  for (const r of resources) {
+    const env = envForStage((r.stage || "").toString());
+    const arr = envBuckets.get(env) ?? [];
+    arr.push(r);
+    envBuckets.set(env, arr);
+  }
+  const environments: EnvBreakdown[] = [ENV_NONPROD, ENV_PROD]
+    .map((env) => {
+      const rows = envBuckets.get(env) ?? [];
+      return {
+        env,
+        stages: [
+          ...new Set(rows.map((r) => (r.stage || "untagged").toString())),
+        ],
+        resourceCount: rows.length,
+        byService: tally(rows, "service"),
+        byStage: tally(rows, "stage"),
+        byRegion: tally(rows, "region"),
+      };
+    })
+    .filter((e) => e.resourceCount > 0);
+
   return {
     available,
     accounts: Array.isArray(accData?.accounts) ? accData.accounts : [],
@@ -122,6 +169,7 @@ export async function getInfra(): Promise<InfraSummary> {
     byService: tally(resources, "service"),
     byStage: tally(resources, "stage"),
     byRegion: tally(resources, "region"),
+    environments,
     cost: {
       available: Boolean(costData) && costData?.available !== false,
       total: typeof costData?.total === "number" ? costData.total : 0,
