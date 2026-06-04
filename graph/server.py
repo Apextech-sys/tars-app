@@ -17,7 +17,7 @@ import json
 import os
 import sys
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -235,7 +235,7 @@ def _temporal_run(coro_fn):
         return await coro_fn(client)
 
     try:
-        return asyncio.run(_run()), None
+        return asyncio.run(asyncio.wait_for(_run(), timeout=18)), None
     except Exception as e:  # noqa: BLE001
         return None, {"notes": str(e)[:240]}
 
@@ -592,7 +592,7 @@ def main() -> None:
     stats = get_graph_stats()
     print(f"[tars-graph] nodes: {stats['nodes']}, edges: {stats['edges']}, "
           f"files: {stats['files']}, imports: {stats['imports']}", flush=True)
-    server = HTTPServer(("0.0.0.0", PORT), GraphHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), GraphHandler)
     print(f"[tars-graph] Listening on 0.0.0.0:{PORT}", flush=True)
     server.serve_forever()
 
