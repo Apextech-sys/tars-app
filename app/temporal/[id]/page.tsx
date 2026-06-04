@@ -43,12 +43,15 @@ function fmtTime(iso: string): string {
   }
 }
 
-function duration(a: string, b: string): string {
+function durMs(a: string, b: string): number {
   if (!(a && b)) {
-    return "";
+    return 0;
   }
   const ms = new Date(b).getTime() - new Date(a).getTime();
-  if (Number.isNaN(ms) || ms < 0) {
+  return Number.isNaN(ms) || ms < 0 ? 0 : ms;
+}
+function durStr(ms: number): string {
+  if (!ms) {
     return "";
   }
   if (ms < 1000) {
@@ -75,7 +78,7 @@ type UnitKind = "start" | "activity" | "timer" | "signal" | "end" | "other";
 interface Unit {
   kind: UnitKind;
   title: string;
-  status: string; // completed | failed | running | scheduled | fired | ""
+  status: string;
   start: string;
   end: string;
   attempt: number;
@@ -83,7 +86,6 @@ interface Unit {
   failure: string;
 }
 
-/** Collapse the raw event history into meaningful execution units (Temporal "compact" style). */
 function groupEvents(events: HistoryEvent[]): {
   units: Unit[];
   taskCycles: number;
@@ -270,6 +272,17 @@ function dotClass(unit: Unit): string {
   return "bg-sky-500";
 }
 
+function Stat({ label, value, cls }: { label: string; value: string; cls?: string }) {
+  return (
+    <div className="rounded-xl border bg-card px-4 py-3">
+      <div className="text-muted-foreground text-xs uppercase tracking-wide">
+        {label}
+      </div>
+      <div className={`mt-0.5 font-semibold text-lg ${cls ?? ""}`}>{value}</div>
+    </div>
+  );
+}
+
 export default async function WorkflowDetailPage({
   params,
   searchParams,
@@ -302,6 +315,34 @@ export default async function WorkflowDetailPage({
   const { units, taskCycles } = groupEvents(d.events);
   const topFailure = units.find((u) => u.failure)?.failure ?? "";
 
+  const acts = units.filter((u) => u.kind === "activity");
+  const failedCount = acts.filter(
+    (u) => u.status === "failed" || u.status === "timedOut"
+  ).length;
+  const totalMs =
+    durMs(i.start, i.close) ||
+    durMs(units.at(0)?.start ?? "", units.at(-1)?.start ?? "");
+  const maxActMs = Math.max(1, ...acts.map((u) => durMs(u.start, u.end)));
+
+  // activities grouped by name
+  const byName = new Map<
+    string,
+    { count: number; ms: number; failed: number }
+  >();
+  for (const u of acts) {
+    const g = byName.get(u.title) ?? { count: 0, ms: 0, failed: 0 };
+    g.count += 1;
+    g.ms += durMs(u.start, u.end);
+    if (u.status === "failed" || u.status === "timedOut") {
+      g.failed += 1;
+    }
+    byName.set(u.title, g);
+  }
+  const actSummary = [...byName.entries()].sort((a, b) => b[1].ms - a[1].ms);
+
+  const startUnit = units.find((u) => u.kind === "start");
+  const input = (startUnit?.detail as { input?: unknown } | undefined)?.input;
+
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-4 md:p-6">
       <Link
@@ -326,9 +367,7 @@ export default async function WorkflowDetailPage({
             >
               {i.status}
             </span>
-            <span className="text-muted-foreground">
-              {i.taskQueue} · {i.historyLength} events · {taskCycles} task cycles
-            </span>
+            <span className="text-muted-foreground">{i.taskQueue}</span>
             <span className="text-muted-foreground">{fmtTime(i.start)}</span>
           </div>
         </div>
@@ -349,18 +388,56 @@ export default async function WorkflowDetailPage({
         </div>
       )}
 
-      {d.pending.length > 0 && (
-        <div className="rounded-xl border bg-card p-4">
-          <div className="mb-2 font-medium text-sm">
-            Pending activities ({d.pending.length})
+      {/* Summary strip */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Total time" value={durStr(totalMs) || "—"} />
+        <Stat label="Activities" value={String(acts.length)} />
+        <Stat
+          cls={failedCount ? "text-red-400" : "text-emerald-400"}
+          label="Failed"
+          value={String(failedCount)}
+        />
+        <Stat label="Events" value={`${i.historyLength} · ${taskCycles} cyc`} />
+      </div>
+
+      {input != null && (
+        <details className="rounded-xl border bg-card" open>
+          <summary className="cursor-pointer px-4 py-2 font-medium text-sm">
+            Order input
+          </summary>
+          <pre className="max-h-72 overflow-auto border-t px-4 py-3 text-muted-foreground text-xs">
+            {JSON.stringify(input, null, 2)}
+          </pre>
+        </details>
+      )}
+
+      {actSummary.length > 0 && (
+        <section>
+          <h2 className="mb-2 font-medium text-sm">Activities</h2>
+          <div className="overflow-hidden rounded-xl border bg-card">
+            {actSummary.map(([name, g]) => (
+              <div
+                className="flex items-center gap-3 border-b px-4 py-2 text-sm last:border-0"
+                key={name}
+              >
+                <span className="min-w-0 flex-1 truncate font-medium">
+                  {name}
+                </span>
+                {g.failed > 0 && (
+                  <span className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 text-red-400 text-xs">
+                    {g.failed} failed
+                  </span>
+                )}
+                <span className="shrink-0 text-muted-foreground text-xs">
+                  ×{g.count}
+                </span>
+                <span className="w-16 shrink-0 text-right text-muted-foreground text-xs tabular-nums">
+                  {durStr(g.ms) || "—"}
+                </span>
+              </div>
+            ))}
           </div>
-          {d.pending.map((p, idx) => (
-            <div className="text-muted-foreground text-sm" key={idx}>
-              {p.activityType} · attempt {p.attempt}
-              {p.lastFailure ? ` · ${p.lastFailure}` : ""}
-            </div>
-          ))}
-        </div>
+        </section>
       )}
 
       <section>
@@ -370,7 +447,10 @@ export default async function WorkflowDetailPage({
         </h2>
         <ol className="ml-2 space-y-3 border-border border-l">
           {units.map((u, idx) => {
-            const dur = duration(u.start, u.end);
+            const ms = durMs(u.start, u.end);
+            const dur = durStr(ms);
+            const barPct =
+              u.kind === "activity" && ms ? Math.max(3, (ms / maxActMs) * 100) : 0;
             const hasDetail =
               Boolean(u.failure) ||
               (u.detail && Object.keys(u.detail as object).length > 0);
@@ -387,7 +467,7 @@ export default async function WorkflowDetailPage({
                     </span>
                     {u.attempt > 1 && (
                       <span className="shrink-0 rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-amber-400 text-xs">
-                        {u.attempt} attempts
+                        {u.attempt}×
                       </span>
                     )}
                     {dur && (
@@ -395,10 +475,17 @@ export default async function WorkflowDetailPage({
                         {dur}
                       </span>
                     )}
-                    <span className="shrink-0 text-muted-foreground text-xs">
-                      {fmtTime(u.start).slice(11)}
-                    </span>
                   </div>
+                  {barPct > 0 && (
+                    <div className="px-3 pb-1.5">
+                      <div className="h-1 w-full overflow-hidden rounded bg-muted/40">
+                        <div
+                          className={`h-full rounded ${u.status === "failed" ? "bg-red-500/70" : "bg-[#00d4a0]/60"}`}
+                          style={{ width: `${barPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                   {u.failure && (
                     <div className="border-red-500/20 border-t px-3 py-1.5 text-red-300/90 text-xs">
                       {u.failure}
@@ -409,7 +496,7 @@ export default async function WorkflowDetailPage({
                       <summary className="cursor-pointer list-none px-3 py-1 text-muted-foreground text-xs hover:text-foreground">
                         payload
                       </summary>
-                      <pre className="overflow-x-auto px-3 pb-2 text-muted-foreground text-xs">
+                      <pre className="max-h-72 overflow-auto px-3 pb-2 text-muted-foreground text-xs">
                         {JSON.stringify(u.detail, null, 2)}
                       </pre>
                     </details>
