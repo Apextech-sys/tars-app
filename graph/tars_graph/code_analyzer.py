@@ -457,6 +457,26 @@ def _repo_paths(conn, repo: str) -> set[str]:
     return out
 
 
+def _ensure_docrepo(conn, repo: str) -> None:
+    """Ensure a DocRepo node exists for an analyzed repo so it's a first-class,
+    clickable graph entity even when nothing else (AWS/doc) links to it."""
+    try:
+        conn.execute(
+            "CREATE NODE TABLE IF NOT EXISTS DocRepo("
+            "id STRING, full_name STRING, url STRING, PRIMARY KEY (id))")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        r = conn.execute("MATCH (d:DocRepo {id:$id}) RETURN count(d)", {"id": repo})
+        if r.has_next() and (r.get_next()[0] or 0) > 0:
+            return
+        conn.execute(
+            "CREATE (d:DocRepo {id:$id, full_name:$fn, url:$u})",
+            {"id": repo, "fn": repo, "u": f"https://github.com/{repo}"})
+    except Exception as e:  # noqa: BLE001
+        print(f"[code-analyzer] docrepo ensure warn {repo}: {e}", file=sys.stderr)
+
+
 def insert_repo(conn, repo: str, infos: dict[str, FileInfo]) -> dict:
     """Bulk insert one repo's nodes + edges into freshly-created tables."""
     for rel, info in infos.items():
@@ -776,6 +796,8 @@ def update_many(repos: list[str], db_path: str, clone: bool, branch: str,
     db = kuzu.Database(db_path)
     conn = kuzu.Connection(db)
     ensure_schema(conn)
+    for _repo in repos:
+        _ensure_docrepo(conn, _repo)
     per_repo = {}
     for repo, prep in prepared.items():
         try:

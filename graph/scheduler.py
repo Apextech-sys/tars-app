@@ -65,7 +65,7 @@ def fast_cycle() -> None:
     #    are safe across process restarts.
     repos = os.environ.get(
         "TARS_CODE_REPOS",
-        "Apextech-sys/tars-app,Apextech-Dev/reflex-connect-v2"
+        "Apextech-sys/tars-app,Apextech-Dev/reflex-connect-v2,Apextech-Dev/reflex-connect-aws"
     )
     if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
         _run_module(
