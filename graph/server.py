@@ -542,6 +542,14 @@ class GraphHandler(BaseHTTPRequestHandler):
             self.send_json(200, temporal_workflows())
         elif route == "/temporal/summary":
             self.send_json(200, temporal_summary())
+        elif route == "/temporal/workflow":
+            qs = parse_qs(parsed.query)
+            wid = (qs.get("id") or [""])[0]
+            rid = (qs.get("runId") or [""])[0]
+            if not wid:
+                self.send_json(400, {"error": "id query param required"})
+                return
+            self.send_json(200, temporal_workflow_detail(wid, rid))
         else:
             self.send_json(404, {"error": "not found"})
 
