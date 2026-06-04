@@ -284,9 +284,14 @@ def _ops_for_session(label, sess):
         ce = sess.client("ce", region_name="us-east-1")
         end = datetime.date.today()
         start = end - datetime.timedelta(days=14)
-        r = ce.get_cost_and_usage(
+        _ckw = dict(
             TimePeriod={"Start": start.isoformat(), "End": end.isoformat()},
             Granularity="DAILY", Metrics=["UnblendedCost"])
+        _acct = res.get("accountId")
+        if _acct:
+            _ckw["Filter"] = {
+                "Dimensions": {"Key": "LINKED_ACCOUNT", "Values": [_acct]}}
+        r = ce.get_cost_and_usage(**_ckw)
         for p in r.get("ResultsByTime", []):
             res["costTrend"].append({
                 "date": p["TimePeriod"]["Start"],
@@ -513,21 +518,25 @@ def aws_cost() -> dict:
         conn, _db = _open_ro()
     except Exception as e:
         return {"available": False, "services": [], "notes": f"graph open soft-fail: {e}"}
-    services: list[dict] = []
+    agg: dict = {}
     total = 0.0
     period = {"start": "", "end": ""}
     try:
         res = conn.execute(
             "MATCH (c:AwsCost) RETURN c.service, c.amount, c.currency, c.period_start, "
-            "c.period_end ORDER BY c.amount DESC")
+            "c.period_end")
         while res.has_next():
             row = res.get_next()
             amt = float(row[1] or 0)
-            services.append({"service": row[0], "amount": round(amt, 2), "currency": row[2]})
+            agg[row[0]] = agg.get(row[0], 0.0) + amt
             total += amt
             period = {"start": row[3], "end": row[4]}
     except Exception as e:
         return {"available": True, "services": [], "notes": f"aws cost not ingested yet: {e}"}
+    services = [
+        {"service": k, "amount": round(v, 2), "currency": "USD"}
+        for k, v in sorted(agg.items(), key=lambda kv: -kv[1])
+    ]
     return {"available": True, "currency": "USD", "total": round(total, 2),
             "period": period, "services": services, "notes": ""}
 

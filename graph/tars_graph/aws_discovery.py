@@ -147,7 +147,7 @@ def discover_resources(session, regions: list[str]) -> dict:
     return out
 
 
-def cost_by_service(session) -> list[dict]:
+def cost_by_service(session, account_id: str = "") -> list[dict]:
     ce = session.client("ce", region_name="us-east-1")
     now = datetime.now(timezone.utc)
     first = now.replace(day=1)
@@ -158,11 +158,15 @@ def cost_by_service(session) -> list[dict]:
     else:
         start = first.strftime("%Y-%m-%d")
         end = now.strftime("%Y-%m-%d")
-    resp = ce.get_cost_and_usage(
+    _kw = dict(
         TimePeriod={"Start": start, "End": end},
         Granularity="MONTHLY", Metrics=["UnblendedCost"],
         GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
     )
+    if account_id:
+        _kw["Filter"] = {
+            "Dimensions": {"Key": "LINKED_ACCOUNT", "Values": [account_id]}}
+    resp = ce.get_cost_and_usage(**_kw)
     rows: list[dict] = []
     for rbt in resp.get("ResultsByTime", []):
         ps = rbt["TimePeriod"]["Start"]
@@ -242,7 +246,7 @@ def _ingest_account(conn, label: str, session, app_map: dict, ts: str) -> dict:
         alias = ""
     resources = discover_resources(session, REGIONS)
     try:
-        costs = cost_by_service(session)
+        costs = cost_by_service(session, account_id)
     except Exception as e:  # noqa: BLE001
         costs = []
         print(f"[aws:{label}] cost read warn: {e}", file=sys.stderr, flush=True)
