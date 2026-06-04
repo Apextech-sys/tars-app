@@ -67,6 +67,8 @@ export interface PrRun {
   repo: string;
   prNumber: number;
   prSha: string | null;
+  prTitle: string | null;
+  prAuthor: string | null;
   policy: PolicyConfig | null;
   status: RunStatus;
   findingsCount: number;

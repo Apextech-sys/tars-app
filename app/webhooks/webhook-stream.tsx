@@ -17,6 +17,7 @@ import {
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { JsonTree } from "@/components/pr-runs/json-tree";
 import type { WebhookFilter } from "@/components/tars/webhook-hero-band";
 import { Button } from "@/components/ui/button";
@@ -120,13 +121,43 @@ function OutcomeReason(event: WebhookDetail): string {
 function DetailPanel({
   event,
   onClose,
+  onReplayed,
 }: {
   event: WebhookDetail;
   onClose: () => void;
+  onReplayed: () => void;
 }) {
   const decoded = decodeAction(event.action, event.triggeredRun !== null);
   const meta = OUTCOME_META[decoded.outcome];
   const OutcomeIcon = meta.icon;
+  const [replaying, setReplaying] = useState(false);
+  const canReplay = event.eventType === "pull_request";
+
+  const handleReplay = useCallback(async () => {
+    setReplaying(true);
+    try {
+      const res = await fetch(`/api/tars/webhooks/${event.id}/replay`, {
+        method: "POST",
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        workflowRunId?: string;
+        error?: string;
+      };
+      if (res.ok) {
+        toast.success(
+          `Re-running PR review for ${event.repoKey}#${event.prNumber ?? "?"}`
+        );
+        onReplayed();
+        onClose();
+      } else {
+        toast.error(data.error ?? "Failed to re-run PR review");
+      }
+    } catch {
+      toast.error("Failed to re-run PR review");
+    } finally {
+      setReplaying(false);
+    }
+  }, [event.id, event.repoKey, event.prNumber, onReplayed, onClose]);
   return (
     <div
       aria-label={`Webhook event ${event.deliveryId ?? event.id}`}
@@ -221,14 +252,24 @@ function DetailPanel({
             ) : null}
           </div>
 
-          <button
-            className="w-full cursor-not-allowed rounded-md border border-border py-1.5 text-muted-foreground/60 text-xs"
-            disabled
-            title="Re-running a review from a delivery needs the replay route (not yet built)"
-            type="button"
-          >
-            Re-run PR review (coming soon)
-          </button>
+          {canReplay ? (
+            <button
+              className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-xs transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={replaying}
+              onClick={handleReplay}
+              title="Re-trigger the PR review workflow for this delivery's pull request"
+              type="button"
+            >
+              <RefreshCw
+                className={cn("size-3.5", replaying && "animate-spin")}
+              />
+              {replaying ? "Re-running…" : "Re-run PR review"}
+            </button>
+          ) : (
+            <p className="rounded-md border border-border border-dashed py-1.5 text-center text-muted-foreground/60 text-xs">
+              Only pull_request deliveries can be re-run.
+            </p>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
@@ -634,6 +675,7 @@ export function WebhookStream({
         <DetailPanel
           event={selectedEvent}
           onClose={() => setSelectedEvent(null)}
+          onReplayed={() => load(filter, search, page)}
         />
       ) : null}
       {detailLoading ? (

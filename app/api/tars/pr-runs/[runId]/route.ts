@@ -19,6 +19,10 @@ export async function GET(
           repo: prReviewRuns.repo,
           prNumber: prReviewRuns.prNumber,
           prSha: prReviewRuns.prSha,
+          // Title/author captured on the run at fetch-pr time (see workflow);
+          // the header prefers these over the best-effort webhook_events join.
+          prTitle: prReviewRuns.prTitle,
+          prAuthor: prReviewRuns.prAuthor,
           policy: prReviewRuns.policy,
           status: prReviewRuns.status,
           findingsCount: prReviewRuns.findingsCount,

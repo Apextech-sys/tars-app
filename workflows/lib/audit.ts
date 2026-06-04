@@ -124,6 +124,16 @@ async function ensureSchema(sql: any) {
     alter table pr_review_runs
       add column if not exists fix_test_gate jsonb;
   `;
+  // PR title + author (drizzle/0016): captured on the run at fetch-pr time so
+  // the list/detail UI shows the real title instead of "PR #n". Idempotent so a
+  // deploy that hasn't run the Drizzle migration still self-heals on first write
+  // — this is the mechanism that actually runs here (VERCEL_ENV is unset on
+  // Dokploy, so the build's db:migrate step is skipped).
+  await sql /* sql */`
+    alter table pr_review_runs
+      add column if not exists pr_title text,
+      add column if not exists pr_author text;
+  `;
   await sql /* sql */`
     create table if not exists tars_jobs (
       job_id            text primary key,
@@ -253,6 +263,10 @@ export interface PrReviewRunRecord {
   repo: string;
   prNumber: number;
   prSha?: string;
+  /** PR title from GitHub; persisted at fetch-pr time, COALESCEd on conflict. */
+  prTitle?: string;
+  /** PR author login from GitHub; persisted at fetch-pr time, COALESCEd. */
+  prAuthor?: string;
   policy?: Record<string, unknown>;
   status:
     | "started"
@@ -327,13 +341,15 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
     // persisted while an empty later write can't clobber an already-resolved one.
     await sql /* sql */`
       insert into pr_review_runs (
-        run_id, owner, repo, pr_number, pr_sha, policy, status,
+        run_id, owner, repo, pr_number, pr_sha, pr_title, pr_author, policy, status,
         findings_count, review_comment_url, error, disagreed_payload,
         debate_rounds, agreed_findings, linear_issue_id, linear_issue_identifier,
         linear_issue_url, updated_at
       ) values (
         ${rec.runId}, ${rec.owner}, ${rec.repo}, ${rec.prNumber},
         ${rec.prSha ?? null},
+        ${rec.prTitle ?? null},
+        ${rec.prAuthor ?? null},
         ${jsonOrNull(sql, rec.policy)},
         ${rec.status},
         ${rec.findingsCount ?? 0},
@@ -353,6 +369,10 @@ export async function upsertPrReviewRun(rec: PrReviewRunRecord): Promise<void> {
         review_comment_url = excluded.review_comment_url,
         error = excluded.error,
         pr_sha = coalesce(pr_review_runs.pr_sha, excluded.pr_sha),
+        -- Title/author are written once (at fetch-pr). A later started/no-title
+        -- write passes NULL, so coalesce(excluded, existing) keeps the real value.
+        pr_title = coalesce(excluded.pr_title, pr_review_runs.pr_title),
+        pr_author = coalesce(excluded.pr_author, pr_review_runs.pr_author),
         policy = coalesce(excluded.policy, pr_review_runs.policy),
         disagreed_payload = coalesce(excluded.disagreed_payload, pr_review_runs.disagreed_payload),
         debate_rounds = coalesce(excluded.debate_rounds, pr_review_runs.debate_rounds),

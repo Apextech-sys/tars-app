@@ -86,6 +86,15 @@ export const prReviewRuns = pgTable("pr_review_runs", {
   repo: text("repo").notNull(),
   prNumber: integer("pr_number").notNull(),
   prSha: text("pr_sha"),
+  // PR title + author login, captured ON the run at fetch-pr time (from the
+  // GitHub `pulls.get` response) so the list/detail UI never depends on the
+  // webhook_events join (which links by a different id and is always NULL).
+  // Nullable + additive; backfilled for historical rows from the GitHub API.
+  // Migration: drizzle/0016_pr_review_pr_title_author.sql (and the idempotent
+  // ensureSchema() self-heal in workflows/lib/audit.ts, which is the mechanism
+  // that actually runs in this Dokploy deploy where VERCEL_ENV is unset).
+  prTitle: text("pr_title"),
+  prAuthor: text("pr_author"),
   policy: jsonb("policy"),
   status: text("status").notNull(),
   findingsCount: integer("findings_count").notNull().default(0),

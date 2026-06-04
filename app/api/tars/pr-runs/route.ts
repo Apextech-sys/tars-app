@@ -12,7 +12,7 @@ import {
 import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
+import { prReviewRuns } from "@/lib/db/tars-schema";
 
 const querySchema = z.object({
   status: z.string().optional(),
@@ -83,15 +83,16 @@ export async function GET(req: NextRequest) {
           archivedAt: prReviewRuns.archivedAt,
           createdAt: prReviewRuns.createdAt,
           updatedAt: prReviewRuns.updatedAt,
-          // Join webhook event for pr_title
-          prTitle: webhookEvents.prTitle,
-          senderLogin: webhookEvents.senderLogin,
+          // Read title/author straight off the run (captured at fetch-pr time).
+          // The old webhook_events join linked on triggered_run = run_id, but
+          // triggered_run stores the WDK execution id (wrun_…) while run_id is
+          // the workflow's own prrev_… id, so the join NEVER matched and these
+          // were NULL for 100% of runs. `senderLogin` is kept as the response
+          // key for UI compatibility; it now sources from pr_review_runs.pr_author.
+          prTitle: prReviewRuns.prTitle,
+          senderLogin: prReviewRuns.prAuthor,
         })
         .from(prReviewRuns)
-        .leftJoin(
-          webhookEvents,
-          eq(webhookEvents.triggeredRun, prReviewRuns.runId)
-        )
         .where(where)
         .orderBy(desc(prReviewRuns.updatedAt))
         .limit(params.limit)

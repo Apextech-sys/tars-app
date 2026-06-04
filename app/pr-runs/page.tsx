@@ -31,20 +31,55 @@ interface RunRow {
 }
 
 const STATUS_META: Record<string, { label: string; cls: string }> = {
-  started: { label: "Running", cls: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
-  "pending-approval": { label: "Awaiting approval", cls: "bg-sky-500/10 text-sky-400 border-sky-500/30" },
-  approved: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  rejected: { label: "Rejected", cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
-  completed: { label: "Completed", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  "skipped-no-findings": { label: "Clean", cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700" },
-  "skipped-policy": { label: "Skipped", cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700" },
-  "blocked-konverge": { label: "Blocked", cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  disagreed: { label: "Disagreed", cls: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
-  error: { label: "Error", cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
+  started: {
+    label: "Running",
+    cls: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+  },
+  "pending-approval": {
+    label: "Awaiting approval",
+    cls: "bg-sky-500/10 text-sky-400 border-sky-500/30",
+  },
+  approved: {
+    label: "Approved",
+    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  },
+  rejected: {
+    label: "Rejected",
+    cls: "bg-rose-500/10 text-rose-400 border-rose-500/30",
+  },
+  completed: {
+    label: "Completed",
+    cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  },
+  "skipped-no-findings": {
+    label: "Clean",
+    cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700",
+  },
+  "skipped-policy": {
+    label: "Skipped",
+    cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700",
+  },
+  "blocked-konverge": {
+    label: "Blocked",
+    cls: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  },
+  disagreed: {
+    label: "Disagreed",
+    cls: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+  },
+  error: {
+    label: "Error",
+    cls: "bg-rose-500/10 text-rose-400 border-rose-500/30",
+  },
 };
 
 function statusMeta(s: string) {
-  return STATUS_META[s] ?? { label: s, cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700" };
+  return (
+    STATUS_META[s] ?? {
+      label: s,
+      cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700",
+    }
+  );
 }
 
 function relativeTime(iso: string): string {
@@ -98,7 +133,14 @@ export default function PrRunsPage() {
   }, [load]);
 
   const counts = useMemo(() => {
-    const c = { pending: 0, disagreed: 0, clean: 0, running: 0, error: 0, findings: 0 };
+    const c = {
+      pending: 0,
+      disagreed: 0,
+      clean: 0,
+      running: 0,
+      error: 0,
+      findings: 0,
+    };
     for (const r of runs) {
       if (r.status === "pending-approval") c.pending += 1;
       else if (r.status === "disagreed") c.disagreed += 1;
@@ -111,12 +153,52 @@ export default function PrRunsPage() {
   }, [runs]);
 
   const tiles: Tile[] = [
-    { key: "pending", label: "Awaiting your approval", value: counts.pending, icon: ShieldQuestion, tone: counts.pending > 0 ? "warn" : "neutral", filter: ["pending-approval"] },
-    { key: "disagreed", label: "Reviewer disagreements", value: counts.disagreed, icon: Scale, tone: counts.disagreed > 0 ? "bad" : "neutral", filter: ["disagreed"] },
-    { key: "clean", label: "Clean (no findings)", value: counts.clean, icon: CheckCircle2, tone: "good", filter: ["skipped-no-findings"] },
-    { key: "findings", label: "Findings raised", value: counts.findings, icon: AlertTriangle, tone: counts.findings > 0 ? "warn" : "neutral" },
-    { key: "running", label: "In flight / errored", value: counts.running + counts.error, icon: Loader2, tone: counts.error > 0 ? "bad" : "neutral", filter: ["started", "error"] },
-    { key: "total", label: "Total reviews", value: runs.length, icon: GitPullRequest, tone: "neutral" },
+    {
+      key: "pending",
+      label: "Awaiting your approval",
+      value: counts.pending,
+      icon: ShieldQuestion,
+      tone: counts.pending > 0 ? "warn" : "neutral",
+      filter: ["pending-approval"],
+    },
+    {
+      key: "disagreed",
+      label: "Reviewer disagreements",
+      value: counts.disagreed,
+      icon: Scale,
+      tone: counts.disagreed > 0 ? "bad" : "neutral",
+      filter: ["disagreed"],
+    },
+    {
+      key: "clean",
+      label: "Clean (no findings)",
+      value: counts.clean,
+      icon: CheckCircle2,
+      tone: "good",
+      filter: ["skipped-no-findings"],
+    },
+    {
+      key: "findings",
+      label: "Findings raised",
+      value: counts.findings,
+      icon: AlertTriangle,
+      tone: counts.findings > 0 ? "warn" : "neutral",
+    },
+    {
+      key: "running",
+      label: "In flight / errored",
+      value: counts.running + counts.error,
+      icon: Loader2,
+      tone: counts.error > 0 ? "bad" : "neutral",
+      filter: ["started", "error"],
+    },
+    {
+      key: "total",
+      label: "Total reviews",
+      value: runs.length,
+      icon: GitPullRequest,
+      tone: "neutral",
+    },
   ];
 
   const repos = useMemo(() => {
@@ -157,7 +239,8 @@ export default function PrRunsPage() {
             <GitPullRequest className="size-5 text-[#00d4a0]" /> PR Reviews
           </h1>
           <p className="text-muted-foreground text-sm">
-            Every dual-AI (Claude + Codex) review TARS has run · click a metric to filter
+            Every dual-AI (Claude + Codex) review TARS has run · click a metric
+            to filter
           </p>
         </div>
         <button
@@ -165,7 +248,8 @@ export default function PrRunsPage() {
           onClick={load}
           type="button"
         >
-          <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} /> Refresh
+          <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />{" "}
+          Refresh
         </button>
       </div>
 
@@ -173,13 +257,14 @@ export default function PrRunsPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {tiles.map((t) => {
           const active =
-            t.filter !== undefined && t.filter.every((s) => statusFilter.has(s));
+            t.filter !== undefined &&
+            t.filter.every((s) => statusFilter.has(s));
           return (
             <button
               className={cn(
                 "rounded-xl border bg-card p-4 text-left transition-colors",
                 t.filter ? "hover:border-[#00d4a0]/50" : "cursor-default",
-                active && "border-[#00d4a0] ring-1 ring-[#00d4a0]/40",
+                active && "border-[#00d4a0] ring-1 ring-[#00d4a0]/40"
               )}
               disabled={!t.filter}
               key={t.key}
@@ -189,7 +274,12 @@ export default function PrRunsPage() {
               <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
                 <t.icon className="size-4" /> {t.label}
               </div>
-              <div className={cn("mt-1 font-semibold text-2xl tabular-nums", TONE[t.tone])}>
+              <div
+                className={cn(
+                  "mt-1 font-semibold text-2xl tabular-nums",
+                  TONE[t.tone]
+                )}
+              >
                 {t.value}
               </div>
             </button>
@@ -201,7 +291,9 @@ export default function PrRunsPage() {
       {needsAttention > 0 ? (
         <button
           className="flex w-full items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-300 text-sm hover:bg-amber-500/15"
-          onClick={() => setStatusFilter(new Set(["pending-approval", "disagreed", "error"]))}
+          onClick={() =>
+            setStatusFilter(new Set(["pending-approval", "disagreed", "error"]))
+          }
           type="button"
         >
           <AlertTriangle className="size-4" />
@@ -222,7 +314,9 @@ export default function PrRunsPage() {
           <button
             className={cn(
               "rounded-full border px-3 py-1 text-sm",
-              repoFilter === null ? "border-[#00d4a0] bg-[#00d4a0]/10 text-[#00d4a0]" : "hover:bg-muted",
+              repoFilter === null
+                ? "border-[#00d4a0] bg-[#00d4a0]/10 text-[#00d4a0]"
+                : "hover:bg-muted"
             )}
             onClick={() => setRepoFilter(null)}
             type="button"
@@ -233,7 +327,9 @@ export default function PrRunsPage() {
             <button
               className={cn(
                 "rounded-full border px-3 py-1 font-mono text-xs",
-                repoFilter === r ? "border-[#00d4a0] bg-[#00d4a0]/10 text-[#00d4a0]" : "hover:bg-muted",
+                repoFilter === r
+                  ? "border-[#00d4a0] bg-[#00d4a0]/10 text-[#00d4a0]"
+                  : "hover:bg-muted"
               )}
               key={r}
               onClick={() => setRepoFilter(repoFilter === r ? null : r)}
@@ -280,7 +376,7 @@ export default function PrRunsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate font-medium">
-                        {r.repo} #{r.prNumber}
+                        {r.prTitle ?? `${r.repo} #${r.prNumber}`}
                       </span>
                       {r.prSha ? (
                         <span className="shrink-0 font-mono text-muted-foreground text-xs">
@@ -289,7 +385,9 @@ export default function PrRunsPage() {
                       ) : null}
                     </div>
                     <div className="truncate text-muted-foreground text-xs">
-                      {r.owner} · {relativeTime(r.updatedAt)}
+                      {r.repo} #{r.prNumber} · {r.owner}
+                      {r.senderLogin ? ` · @${r.senderLogin}` : ""} ·{" "}
+                      {relativeTime(r.updatedAt)}
                     </div>
                   </div>
                   {r.findingsCount > 0 ? (
@@ -298,10 +396,12 @@ export default function PrRunsPage() {
                         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                           <div
                             className="h-full rounded-full bg-amber-400/70"
-                            style={{ width: `${(r.findingsCount / maxFindings) * 100}%` }}
+                            style={{
+                              width: `${(r.findingsCount / maxFindings) * 100}%`,
+                            }}
                           />
                         </div>
-                        <span className="tabular-nums text-muted-foreground text-xs">
+                        <span className="text-muted-foreground text-xs tabular-nums">
                           {r.findingsCount}
                         </span>
                       </div>
@@ -314,7 +414,7 @@ export default function PrRunsPage() {
                   <span
                     className={cn(
                       "shrink-0 rounded-full border px-2.5 py-0.5 text-xs",
-                      meta.cls,
+                      meta.cls
                     )}
                   >
                     {meta.label}
@@ -327,8 +427,8 @@ export default function PrRunsPage() {
         )}
       </div>
       <p className="text-muted-foreground text-xs">
-        Showing {filtered.length} of {runs.length} live reviews. Click a row for the
-        full pipeline, the Claude-vs-Codex findings, and the approval gate.
+        Showing {filtered.length} of {runs.length} live reviews. Click a row for
+        the full pipeline, the Claude-vs-Codex findings, and the approval gate.
       </p>
     </div>
   );

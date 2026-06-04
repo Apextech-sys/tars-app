@@ -315,7 +315,9 @@ async function runReviewer(
     maxAttempts: 2,
   });
   await ctx.audit(kind, "start", { jobId: dispatch.jobId, round });
-  const job = await waitForJob(dispatch.jobId, { timeoutMs: WORKER_TIMEOUT_MS });
+  const job = await waitForJob(dispatch.jobId, {
+    timeoutMs: WORKER_TIMEOUT_MS,
+  });
   await ctx.audit(kind, job.status === "done" ? "ok" : "error", {
     status: job.status,
     attempts: job.attempts,
@@ -403,10 +405,18 @@ async function runDebate(ctx: {
     rounds.push({
       round,
       codex: toPosition("codex", codexRun.result, codexFindings, prevCodex),
-      claude: toPosition("claude", claudeRun.result, claudeFindings, prevClaude),
+      claude: toPosition(
+        "claude",
+        claudeRun.result,
+        claudeFindings,
+        prevClaude
+      ),
     });
 
-    const { agreed, disputed } = partitionFindings(codexFindings, claudeFindings);
+    const { agreed, disputed } = partitionFindings(
+      codexFindings,
+      claudeFindings
+    );
     await ctx.audit("debate-round", "ok", {
       round,
       codex: codexFindings.length,
@@ -558,6 +568,12 @@ export async function prReviewWorkflow(
       repo: input.repo,
       prNumber: input.prNumber,
       prSha: pr.headSha,
+      // Persist the real PR title + author ON the run (from the GitHub
+      // pulls.get response) so the list/detail UI shows them directly without
+      // depending on the webhook_events join. Works for webhook- AND
+      // manually-triggered runs; coalesced on conflict so later writes keep it.
+      prTitle: pr.title,
+      prAuthor: pr.user,
       policy: policy as unknown as Record<string, unknown>,
       status: "started",
     });

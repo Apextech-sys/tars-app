@@ -243,7 +243,7 @@ export default async function PrRunDetailPage({
 
       <RunDetailHeader
         durationMs={durationMs}
-        prTitle={webhookEvent?.prTitle ?? null}
+        prTitle={run.prTitle ?? webhookEvent?.prTitle ?? null}
         run={run}
         severityCounts={severityCounts}
         totalFindings={totalFindings}
