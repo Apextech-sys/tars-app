@@ -541,6 +541,183 @@ def aws_cost() -> dict:
             "period": period, "services": services, "notes": ""}
 
 
+
+_KG_LABELPROP = {
+    "DocRepo": "full_name", "File": "path", "AwsResource": "name",
+    "AwsAccount": "alias", "Doc": "title", "Ticket": "identifier",
+}
+_KG_EDGES = [
+    ("IMPORTS", "File", "File"),
+    ("RESOURCE_FOR_REPO", "AwsResource", "DocRepo"),
+    ("RESOURCE_IN_ACCOUNT", "AwsResource", "AwsAccount"),
+    ("MENTIONS_FILE", "Doc", "File"),
+    ("MENTIONS_REPO", "Doc", "DocRepo"),
+    ("MENTIONS_TICKET", "Doc", "Ticket"),
+]
+
+
+def _kg_jsonable(v):
+    return v if isinstance(v, (str, int, float, bool)) or v is None else str(v)
+
+
+def kg_stats() -> dict:
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:  # noqa: BLE001
+        return {"available": False, "notes": f"graph open soft-fail: {e}"}
+    nodes, edges = [], []
+    for t in ["DocRepo", "AwsAccount", "File", "AwsResource", "Doc", "Ticket"]:
+        try:
+            r = conn.execute(f"MATCH (x:{t}) RETURN count(x)")
+            nodes.append({"type": t, "count": r.get_next()[0]})
+        except Exception:  # noqa: BLE001
+            pass
+    for rel in ["IMPORTS", "RESOURCE_FOR_REPO", "RESOURCE_IN_ACCOUNT",
+                "MENTIONS_FILE", "MENTIONS_REPO", "MENTIONS_TICKET"]:
+        try:
+            r = conn.execute(f"MATCH ()-[e:{rel}]->() RETURN count(e)")
+            edges.append({"type": rel, "count": r.get_next()[0]})
+        except Exception:  # noqa: BLE001
+            pass
+    return {"available": True, "nodes": nodes, "edges": edges,
+            "totalNodes": sum(n["count"] for n in nodes),
+            "totalEdges": sum(e["count"] for e in edges)}
+
+
+def kg_search(q: str, limit=24) -> dict:
+    try:
+        limit = int(limit)
+    except Exception:  # noqa: BLE001
+        limit = 24
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:  # noqa: BLE001
+        return {"available": False, "results": [], "notes": str(e)[:120]}
+    ql = (q or "").strip().lower()
+    if not ql:
+        return {"available": True, "results": []}
+    out, seen = [], set()
+    plan = [("DocRepo", "full_name"), ("AwsResource", "name"), ("AwsResource", "service"),
+            ("File", "path"), ("Doc", "title"), ("Ticket", "title"),
+            ("Ticket", "identifier"), ("AwsAccount", "alias")]
+    for t, prop in plan:
+        if len(out) >= limit:
+            break
+        lp = _KG_LABELPROP.get(t, "id")
+        try:
+            r = conn.execute(
+                f"MATCH (n:{t}) WHERE lower(n.{prop}) CONTAINS $q "
+                f"RETURN n.id, n.{lp} LIMIT 12", {"q": ql})
+            while r.has_next() and len(out) < limit:
+                row = r.get_next()
+                nid = row[0]
+                if not nid or nid in seen:
+                    continue
+                seen.add(nid)
+                out.append({"id": nid, "type": t, "label": row[1] or nid})
+        except Exception:  # noqa: BLE001
+            pass
+    return {"available": True, "results": out}
+
+
+def kg_node(node_id: str) -> dict:
+    try:
+        conn, _db = _open_ro()
+    except Exception as e:  # noqa: BLE001
+        return {"available": False, "found": False, "notes": str(e)[:120]}
+    if not node_id:
+        return {"available": True, "found": False}
+    ntype, props = None, {}
+    for t in _KG_LABELPROP:
+        try:
+            r = conn.execute(f"MATCH (n:{t}) WHERE n.id=$id RETURN n LIMIT 1", {"id": node_id})
+            if r.has_next():
+                node = r.get_next()[0]
+                try:
+                    props = {k: _kg_jsonable(v) for k, v in node.items()
+                             if not str(k).startswith("_")}
+                except Exception:  # noqa: BLE001
+                    props = {}
+                ntype = t
+                break
+        except Exception:  # noqa: BLE001
+            pass
+    if not ntype:
+        return {"available": True, "found": False}
+    CAP = 24
+    neighbors, rel_summary = [], []
+
+    def _collect(query, target_t, rel, direction):
+        lp = _KG_LABELPROP.get(target_t, "id")
+        try:
+            cnt = conn.execute(query[0], {"id": node_id}).get_next()[0]
+        except Exception:  # noqa: BLE001
+            return
+        if not cnt:
+            return
+        rows = []
+        try:
+            r = conn.execute(query[1], {"id": node_id})
+            while r.has_next():
+                rows.append(r.get_next())
+        except Exception:  # noqa: BLE001
+            pass
+        for row in rows:
+            neighbors.append({"id": row[0], "type": target_t,
+                              "label": row[1] or row[0], "rel": rel, "dir": direction})
+        rel_summary.append({"rel": rel, "dir": direction, "type": target_t,
+                            "count": cnt, "shown": len(rows)})
+
+    for rel, src, dst in _KG_EDGES:
+        if src == ntype:
+            lp = _KG_LABELPROP.get(dst, "id")
+            _collect((
+                f"MATCH (n:{src} {{id:$id}})-[:{rel}]->(m:{dst}) RETURN count(m)",
+                f"MATCH (n:{src} {{id:$id}})-[:{rel}]->(m:{dst}) RETURN m.id, m.{lp} LIMIT {CAP}",
+            ), dst, rel, "out")
+        if dst == ntype:
+            lp = _KG_LABELPROP.get(src, "id")
+            _collect((
+                f"MATCH (n:{dst} {{id:$id}})<-[:{rel}]-(m:{src}) RETURN count(m)",
+                f"MATCH (n:{dst} {{id:$id}})<-[:{rel}]-(m:{src}) RETURN m.id, m.{lp} LIMIT {CAP}",
+            ), src, rel, "in")
+    # synthetic repo<->file links (no explicit edge; File.repo == DocRepo.id)
+    if ntype == "File" and props.get("repo"):
+        try:
+            r = conn.execute("MATCH (d:DocRepo {id:$r}) RETURN d.id, d.full_name",
+                             {"r": props["repo"]})
+            if r.has_next():
+                row = r.get_next()
+                neighbors.append({"id": row[0], "type": "DocRepo",
+                                  "label": row[1] or row[0], "rel": "IN_REPO", "dir": "out"})
+                rel_summary.append({"rel": "IN_REPO", "dir": "out", "type": "DocRepo",
+                                    "count": 1, "shown": 1})
+        except Exception:  # noqa: BLE001
+            pass
+    if ntype == "DocRepo":
+        try:
+            cnt = conn.execute("MATCH (f:File {repo:$r}) RETURN count(f)",
+                               {"r": node_id}).get_next()[0]
+            if cnt:
+                rows = []
+                r = conn.execute("MATCH (f:File {repo:$r}) RETURN f.id, f.path LIMIT 18",
+                                 {"r": node_id})
+                while r.has_next():
+                    rows.append(r.get_next())
+                for row in rows:
+                    neighbors.append({"id": row[0], "type": "File",
+                                      "label": row[1] or row[0], "rel": "IN_REPO", "dir": "in"})
+                rel_summary.append({"rel": "IN_REPO", "dir": "in", "type": "File",
+                                    "count": cnt, "shown": len(rows)})
+        except Exception:  # noqa: BLE001
+            pass
+    lp = _KG_LABELPROP.get(ntype, "id")
+    return {"available": True, "found": True,
+            "node": {"id": node_id, "type": ntype,
+                     "label": props.get(lp) or node_id, "props": props},
+            "neighbors": neighbors, "relSummary": rel_summary}
+
+
 def get_graph_stats() -> dict:
     """Health stats: Entity/edge counts from Graphiti's DB; File/IMPORTS counts
     from the dedicated code-graph DB. Each opened independently and soft-fails."""
@@ -653,6 +830,19 @@ class GraphHandler(BaseHTTPRequestHandler):
             self.send_json(200, aws_cost())
         elif route == "/aws/ops":
             self.send_json(200, aws_ops())
+        elif route == "/graph/stats":
+            self.send_json(200, kg_stats())
+        elif route == "/graph/search":
+            qs = parse_qs(parsed.query)
+            self.send_json(200, kg_search((qs.get("q") or [""])[0],
+                                          (qs.get("limit") or ["24"])[0]))
+        elif route == "/graph/node":
+            qs = parse_qs(parsed.query)
+            nid = (qs.get("id") or [""])[0]
+            if not nid:
+                self.send_json(400, {"error": "id query param required"})
+                return
+            self.send_json(200, kg_node(nid))
         elif route == "/temporal/workflows":
             self.send_json(200, temporal_workflows())
         elif route == "/temporal/summary":
