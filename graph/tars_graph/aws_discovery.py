@@ -207,7 +207,7 @@ def _upsert_account(conn, account_id: str, alias: str, ts: str) -> str:
 def _upsert_resource(conn, rec: dict, exists: bool) -> None:
     if exists:
         conn.execute(
-            "MATCH (r:AwsResource {id:$id}) SET r.account_id=$account_id, r.service=$service, "
+            "MATCH (r:AwsResource {id:$id}) SET r.arn=$arn, r.account_id=$account_id, r.service=$service, "
             "r.restype=$restype, r.region=$region, r.stage=$stage, r.app=$app, "
             "r.name=$name, r.ingested_at=$ts", rec)
     else:
