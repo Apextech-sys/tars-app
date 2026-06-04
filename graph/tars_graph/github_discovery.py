@@ -141,6 +141,11 @@ async def discover():
         log.info(f'org {org}: {len(repos)} repos')
 
     all_repos = user_repos + [r for rs in org_repos.values() for r in rs]
+    _excl = {x.strip().lower() for x in os.environ.get('TARS_EXCLUDE_REPOS', 'polymarket').split(',') if x.strip()}
+    if _excl:
+        _before = len(all_repos)
+        all_repos = [r for r in all_repos if not any(e in (r.get('nameWithOwner') or '').lower() for e in _excl)]
+        log.info(f'excluded {_before - len(all_repos)} repos via TARS_EXCLUDE_REPOS={sorted(_excl)}')
     log.info(f'total repos to scan: {len(all_repos)}')
 
     # 1b. Diff against last-seen snapshot — emit new_repo / removed_repo events

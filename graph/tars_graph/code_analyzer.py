@@ -529,7 +529,7 @@ def shallow_clone(repo: str, dest: Path, branch: str = "main") -> None:
     auth = f"x-access-token:{token}@" if token else ""
     url = f"https://{auth}github.com/{repo}.git"
     subprocess.run(
-        ["git", "clone", "--depth", "1", "--branch", branch, url, str(dest)],
+        ["git", "clone", "--depth", "1", url, str(dest)],
         check=True, capture_output=True, text=True, timeout=180,
     )
 
@@ -542,7 +542,7 @@ def clone_for_diff(repo: str, dest: Path, branch: str, base: Optional[str]) -> N
     url = f"https://{auth}github.com/{repo}.git"
     if base:
         subprocess.run(
-            ["git", "clone", "--branch", branch, "--filter=blob:none", url, str(dest)],
+            ["git", "clone", "--filter=blob:none", url, str(dest)],
             check=True, capture_output=True, text=True, timeout=300,
         )
         try:
@@ -552,7 +552,7 @@ def clone_for_diff(repo: str, dest: Path, branch: str, base: Optional[str]) -> N
             pass
     else:
         subprocess.run(
-            ["git", "clone", "--depth", "1", "--branch", branch, url, str(dest)],
+            ["git", "clone", "--depth", "1", url, str(dest)],
             check=True, capture_output=True, text=True, timeout=180,
         )
 

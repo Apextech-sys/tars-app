@@ -64,7 +64,8 @@ def fast_cycle() -> None:
     #    Writes the dedicated code-graph.kuzu (sole writer) so per-row updates
     #    are safe across process restarts.
     repos = os.environ.get(
-        "TARS_CODE_REPOS", "Apextech-sys/tars-app,Apextech-sys/reflex-connect"
+        "TARS_CODE_REPOS",
+        "Apextech-sys/tars-app,Apextech-Dev/reflex-connect-v2"
     )
     if os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN"):
         _run_module(

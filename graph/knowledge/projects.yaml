@@ -59,32 +59,6 @@ tars-app:
   - Apextech-sys/tars-app
   issue_tracker: github_issues
   notes: TARS itself. PRs on this repo auto-review + auto-fix allowed.
-polymarket-v2:
-  business: Personal
-  kind: personal
-  visibility: personal
-  auto_review: true
-  auto_fix: true
-  protect_mode: false
-  severity_threshold: minor
-  repos:
-  - Apextech-sys/polymarket-v2
-  issue_tracker: github_issues
-  notes: Live trading repo. Personal — never surface to Linear or external systems.
-polymarket:
-  business: Personal
-  kind: personal
-  visibility: personal
-  auto_review: true
-  auto_fix: true
-  protect_mode: false
-  severity_threshold: minor
-  repos:
-  - Apextech-sys/polymarket-bot
-  - Apextech-sys/polymarket-dashboard
-  - Apextech-sys/polymarket-v2
-  issue_tracker: github_issues
-  notes: Polymarket v1 (legacy). Personal.
 freshbark:
   business: Personal
   kind: personal
