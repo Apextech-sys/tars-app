@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { JsonTree } from "@/components/pr-runs/json-tree";
@@ -42,7 +42,14 @@ interface WebhookRow {
   prSha: string | null;
   prTitle: string | null;
   senderLogin: string | null;
+  /** WDK execution id (`wrun_…`) returned by `start()`; NOT deep-linkable. */
   triggeredRun: string | null;
+  /**
+   * The PR-review workflow's own run_id (`prrev_…`), resolved server-side from
+   * `triggeredRun`. This is what `/pr-runs/<id>` keys on; null when no run
+   * could be confidently correlated (render the id as plain text, not a link).
+   */
+  resolvedPrRunId: string | null;
   createdAt: string;
 }
 
@@ -98,6 +105,50 @@ function FilterChip({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * Render a delivery's triggered PR-review run.
+ *
+ * Links to `/pr-runs/<prrev id>` only when the server resolved a real
+ * `prReviewRuns.run_id` (`resolvedPrRunId`). The raw `triggeredRun` is the WDK
+ * execution id (`wrun_…`) which the detail route cannot resolve, so when no
+ * run could be correlated we render the id as plain (non-link) text rather
+ * than a guaranteed-404 link. `display` controls the visible label: the full
+ * id in the detail panel, the last 8 chars in the dense table cell.
+ */
+function TriggeredRunCell({
+  triggeredRun,
+  resolvedPrRunId,
+  display,
+  onLinkClick,
+}: {
+  triggeredRun: string;
+  resolvedPrRunId: string | null;
+  display: "full" | "short";
+  onLinkClick?: (e: MouseEvent) => void;
+}) {
+  const label = display === "short" ? triggeredRun.slice(-8) : triggeredRun;
+  if (resolvedPrRunId) {
+    return (
+      <Link
+        className="inline-flex items-center gap-1 font-mono text-[#00d4a0] text-xs hover:underline"
+        href={`/pr-runs/${encodeURIComponent(resolvedPrRunId)}`}
+        onClick={onLinkClick}
+      >
+        {label}
+        <ExternalLink className="size-3" />
+      </Link>
+    );
+  }
+  return (
+    <span
+      className="font-mono text-muted-foreground text-xs"
+      title="No PR-review run could be linked to this delivery yet."
+    >
+      {label}
+    </span>
   );
 }
 
@@ -241,13 +292,11 @@ function DetailPanel({
             {event.triggeredRun ? (
               <div className="col-span-2">
                 <p className="text-muted-foreground text-xs">Triggered run</p>
-                <Link
-                  className="flex items-center gap-1 font-mono text-[#00d4a0] text-xs hover:underline"
-                  href={`/pr-runs/${encodeURIComponent(event.triggeredRun)}`}
-                >
-                  {event.triggeredRun}
-                  <ExternalLink className="size-3" />
-                </Link>
+                <TriggeredRunCell
+                  display="full"
+                  resolvedPrRunId={event.resolvedPrRunId}
+                  triggeredRun={event.triggeredRun}
+                />
               </div>
             ) : null}
           </div>
@@ -618,14 +667,12 @@ export function WebhookStream({
                         </td>
                         <td className="hidden px-4 py-3 lg:table-cell">
                           {e.triggeredRun ? (
-                            <Link
-                              className="inline-flex items-center gap-1 font-mono text-[#00d4a0] text-xs hover:underline"
-                              href={`/pr-runs/${encodeURIComponent(e.triggeredRun)}`}
-                              onClick={(ev) => ev.stopPropagation()}
-                            >
-                              {e.triggeredRun.slice(-8)}
-                              <ExternalLink className="size-3" />
-                            </Link>
+                            <TriggeredRunCell
+                              display="short"
+                              onLinkClick={(ev) => ev.stopPropagation()}
+                              resolvedPrRunId={e.resolvedPrRunId}
+                              triggeredRun={e.triggeredRun}
+                            />
                           ) : (
                             <span className="text-muted-foreground/50 text-xs">
                               —

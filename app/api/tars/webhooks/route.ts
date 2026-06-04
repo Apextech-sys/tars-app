@@ -13,6 +13,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { webhookEvents } from "@/lib/db/tars-schema";
+import { resolvePrRunIds } from "@/lib/tars/resolve-pr-run";
 
 const querySchema = z.object({
   repo: z.string().optional(),
@@ -92,11 +93,18 @@ export async function GET(req: NextRequest) {
         .where(where),
     ]);
 
+    // Resolve each delivery's WDK execution id (`triggered_run`, a `wrun_…`)
+    // to the PR-review workflow's own `prrev_…` run_id, which is what the
+    // /pr-runs detail route keys on. A link built straight from `triggered_run`
+    // 404s; `resolvedPrRunId` is the deep-linkable id (or null -> plain text).
+    const resolved = await resolvePrRunIds(rows);
+
     return NextResponse.json({
       events: rows.map((e) => ({
         ...e,
         rawPayload: undefined, // don't send raw on list
         createdAt: e.createdAt.toISOString(),
+        resolvedPrRunId: resolved.get(e.id) ?? null,
       })),
       total: countResult[0]?.count ?? 0,
       limit: params.limit,

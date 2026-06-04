@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { webhookEvents } from "@/lib/db/tars-schema";
+import { resolvePrRunId } from "@/lib/tars/resolve-pr-run";
 
 export async function GET(
   _req: NextRequest,
@@ -20,9 +21,14 @@ export async function GET(
     }
 
     const e = rows[0];
+    // `triggered_run` is the WDK execution id (`wrun_…`); the /pr-runs detail
+    // route keys on the workflow's own `prrev_…` run_id. Resolve it so the
+    // DetailPanel deep-links correctly (or renders plain text when null).
+    const resolvedPrRunId = await resolvePrRunId(e);
     return NextResponse.json({
       ...e,
       createdAt: e.createdAt.toISOString(),
+      resolvedPrRunId,
     });
   } catch (err) {
     console.error("GET /api/tars/webhooks/[id] error", err);
