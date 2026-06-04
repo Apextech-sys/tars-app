@@ -1,43 +1,18 @@
 "use client";
 
 import {
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  Filter,
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  GitPullRequest,
   Loader2,
   RefreshCw,
+  Scale,
+  ShieldQuestion,
 } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState, useTransition } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
-
-const PAGE_SIZE = 25;
-
-const ALL_STATUSES = [
-  "started",
-  "pending-approval",
-  "approved",
-  "rejected",
-  "completed",
-  "skipped-no-findings",
-  "skipped-policy",
-  "blocked-konverge",
-  "disagreed",
-  "error",
-] as const;
-
-type RunStatus = (typeof ALL_STATUSES)[number];
 
 interface RunRow {
   runId: string;
@@ -55,448 +30,306 @@ interface RunRow {
   senderLogin: string | null;
 }
 
-type ArchivedFilter = "all" | "archived" | "live";
-
-const STATUS_COLORS: Record<string, string> = {
-  started: "bg-blue-500/10 text-blue-400 border border-blue-500/30",
-  completed: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
-  "skipped-no-findings": "bg-zinc-500/10 text-zinc-400 border border-zinc-700",
-  "skipped-policy": "bg-zinc-500/10 text-zinc-400 border border-zinc-700",
-  "blocked-konverge":
-    "bg-amber-500/10 text-amber-400 border border-amber-500/30",
-  disagreed: "bg-purple-500/10 text-purple-400 border border-purple-500/30",
-  "pending-approval": "bg-sky-500/10 text-sky-400 border border-sky-500/30",
-  approved: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30",
-  rejected: "bg-rose-500/10 text-rose-400 border border-rose-500/30",
-  error: "bg-red-500/10 text-red-400 border border-red-500/30",
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+  started: { label: "Running", cls: "bg-blue-500/10 text-blue-400 border-blue-500/30" },
+  "pending-approval": { label: "Awaiting approval", cls: "bg-sky-500/10 text-sky-400 border-sky-500/30" },
+  approved: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  rejected: { label: "Rejected", cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
+  completed: { label: "Completed", cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  "skipped-no-findings": { label: "Clean", cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700" },
+  "skipped-policy": { label: "Skipped", cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700" },
+  "blocked-konverge": { label: "Blocked", cls: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+  disagreed: { label: "Disagreed", cls: "bg-purple-500/10 text-purple-400 border-purple-500/30" },
+  error: { label: "Error", cls: "bg-rose-500/10 text-rose-400 border-rose-500/30" },
 };
 
-function StatusChip({ status }: { status: string }) {
-  const cls =
-    STATUS_COLORS[status] ??
-    "bg-zinc-500/10 text-zinc-400 border border-zinc-700";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 font-medium text-xs uppercase tracking-wide",
-        cls
-      )}
-    >
-      {status}
-    </span>
-  );
+function statusMeta(s: string) {
+  return STATUS_META[s] ?? { label: s, cls: "bg-zinc-500/10 text-zinc-400 border-zinc-700" };
 }
 
 function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) {
-    return `${s}s ago`;
-  }
-  const m = Math.floor(s / 60);
-  if (m < 60) {
-    return `${m}m ago`;
-  }
-  const h = Math.floor(m / 60);
-  if (h < 24) {
-    return `${h}h ago`;
-  }
-  return `${Math.floor(h / 24)}d ago`;
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const s = Math.max(0, Math.round((now - then) / 1000));
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
 }
 
-export default function PrRunsListPage() {
+interface Tile {
+  key: string;
+  label: string;
+  value: number;
+  icon: typeof GitPullRequest;
+  tone: "neutral" | "good" | "warn" | "bad";
+  filter?: string[];
+}
+const TONE: Record<string, string> = {
+  neutral: "text-foreground",
+  good: "text-[#00d4a0]",
+  warn: "text-amber-400",
+  bad: "text-red-400",
+};
+
+export default function PrRunsPage() {
   const [runs, setRuns] = useState<RunRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [refreshing, setRefreshing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [repoFilter, setRepoFilter] = useState<string | null>(null);
 
-  // Filters
-  const [selectedStatuses, setSelectedStatuses] = useState<RunStatus[]>([]);
-  const [repoFilter, setRepoFilter] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [archivedFilter, setArchivedFilter] = useState<ArchivedFilter>("all");
-
-  const load = useCallback(
-    (
-      statuses: RunStatus[],
-      repo: string,
-      from: string,
-      to: string,
-      archived: ArchivedFilter,
-      p: number
-    ) => {
-      startTransition(async () => {
-        setLoading(true);
-        try {
-          const params = new URLSearchParams();
-          if (statuses.length > 0) {
-            params.set("status", statuses.join(","));
-          }
-          if (repo) {
-            params.set("repo", repo);
-          }
-          if (from) {
-            params.set("from", from);
-          }
-          if (to) {
-            params.set("to", to);
-          }
-          if (archived === "archived") {
-            params.set("archived", "true");
-          } else if (archived === "live") {
-            params.set("archived", "false");
-          }
-          params.set("limit", String(PAGE_SIZE));
-          params.set("offset", String(p * PAGE_SIZE));
-
-          const res = await fetch(`/api/tars/pr-runs?${params.toString()}`);
-          if (!res.ok) {
-            throw new Error("Failed");
-          }
-          const data = (await res.json()) as { runs: RunRow[]; total: number };
-          setRuns(data.runs);
-          setTotal(data.total);
-        } finally {
-          setLoading(false);
-        }
+  const load = useCallback(() => {
+    setRefreshing(true);
+    fetch("/api/tars/pr-runs?limit=100&archived=false")
+      .then((r) => r.json())
+      .then((d) => setRuns(Array.isArray(d.runs) ? d.runs : []))
+      .catch(() => setRuns([]))
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
       });
-    },
-    []
-  );
+  }, []);
 
   useEffect(() => {
-    load(selectedStatuses, repoFilter, dateFrom, dateTo, archivedFilter, page);
-  }, [
-    load,
-    selectedStatuses,
-    repoFilter,
-    dateFrom,
-    dateTo,
-    archivedFilter,
-    page,
-  ]);
+    load();
+  }, [load]);
 
-  const toggleStatus = (s: RunStatus) => {
-    setSelectedStatuses((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
-    );
-    setPage(0);
-  };
+  const counts = useMemo(() => {
+    const c = { pending: 0, disagreed: 0, clean: 0, running: 0, error: 0, findings: 0 };
+    for (const r of runs) {
+      if (r.status === "pending-approval") c.pending += 1;
+      else if (r.status === "disagreed") c.disagreed += 1;
+      else if (r.status === "skipped-no-findings") c.clean += 1;
+      else if (r.status === "started") c.running += 1;
+      else if (r.status === "error") c.error += 1;
+      c.findings += r.findingsCount || 0;
+    }
+    return c;
+  }, [runs]);
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const tiles: Tile[] = [
+    { key: "pending", label: "Awaiting your approval", value: counts.pending, icon: ShieldQuestion, tone: counts.pending > 0 ? "warn" : "neutral", filter: ["pending-approval"] },
+    { key: "disagreed", label: "Reviewer disagreements", value: counts.disagreed, icon: Scale, tone: counts.disagreed > 0 ? "bad" : "neutral", filter: ["disagreed"] },
+    { key: "clean", label: "Clean (no findings)", value: counts.clean, icon: CheckCircle2, tone: "good", filter: ["skipped-no-findings"] },
+    { key: "findings", label: "Findings raised", value: counts.findings, icon: AlertTriangle, tone: counts.findings > 0 ? "warn" : "neutral" },
+    { key: "running", label: "In flight / errored", value: counts.running + counts.error, icon: Loader2, tone: counts.error > 0 ? "bad" : "neutral", filter: ["started", "error"] },
+    { key: "total", label: "Total reviews", value: runs.length, icon: GitPullRequest, tone: "neutral" },
+  ];
 
-  // Card layout for mobile
-  function RunCard({ run }: { run: RunRow }) {
-    return (
-      <Link
-        className="block space-y-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-accent/50"
-        href={`/pr-runs/${encodeURIComponent(run.runId)}`}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate font-medium text-sm">
-              {run.prTitle ?? `PR #${run.prNumber}`}
-            </p>
-            <p className="mt-0.5 font-mono text-muted-foreground text-xs">
-              {run.owner}/{run.repo} #{run.prNumber}
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <StatusChip status={run.status} />
-            {run.archivedAt && (
-              <span className="rounded-full border border-zinc-700 bg-zinc-800/50 px-2 py-0.5 font-medium text-[10px] text-zinc-400 uppercase tracking-wide">
-                archived
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3 text-muted-foreground text-xs">
-          {run.findingsCount > 0 && (
-            <span>
-              {run.findingsCount} finding{run.findingsCount === 1 ? "" : "s"}
-            </span>
-          )}
-          <span className="ml-auto">{relativeTime(run.updatedAt)}</span>
-        </div>
-      </Link>
-    );
-  }
+  const repos = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of runs) set.add(`${r.owner}/${r.repo}`);
+    return [...set].sort();
+  }, [runs]);
+
+  const filtered = useMemo(() => {
+    return runs.filter((r) => {
+      if (statusFilter.size > 0 && !statusFilter.has(r.status)) return false;
+      if (repoFilter && `${r.owner}/${r.repo}` !== repoFilter) return false;
+      return true;
+    });
+  }, [runs, statusFilter, repoFilter]);
+
+  const toggleStatus = useCallback((statuses: string[]) => {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      const allOn = statuses.every((s) => next.has(s));
+      if (allOn) {
+        for (const s of statuses) next.delete(s);
+      } else {
+        for (const s of statuses) next.add(s);
+      }
+      return next;
+    });
+  }, []);
+
+  const needsAttention = counts.pending + counts.disagreed + counts.error;
+  const maxFindings = Math.max(1, ...runs.map((r) => r.findingsCount || 0));
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 md:py-8">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="font-bold text-2xl">PR Runs</h1>
-            <p className="mt-1 text-muted-foreground text-sm">
-              {total.toLocaleString()} total run{total === 1 ? "" : "s"}
-            </p>
-          </div>
-          <Button
-            className="min-h-[44px]"
-            disabled={isPending}
-            onClick={() =>
-              load(
-                selectedStatuses,
-                repoFilter,
-                dateFrom,
-                dateTo,
-                archivedFilter,
-                page
-              )
-            }
-            size="sm"
-            variant="outline"
-          >
-            <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
-            Refresh
-          </Button>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 font-semibold text-xl">
+            <GitPullRequest className="size-5 text-[#00d4a0]" /> PR Reviews
+          </h1>
+          <p className="text-muted-foreground text-sm">
+            Every dual-AI (Claude + Codex) review TARS has run · click a metric to filter
+          </p>
         </div>
+        <button
+          className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm hover:bg-muted"
+          onClick={load}
+          type="button"
+        >
+          <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} /> Refresh
+        </button>
+      </div>
 
-        {/* Filters */}
-        <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-          <div className="mb-2 flex items-center gap-2 text-muted-foreground text-sm">
-            <Filter className="size-3.5" />
-            Filters
-          </div>
-
-          {/* Status chips */}
-          <div className="flex flex-wrap gap-1.5">
-            {ALL_STATUSES.map((s) => (
-              <button
-                className={cn(
-                  "min-h-[32px] rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  selectedStatuses.includes(s)
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-muted hover:bg-accent"
-                )}
-                key={s}
-                onClick={() => toggleStatus(s)}
-                type="button"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-
-          {/* Archived filter */}
-          <div className="flex flex-wrap gap-1.5">
-            {(["all", "live", "archived"] as const).map((a) => (
-              <button
-                className={cn(
-                  "min-h-[32px] rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  archivedFilter === a
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-muted hover:bg-accent"
-                )}
-                key={a}
-                onClick={() => {
-                  setArchivedFilter(a);
-                  setPage(0);
-                }}
-                type="button"
-              >
-                {a}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Input
-              className="w-full sm:w-48"
-              onChange={(e) => {
-                setRepoFilter(e.target.value);
-                setPage(0);
-              }}
-              placeholder="owner/repo"
-              value={repoFilter}
-            />
-            <Input
-              className="w-full sm:w-auto"
-              onChange={(e) => {
-                setDateFrom(e.target.value);
-                setPage(0);
-              }}
-              title="From date"
-              type="date"
-              value={dateFrom}
-            />
-            <Input
-              className="w-full sm:w-auto"
-              onChange={(e) => {
-                setDateTo(e.target.value);
-                setPage(0);
-              }}
-              title="To date"
-              type="date"
-              value={dateTo}
-            />
-          </div>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="space-y-3 md:hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : runs.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-muted-foreground">
-              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
-                <Filter className="size-5" />
+      {/* Hero tiles */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {tiles.map((t) => {
+          const active =
+            t.filter !== undefined && t.filter.every((s) => statusFilter.has(s));
+          return (
+            <button
+              className={cn(
+                "rounded-xl border bg-card p-4 text-left transition-colors",
+                t.filter ? "hover:border-[#00d4a0]/50" : "cursor-default",
+                active && "border-[#00d4a0] ring-1 ring-[#00d4a0]/40",
+              )}
+              disabled={!t.filter}
+              key={t.key}
+              onClick={() => t.filter && toggleStatus(t.filter)}
+              type="button"
+            >
+              <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
+                <t.icon className="size-4" /> {t.label}
               </div>
-              <p className="font-medium text-sm">
-                No PR runs match these filters
-              </p>
-              <p className="text-xs">Try adjusting the status or date range</p>
-            </div>
-          ) : (
-            runs.map((run) => <RunCard key={run.runId} run={run} />)
+              <div className={cn("mt-1 font-semibold text-2xl tabular-nums", TONE[t.tone])}>
+                {t.value}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Needs-attention banner */}
+      {needsAttention > 0 ? (
+        <button
+          className="flex w-full items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-300 text-sm hover:bg-amber-500/15"
+          onClick={() => setStatusFilter(new Set(["pending-approval", "disagreed", "error"]))}
+          type="button"
+        >
+          <AlertTriangle className="size-4" />
+          <span className="font-medium">
+            {needsAttention} review{needsAttention === 1 ? "" : "s"} need you
+          </span>
+          <span className="text-amber-300/70">
+            · {counts.pending} to approve · {counts.disagreed} disagreements
+            {counts.error > 0 ? ` · ${counts.error} errored` : ""}
+          </span>
+          <ArrowRight className="ml-auto size-4" />
+        </button>
+      ) : null}
+
+      {/* Repo filter */}
+      {repos.length > 1 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            className={cn(
+              "rounded-full border px-3 py-1 text-sm",
+              repoFilter === null ? "border-[#00d4a0] bg-[#00d4a0]/10 text-[#00d4a0]" : "hover:bg-muted",
+            )}
+            onClick={() => setRepoFilter(null)}
+            type="button"
+          >
+            All repos
+          </button>
+          {repos.map((r) => (
+            <button
+              className={cn(
+                "rounded-full border px-3 py-1 font-mono text-xs",
+                repoFilter === r ? "border-[#00d4a0] bg-[#00d4a0]/10 text-[#00d4a0]" : "hover:bg-muted",
+              )}
+              key={r}
+              onClick={() => setRepoFilter(repoFilter === r ? null : r)}
+              type="button"
+            >
+              {r}
+            </button>
+          ))}
+          {(statusFilter.size > 0 || repoFilter) && (
+            <button
+              className="rounded-full px-3 py-1 text-muted-foreground text-xs hover:text-foreground"
+              onClick={() => {
+                setStatusFilter(new Set());
+                setRepoFilter(null);
+              }}
+              type="button"
+            >
+              Clear filters
+            </button>
           )}
         </div>
+      ) : null}
 
-        {/* Desktop table */}
-        <div className="hidden overflow-hidden rounded-lg border border-border bg-card md:block">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PR</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Findings</TableHead>
-                  <TableHead>Reviewer</TableHead>
-                  <TableHead>Updated</TableHead>
-                  <TableHead className="w-12" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  // Skeleton rows
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={`skeleton-${i}`}>
-                      {Array.from({ length: 6 }).map((__, j) => (
-                        <TableCell key={j}>
-                          <div className="h-4 animate-pulse rounded bg-muted" />
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))
-                ) : runs.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      className="py-16 text-center text-muted-foreground"
-                      colSpan={6}
-                    >
-                      <div className="flex flex-col items-center gap-2">
-                        <Filter className="size-8 opacity-40" />
-                        <p className="font-medium text-sm">
-                          No PR runs match these filters
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  runs.map((run) => (
-                    <TableRow className="group" key={run.runId}>
-                      <TableCell>
-                        <div className="space-y-0.5">
-                          <p className="max-w-[280px] truncate font-medium text-sm">
-                            {run.prTitle ?? `PR #${run.prNumber}`}
-                          </p>
-                          <p className="font-mono text-muted-foreground text-xs">
-                            {run.owner}/{run.repo} #{run.prNumber}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <StatusChip status={run.status} />
-                          {run.archivedAt && (
-                            <span className="rounded-full border border-zinc-700 bg-zinc-800/50 px-1.5 py-0.5 font-medium text-[10px] text-zinc-400 uppercase tracking-wide">
-                              archived
-                            </span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {run.findingsCount > 0 ? (
-                          <span>{run.findingsCount}</span>
-                        ) : (
-                          <span className="text-zinc-600">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {run.status === "disagreed" ? (
-                          <div className="flex gap-1">
-                            <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-purple-400 text-xs">
-                              Codex
-                            </span>
-                            <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-1.5 py-0.5 text-purple-400 text-xs">
-                              Claude
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">
-                            —
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground text-xs">
-                        {relativeTime(run.updatedAt)}
-                      </TableCell>
-                      <TableCell>
-                        <Link
-                          aria-label={`View run ${run.runId}`}
-                          className="inline-flex min-h-[32px] items-center gap-1 text-primary text-xs hover:underline"
-                          href={`/pr-runs/${encodeURIComponent(run.runId)}`}
-                        >
-                          View
-                          <ExternalLink className="size-3" />
-                        </Link>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+      {/* Runs table */}
+      <div className="overflow-hidden rounded-xl border bg-card">
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground text-sm">
+            <Loader2 className="size-4 animate-spin" /> Loading reviews…
           </div>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between text-muted-foreground text-sm">
-            <span>
-              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)}{" "}
-              of {total}
-            </span>
-            <div className="flex gap-2">
-              <Button
-                className="min-h-[44px]"
-                disabled={page === 0 || isPending}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                size="sm"
-                variant="outline"
-              >
-                <ChevronLeft className="size-4" />
-                Previous
-              </Button>
-              <Button
-                className="min-h-[44px]"
-                disabled={page >= totalPages - 1 || isPending}
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                size="sm"
-                variant="outline"
-              >
-                Next
-                <ChevronRight className="size-4" />
-              </Button>
-            </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center text-muted-foreground text-sm">
+            No reviews match the current filter.
+          </div>
+        ) : (
+          <div className="divide-y">
+            {filtered.map((r) => {
+              const meta = statusMeta(r.status);
+              return (
+                <Link
+                  className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/40"
+                  href={`/pr-runs/${r.runId}`}
+                  key={r.runId}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-medium">
+                        {r.repo} #{r.prNumber}
+                      </span>
+                      {r.prSha ? (
+                        <span className="shrink-0 font-mono text-muted-foreground text-xs">
+                          {r.prSha.slice(0, 7)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="truncate text-muted-foreground text-xs">
+                      {r.owner} · {relativeTime(r.updatedAt)}
+                    </div>
+                  </div>
+                  {r.findingsCount > 0 ? (
+                    <div className="hidden w-24 shrink-0 sm:block">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full bg-amber-400/70"
+                            style={{ width: `${(r.findingsCount / maxFindings) * 100}%` }}
+                          />
+                        </div>
+                        <span className="tabular-nums text-muted-foreground text-xs">
+                          {r.findingsCount}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="hidden w-24 shrink-0 text-right text-muted-foreground text-xs sm:block">
+                      no findings
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full border px-2.5 py-0.5 text-xs",
+                      meta.cls,
+                    )}
+                  >
+                    {meta.label}
+                  </span>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
+      <p className="text-muted-foreground text-xs">
+        Showing {filtered.length} of {runs.length} live reviews. Click a row for the
+        full pipeline, the Claude-vs-Codex findings, and the approval gate.
+      </p>
     </div>
   );
 }
