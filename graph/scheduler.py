@@ -108,6 +108,88 @@ def slow_cycle() -> None:
     _log("slow cycle done")
 
 
+
+_SLACK_CHANNEL = os.environ.get("TARS_MONITOR_SLACK_CHANNEL", "D0B5JSGPBHD")
+_FRESHNESS_STATE = "/tmp/tars-freshness-state.json"
+# (node label, friendly name, max-age hours, enabling-credential env var)
+_FRESHNESS_CHECKS = [
+    ("AwsResource", "AWS resources", 6, "AWS_ACCESS_KEY_ID"),
+    ("AwsCost", "AWS cost", 6, "AWS_ACCESS_KEY_ID"),
+    ("Doc", "Notion docs", 30, "NOTION_API_KEY"),
+]
+
+
+def _slack(text: str) -> None:
+    import json as _json
+    import urllib.request as _u
+    tok = os.environ.get("SLACK_BOT_TOKEN")
+    if not tok:
+        _log("freshness: SLACK_BOT_TOKEN unset, cannot alert")
+        return
+    try:
+        data = _json.dumps({"channel": _SLACK_CHANNEL, "text": text}).encode()
+        req = _u.Request(
+            "https://slack.com/api/chat.postMessage", data=data,
+            headers={"Authorization": f"Bearer {tok}",
+                     "Content-Type": "application/json"})
+        _u.urlopen(req, timeout=10).read()
+    except Exception as e:  # noqa: BLE001
+        _log(f"freshness slack post failed: {e}")
+
+
+def freshness_check() -> None:
+    """Dead-man: alert if any enabled connector's newest ingested_at is stale."""
+    import json as _json
+    try:
+        import kuzu  # type: ignore
+    except Exception:  # noqa: BLE001
+        return
+    path = os.environ.get("TARS_CODE_GRAPH_PATH", "/data/code-graph.kuzu")
+    try:
+        conn = kuzu.Connection(kuzu.Database(path, read_only=True))
+    except Exception as e:  # noqa: BLE001
+        _log(f"freshness: cannot open graph ro ({e}) — skipping this cycle")
+        return
+    now = datetime.now(timezone.utc)
+    stale = []
+    for label, friendly, max_h, cred in _FRESHNESS_CHECKS:
+        if not os.environ.get(cred):
+            continue  # connector deliberately disabled — not a freshness concern
+        try:
+            r = conn.execute(
+                f"MATCH (n:{label}) RETURN count(n), max(n.ingested_at)")
+            if not r.has_next():
+                continue
+            cnt, latest = r.get_next()
+            if not (cnt or 0) or not latest:
+                stale.append(f"{friendly}: enabled but 0 rows")
+                continue
+            dt = datetime.fromisoformat(str(latest).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            age_h = (now - dt).total_seconds() / 3600.0
+            if age_h > max_h:
+                stale.append(f"{friendly}: {age_h:.1f}h old (limit {max_h}h)")
+        except Exception as e:  # noqa: BLE001
+            _log(f"freshness check {label} failed: {e}")
+    try:
+        with open(_FRESHNESS_STATE) as f:
+            prev = _json.load(f).get("stale", [])
+    except Exception:  # noqa: BLE001
+        prev = []
+    if stale and stale != prev:
+        _slack("⚠️ TARS graph ingest STALE:\n• " + "\n• ".join(stale))
+        _log(f"freshness ALERT: {stale}")
+    elif not stale and prev:
+        _slack("✅ TARS graph ingest recovered — all connectors fresh.")
+        _log("freshness recovered")
+    try:
+        with open(_FRESHNESS_STATE, "w") as f:
+            _json.dump({"stale": stale}, f)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main() -> None:
     if os.environ.get("TARS_DISABLE_SCHEDULER", "0") == "1":
         _log("TARS_DISABLE_SCHEDULER=1 — scheduler not running")
@@ -122,6 +204,10 @@ def main() -> None:
         if time.time() - last_slow >= SLOW_MIN * 60:
             slow_cycle()
             last_slow = time.time()
+        try:
+            freshness_check()
+        except Exception as e:  # noqa: BLE001
+            _log(f"freshness_check error: {e}")
         # sleep the remainder of the fast interval
         elapsed = time.time() - cycle_start
         sleep_s = max(60, FAST_MIN * 60 - elapsed)

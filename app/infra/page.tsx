@@ -232,7 +232,7 @@ function EnvCard({ data, currency }: { data: EnvSummary; currency: string }) {
       <div className="mt-3 flex items-end justify-between gap-3">
         <div>
           <div className="text-muted-foreground text-xs uppercase tracking-wide">
-            Spend (last {data.trend.length}d)
+            Spend · month-to-date
           </div>
           <div className="font-semibold text-2xl">
             {money(data.cost, currency)}
@@ -398,6 +398,8 @@ export default async function InfraPage() {
   }
 
   // Per-environment rollup: Dev+Staging (Apextech account) vs Production (Konverge account).
+  // Use month-to-date spend so the env cards reconcile with the "Month-to-date cost" hero tile.
+  const monthPrefix = new Date().toISOString().slice(0, 7); // YYYY-MM
   const envData: EnvSummary[] = [ENV_NONPROD, ENV_PROD]
     .map((env) => {
       const opsAcc = opsAccounts.find(
@@ -413,7 +415,9 @@ export default async function InfraPage() {
       return {
         env,
         accountId: opsAcc?.accountId ?? "",
-        cost: trend.reduce((n, p) => n + p.amount, 0),
+        cost: trend
+          .filter((p) => p.date.startsWith(monthPrefix))
+          .reduce((n, p) => n + p.amount, 0),
         trend,
         healthy: services.filter(serviceHealthy).length,
         totalSvc: services.length,
