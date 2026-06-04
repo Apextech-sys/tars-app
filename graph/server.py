@@ -291,6 +291,79 @@ def temporal_summary() -> dict:
     return {"available": True, "namespace": ns, "counts": res, "notes": ""}
 
 
+def _decode_payloads(obj):
+    """Recursively decode Temporal Payload {{metadata, data:<b64>}} blobs to text/JSON."""
+    import base64
+    import json as _json
+    if isinstance(obj, dict):
+        if isinstance(obj.get("data"), str) and "metadata" in obj:
+            try:
+                raw = base64.b64decode(obj["data"])
+                txt = raw.decode("utf-8", "replace")
+                try:
+                    return _json.loads(txt)
+                except Exception:
+                    return txt[:2000]
+            except Exception:
+                return str(obj.get("data", ""))[:200]
+        return {k: _decode_payloads(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_decode_payloads(x) for x in obj]
+    return obj
+
+
+def temporal_workflow_detail(wid: str, run_id: str) -> dict:
+    """Full describe + event history for a single workflow execution (read-only)."""
+    async def fetch(client):
+        from google.protobuf.json_format import MessageToDict
+        h = client.get_workflow_handle(wid, run_id=(run_id or None))
+        d = await h.describe()
+        info = {
+            "id": d.id, "runId": d.run_id, "type": d.workflow_type,
+            "status": (d.status.name if d.status else ""),
+            "taskQueue": getattr(d, "task_queue", ""),
+            "start": (d.start_time.isoformat() if d.start_time else ""),
+            "close": (d.close_time.isoformat() if d.close_time else ""),
+            "historyLength": getattr(d, "history_length", None),
+        }
+        pending = []
+        try:
+            for pa in d.raw_description.pending_activities:
+                pending.append({
+                    "activityId": pa.activity_id,
+                    "activityType": pa.activity_type.name,
+                    "state": int(pa.state), "attempt": pa.attempt,
+                    "lastFailure": (pa.last_failure.message if pa.HasField("last_failure") else ""),
+                })
+        except Exception:  # noqa: BLE001
+            pass
+        events = []
+        async for ev in h.fetch_history_events():
+            dd = MessageToDict(ev)
+            akey = [k for k in dd if k.endswith("EventAttributes")]
+            attrs = _decode_payloads(dd[akey[0]]) if akey else {}
+            failure = ""
+            if isinstance(attrs, dict) and isinstance(attrs.get("failure"), dict):
+                failure = str(attrs["failure"].get("message", ""))[:600]
+            events.append({
+                "id": int(dd.get("eventId", 0) or 0),
+                "time": dd.get("eventTime", ""),
+                "type": dd.get("eventType", "").replace("EVENT_TYPE_", ""),
+                "failure": failure,
+                "attrs": attrs,
+            })
+            if len(events) >= 400:
+                break
+        return {"info": info, "pending": pending, "events": events}
+
+    res, err = _temporal_run(fetch)
+    if err is not None:
+        return {"available": False, "notes": err["notes"]}
+    out = {"available": True, "notes": ""}
+    out.update(res)
+    return out
+
+
 def list_aws_resources() -> dict:
     """AWS resources discovered into the code-graph (account 140138661997 scope)."""
     try:
