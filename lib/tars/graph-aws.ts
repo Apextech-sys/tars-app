@@ -96,8 +96,14 @@ export async function getInfra(): Promise<InfraSummary> {
     graphFetch("/aws/cost"),
   ]);
 
-  const accData = accRaw as { available?: boolean; accounts?: AwsAccount[] } | null;
-  const resData = resRaw as { available?: boolean; resources?: AwsResource[] } | null;
+  const accData = accRaw as {
+    available?: boolean;
+    accounts?: AwsAccount[];
+  } | null;
+  const resData = resRaw as {
+    available?: boolean;
+    resources?: AwsResource[];
+  } | null;
   const costData = costRaw as {
     available?: boolean;
     total?: number;
@@ -125,4 +131,56 @@ export async function getInfra(): Promise<InfraSummary> {
     },
     notes: available ? undefined : "tars-graph unreachable",
   };
+}
+
+export interface OpsAccount {
+  label: string;
+  accountId: string;
+  alarms: {
+    OK: number;
+    ALARM: number;
+    INSUFFICIENT_DATA?: number;
+    firing: { name: string; reason: string }[];
+  };
+  services: {
+    cluster: string;
+    name: string;
+    running: number;
+    desired: number;
+    status: string;
+  }[];
+  rds: { id: string; status: string; engine: string }[];
+  costTrend: { date: string; amount: number }[];
+}
+export interface OpsView {
+  available: boolean;
+  accounts: OpsAccount[];
+  notes?: string;
+}
+
+export async function getOps(): Promise<OpsView> {
+  if (!TARS_GRAPH_URL) {
+    return { available: false, accounts: [], notes: "TARS_GRAPH_URL unset" };
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000); // live boto3 fan-out
+  try {
+    const res = await fetch(`${TARS_GRAPH_URL}/aws/ops`, {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return { available: false, accounts: [], notes: `ops ${res.status}` };
+    }
+    const data = (await res.json()) as Partial<OpsView>;
+    return {
+      available: data.available !== false,
+      accounts: Array.isArray(data.accounts) ? data.accounts : [],
+      notes: data.notes,
+    };
+  } catch {
+    return { available: false, accounts: [], notes: "ops unreachable" };
+  } finally {
+    clearTimeout(timer);
+  }
 }
