@@ -1,4 +1,5 @@
 import { Activity, ExternalLink, Workflow } from "lucide-react";
+import Link from "next/link";
 import {
   cloudConsoleUrl,
   getTemporal,
@@ -101,25 +102,32 @@ export default async function TemporalPage() {
         <div className="overflow-hidden rounded-xl border bg-card">
           {t.workflows.map((w) => (
             <div
-              className="flex items-center gap-3 border-b px-4 py-2 text-sm last:border-0"
+              className="flex items-center gap-3 border-b px-4 py-2 text-sm last:border-0 hover:bg-accent/30"
               key={`${w.id}:${w.runId}`}
             >
-              <span
-                className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusClass(
-                  w.status
+              <Link
+                className="flex min-w-0 flex-1 items-center gap-3"
+                href={`/temporal/${encodeURIComponent(w.id)}?runId=${encodeURIComponent(
+                  w.runId
                 )}`}
               >
-                {w.status || "—"}
-              </span>
-              <span className="w-48 shrink-0 truncate font-medium">
-                {w.type}
-              </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-xs">
-                {w.id}
-              </span>
-              <span className="w-20 shrink-0 text-right text-muted-foreground text-xs">
-                {relativeTime(w.start)}
-              </span>
+                <span
+                  className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-xs ${statusClass(
+                    w.status
+                  )}`}
+                >
+                  {w.status || "—"}
+                </span>
+                <span className="w-48 shrink-0 truncate font-medium">
+                  {w.type}
+                </span>
+                <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground text-xs">
+                  {w.id}
+                </span>
+                <span className="w-20 shrink-0 text-right text-muted-foreground text-xs">
+                  {relativeTime(w.start)}
+                </span>
+              </Link>
               <a
                 aria-label="Open in Temporal Cloud"
                 className="shrink-0 text-[#00d4a0] hover:text-[#00d4a0]/80"

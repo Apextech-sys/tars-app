@@ -97,3 +97,67 @@ export async function getTemporal(): Promise<TemporalView> {
     notes: available ? undefined : sum?.notes || wf?.notes || "tars-graph unreachable",
   };
 }
+
+export interface HistoryEvent {
+  id: number;
+  time: string;
+  type: string;
+  failure: string;
+  attrs: Record<string, unknown>;
+}
+export interface WorkflowDetail {
+  available: boolean;
+  info: {
+    id: string;
+    runId: string;
+    type: string;
+    status: string;
+    taskQueue: string;
+    start: string;
+    close: string;
+    historyLength: number | null;
+  };
+  pending: {
+    activityId?: string;
+    activityType?: string;
+    state?: number;
+    attempt?: number;
+    lastFailure?: string;
+  }[];
+  events: HistoryEvent[];
+  notes?: string;
+}
+
+export async function getWorkflowDetail(
+  id: string,
+  runId: string
+): Promise<WorkflowDetail> {
+  const empty: WorkflowDetail = {
+    available: false,
+    info: {
+      id,
+      runId,
+      type: "",
+      status: "",
+      taskQueue: "",
+      start: "",
+      close: "",
+      historyLength: null,
+    },
+    pending: [],
+    events: [],
+  };
+  const data = (await graphFetch(
+    `/temporal/workflow?id=${encodeURIComponent(id)}&runId=${encodeURIComponent(runId)}`
+  )) as Partial<WorkflowDetail> | null;
+  if (!(data && data.info)) {
+    return { ...empty, notes: "workflow not found or tars-graph unreachable" };
+  }
+  return {
+    available: data.available !== false,
+    info: data.info as WorkflowDetail["info"],
+    pending: Array.isArray(data.pending) ? data.pending : [],
+    events: Array.isArray(data.events) ? data.events : [],
+    notes: typeof data.notes === "string" ? data.notes : undefined,
+  };
+}
