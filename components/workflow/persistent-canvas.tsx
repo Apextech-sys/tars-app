@@ -6,8 +6,9 @@ import { WorkflowCanvas } from "./workflow-canvas";
 export function PersistentCanvas() {
   const pathname = usePathname();
 
-  // Show canvas on homepage and workflow pages
-  const showCanvas = pathname === "/" || pathname.startsWith("/workflows/");
+  // Show canvas only on the relocated visual-builder routes (control-room
+  // /workflows pages must not have the canvas drawn over them).
+  const showCanvas = pathname.startsWith("/workflows-canvas/");
 
   if (!showCanvas) {
     return null;

@@ -1,385 +1,268 @@
-"use client";
-
+import { sql } from "drizzle-orm";
 import {
-  AlertCircle,
+  AlertTriangle,
+  Bell,
   CheckCircle2,
-  Info,
-  Lock,
-  RefreshCw,
-  Save,
+  Cog,
+  GitBranch,
+  Plug,
+  Send,
+  SlidersHorizontal,
+  Users,
 } from "lucide-react";
-import { useEffect, useState, useTransition } from "react";
-import { toast } from "sonner";
-import { NotificationsSettingsSection } from "@/components/tars/notifications-settings-section";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
+import { BehaviourModelsSection } from "@/components/settings/behaviour-models";
+import { IntegrationHealthSection } from "@/components/settings/integration-health";
+import { NotificationsRoutingSection } from "@/components/settings/notifications-routing";
+import { ProjectsRegistrySection } from "@/components/settings/projects-registry";
 import {
-  loadModelSettings,
-  loadProjectsYaml,
-  type ProjectsMap,
-  saveKillSwitches,
-  saveModelSettings,
-  saveProjectsYaml,
-} from "./actions";
+  SettingsStatTile,
+  type Tone,
+} from "@/components/settings/settings-stat-tile";
+import { db } from "@/lib/db";
+import { repoSettings, webhookEvents } from "@/lib/db/tars-schema";
+import { getAppSetting } from "@/lib/tars/app-settings";
 
-const CHAT_MODELS = [
-  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-opus-4", label: "Claude Opus 4" },
-  { value: "gpt-4o", label: "GPT-4o" },
+export const dynamic = "force-dynamic";
+
+// Required integrations whose absence flips the wiring banner to a hard state.
+const REQUIRED_ENV: { label: string; vars: string[] }[] = [
+  { label: "GitHub", vars: ["GH_TOKEN", "GITHUB_WEBHOOK_SECRET"] },
+  { label: "Linear", vars: ["LINEAR_API_KEY", "LINEAR_WEBHOOK_SECRET"] },
+  { label: "OpenAI", vars: ["OPENAI_API_KEY"] },
+  { label: "Knowledge graph", vars: ["TARS_GRAPH_URL"] },
+  { label: "Postgres", vars: ["DATABASE_URL"] },
 ];
 
-const CODE_REVIEW_MODELS = [
-  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-  { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-opus-4", label: "Claude Opus 4" },
-  { value: "gpt-5.5", label: "GPT-5.5" },
+const OPTIONAL_ENV: { label: string; vars: string[] }[] = [
+  {
+    label: "Slack",
+    vars: ["SLACK_BOT_TOKEN", "SLACK_USER_TOKEN", "SLACK_SIGNING_SECRET"],
+  },
+  { label: "Review worker", vars: ["TARS_WORKER_CALLBACK_SECRET"] },
 ];
 
-// ── Section wrapper ───────────────────────────────────────────
+function envPresent(name: string): boolean {
+  const v = process.env[name];
+  return typeof v === "string" && v.trim().length > 0;
+}
 
-function Section({
+function groupConnected(group: { vars: string[] }): boolean {
+  return group.vars.every((v) => envPresent(v));
+}
+
+interface NotificationsSetting {
+  enabled: boolean;
+  severity_threshold: string;
+}
+
+function SectionShell({
   title,
   description,
+  icon: Icon,
+  accent,
   children,
+  id,
 }: {
   title: string;
   description: string;
-  children: React.ReactNode;
+  icon: typeof Cog;
+  accent?: boolean;
+  children: ReactNode;
+  id?: string;
 }) {
   return (
-    <section className="rounded-lg border bg-card">
-      <div className="border-b p-4 md:p-5">
-        <h2 className="font-semibold text-base">{title}</h2>
-        <p className="mt-0.5 text-muted-foreground text-sm">{description}</p>
+    <section className="space-y-4" id={id}>
+      <div>
+        <h2 className="flex items-center gap-2 font-semibold text-lg">
+          <Icon className={accent ? "size-4 text-[#00d4a0]" : "size-4"} />
+          {title}
+        </h2>
+        <p className="text-muted-foreground text-sm">{description}</p>
       </div>
-      <div className="p-4 md:p-5">{children}</div>
+      {children}
     </section>
   );
 }
 
-// ── YAML editor section ───────────────────────────────────────
+export default async function SettingsPage() {
+  const allEnv = [...REQUIRED_ENV, ...OPTIONAL_ENV];
+  const connectedCount = allEnv.filter(groupConnected).length;
+  const totalIntegrations = allEnv.length;
+  const missingRequired = REQUIRED_ENV.filter((g) => !groupConnected(g));
 
-function YamlEditorSection() {
-  const [raw, setRaw] = useState("");
-  const [original, setOriginal] = useState("");
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const isDirty = raw !== original;
+  const [repoRows, webhook24h] = await Promise.all([
+    db
+      .select({ webhookEnabled: repoSettings.webhookEnabled })
+      .from(repoSettings),
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(webhookEvents)
+      .where(sql`${webhookEvents.createdAt} > now() - interval '24 hours'`),
+  ]);
 
-  useEffect(() => {
-    loadProjectsYaml().then(({ raw: r }) => {
-      setRaw(r);
-      setOriginal(r);
-    });
-  }, []);
+  const reposUnderReview = repoRows.filter((r) => r.webhookEnabled).length;
+  const totalRepos = repoRows.length;
+  const deliveries24h = webhook24h[0]?.count ?? 0;
 
-  const save = () => {
-    setError(null);
-    startTransition(async () => {
-      const result = await saveProjectsYaml(raw);
-      if (result.ok) {
-        setOriginal(raw);
-        toast.success("Policy saved");
-      } else {
-        setError(result.error);
-        toast.error("Save failed");
-      }
-    });
+  const notifications = (await getAppSetting<NotificationsSetting>(
+    "notifications"
+  )) ?? {
+    enabled: false,
+    severity_threshold: "warn",
   };
 
+  // Banner tone — precomputed to avoid nested ternaries in JSX.
+  const alertingActive = notifications.enabled;
+
+  let bannerClass = "border-[#00d4a0]/30 bg-[#00d4a0]/10 text-[#00d4a0]";
+  let bannerIcon: ReactNode = <CheckCircle2 className="size-4" />;
+  let bannerText = "All integrations connected · alerting active";
+  if (missingRequired.length > 0) {
+    bannerClass = "border-red-500/30 bg-red-500/10 text-red-400";
+    bannerIcon = <AlertTriangle className="size-4" />;
+    const names = missingRequired.map((g) => g.label).join(", ");
+    bannerText = `${missingRequired.length} required integration${
+      missingRequired.length === 1 ? "" : "s"
+    } not configured: ${names}`;
+  } else if (!alertingActive) {
+    bannerClass = "border-amber-500/30 bg-amber-500/10 text-amber-400";
+    bannerIcon = <AlertTriangle className="size-4" />;
+    bannerText = "Integrations connected — but notifications are off";
+  }
+
+  // Hero tile tones.
+  let integrationsTone: Tone = "good";
+  if (missingRequired.length > 0) {
+    integrationsTone = "bad";
+  } else if (connectedCount < totalIntegrations) {
+    integrationsTone = "warn";
+  }
+
+  const reposTone: Tone = reposUnderReview > 0 ? "good" : "warn";
+  const deliveriesTone: Tone = deliveries24h > 0 ? "good" : "warn";
+  const notifTone: Tone = notifications.enabled ? "good" : "warn";
+  const notifValue = notifications.enabled ? "On" : "Off";
+  const notifSub = `${notifications.severity_threshold}+ threshold`;
+
   return (
-    <Section
-      description="YAML source for /home/shaun/.tars-state/knowledge/projects.yaml. Edits auto-invalidate the policy cache."
-      title="Project policies"
-    >
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2 text-muted-foreground text-xs">
-          <Lock className="size-3.5 shrink-0 text-yellow-500" />
+    <div className="mx-auto max-w-6xl space-y-8 p-4 md:p-6">
+      <header>
+        <h1 className="flex items-center gap-2 font-semibold text-xl">
+          <Cog className="size-5 text-[#00d4a0]" /> Settings
+        </h1>
+        <p className="max-w-3xl text-muted-foreground text-sm">
+          Verify TARS is correctly wired and tune how it behaves and alerts you
+          — integration health, the repos under review, models, and where alerts
+          are routed. Credentials show presence only, never their values.
+        </p>
+      </header>
+
+      {/* System wiring banner */}
+      <div
+        className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-4 py-3 text-sm ${bannerClass}`}
+      >
+        <span className="flex items-center gap-2 font-medium">
+          {bannerIcon} {bannerText}
+        </span>
+        <span className="text-muted-foreground">
+          · {connectedCount}/{totalIntegrations} integrations ·{" "}
+          {reposUnderReview} repo{reposUnderReview === 1 ? "" : "s"} under
+          review
+        </span>
+      </div>
+
+      {/* Hero stat row */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SettingsStatTile
+          icon={Plug}
+          label="Integrations connected"
+          sub={
+            missingRequired.length > 0
+              ? `${missingRequired.length} required missing`
+              : "all required present"
+          }
+          tone={integrationsTone}
+          value={
+            <>
+              {connectedCount}
+              <span className="text-base text-muted-foreground">
+                /{totalIntegrations}
+              </span>
+            </>
+          }
+        />
+        <SettingsStatTile
+          icon={GitBranch}
+          label="Repos under review"
+          sub={`of ${totalRepos} registered`}
+          tone={reposTone}
+          value={reposUnderReview}
+        />
+        <SettingsStatTile
+          icon={Send}
+          label="Webhook deliveries · 24h"
+          sub="ingestion alive"
+          tone={deliveriesTone}
+          value={deliveries24h.toLocaleString()}
+        />
+        <SettingsStatTile
+          icon={Bell}
+          label="Notifications"
+          sub={notifSub}
+          tone={notifTone}
+          value={notifValue}
+        />
+      </div>
+
+      <SectionShell
+        accent
+        description="Which external systems TARS is connected to — credential presence and last activity, surfaced in-app. Expand a tile to see which slots are filled."
+        icon={Plug}
+        title="Integration health"
+      >
+        <IntegrationHealthSection />
+      </SectionShell>
+
+      <SectionShell
+        description="Every repo TARS watches, its delivery activity, and inline review controls — backed by the repo_settings table."
+        icon={GitBranch}
+        id="projects-registry"
+        title="Projects registry & review controls"
+      >
+        <ProjectsRegistrySection />
+      </SectionShell>
+
+      <SectionShell
+        description="Global model defaults for the chat assistant and the PR review engine."
+        icon={SlidersHorizontal}
+        title="Behaviour & models"
+      >
+        <BehaviourModelsSection />
+      </SectionShell>
+
+      <SectionShell
+        description="Browser push alerts plus where escalations are routed across Slack and Linear."
+        icon={Bell}
+        title="Notifications & routing"
+      >
+        <NotificationsRoutingSection />
+      </SectionShell>
+
+      <SectionShell
+        description="TARS agent departments and profiles are configured in TARS core (not in this app)."
+        icon={Users}
+        title="Departments & profiles"
+      >
+        <div className="flex items-start gap-2 rounded-xl border bg-card px-4 py-3 text-muted-foreground text-sm">
+          <Users className="mt-0.5 size-4 shrink-0" />
           <span>
-            protect_mode is <strong>retired</strong>. All{" "}
-            <code className="text-xs">auto_review: true</code> repos (including
-            Konverge / Reflex-Connect) are reviewed; nothing is written
-            externally until you approve from the run detail page.
+            Department and agent-profile configuration lives in TARS core state,
+            not this dashboard. No profile data source is wired to this app, so
+            nothing is shown here rather than fabricated placeholders.
           </span>
         </div>
-
-        <textarea
-          className="min-h-[200px] w-full resize-y rounded-md border bg-background px-3 py-2.5 font-mono text-xs focus:outline-none focus:ring-2 focus:ring-ring md:min-h-[480px]"
-          onChange={(e) => setRaw(e.target.value)}
-          spellCheck={false}
-          style={{ fontSize: "16px" }}
-          value={raw}
-        />
-
-        {error && (
-          <div className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
-          <Button disabled={!isDirty || isPending} onClick={save} size="sm">
-            {isPending ? (
-              <RefreshCw className="size-3.5 animate-spin" />
-            ) : (
-              <Save className="size-3.5" />
-            )}
-            {isDirty ? "Save changes" : "Saved"}
-          </Button>
-          {isDirty && (
-            <span className="text-xs text-yellow-600 dark:text-yellow-400">
-              Unsaved changes
-            </span>
-          )}
-        </div>
-      </div>
-    </Section>
-  );
-}
-
-// ── Kill switches section ─────────────────────────────────────
-
-function KillSwitchesSection() {
-  const [parsed, setParsed] = useState<ProjectsMap>({});
-  const [pending, setPending] = useState<
-    Record<string, { auto_review?: boolean; auto_fix?: boolean }>
-  >({});
-  const [isPending, startTransition] = useTransition();
-  const hasPending = Object.keys(pending).length > 0;
-
-  useEffect(() => {
-    loadProjectsYaml().then(({ parsed: p }) => {
-      setParsed(p);
-    });
-  }, []);
-
-  const toggle = (
-    key: string,
-    field: "auto_review" | "auto_fix",
-    current: boolean
-  ) => {
-    setPending((prev) => ({
-      ...prev,
-      [key]: { ...(prev[key] ?? {}), [field]: !current },
-    }));
-  };
-
-  const effectiveVal = (
-    key: string,
-    field: "auto_review" | "auto_fix"
-  ): boolean => {
-    if (pending[key]?.[field] !== undefined) {
-      return pending[key][field]!;
-    }
-    return (parsed[key]?.[field] as boolean | undefined) ?? false;
-  };
-
-  const save = () => {
-    startTransition(async () => {
-      const result = await saveKillSwitches(pending);
-      if (result.ok) {
-        // Merge pending into parsed
-        setParsed((prev) => {
-          const next = { ...prev };
-          for (const [k, v] of Object.entries(pending)) {
-            next[k] = { ...(next[k] ?? {}), ...v };
-          }
-          return next;
-        });
-        setPending({});
-        toast.success("Kill switches saved");
-      } else {
-        toast.error(result.error);
-      }
-    });
-  };
-
-  const projects = Object.entries(parsed);
-
-  return (
-    <Section
-      description="Toggle auto-review and auto-fix per project. Changes are previewed before saving."
-      title="Kill switches"
-    >
-      <div className="space-y-4">
-        {projects.length === 0 ? (
-          <p className="text-muted-foreground text-sm">No projects found.</p>
-        ) : (
-          <div className="space-y-2">
-            {projects.map(([key]) => {
-              const autoReview = effectiveVal(key, "auto_review");
-              const autoFix = effectiveVal(key, "auto_fix");
-              const changed =
-                pending[key]?.auto_review !== undefined ||
-                pending[key]?.auto_fix !== undefined;
-
-              return (
-                <div
-                  className={cn(
-                    "flex items-center justify-between gap-4 rounded-md border px-4 py-3",
-                    changed &&
-                      "border-yellow-400 bg-yellow-50 dark:bg-yellow-950/20"
-                  )}
-                  key={key}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-medium font-mono text-sm">
-                      {key}
-                    </span>
-                    {changed && (
-                      <Badge className="text-xs" variant="warning">
-                        unsaved
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-4">
-                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                      <input
-                        checked={autoReview}
-                        className="size-5 cursor-pointer accent-primary"
-                        onChange={() => toggle(key, "auto_review", autoReview)}
-                        type="checkbox"
-                      />
-                      Auto-review
-                    </label>
-
-                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-sm">
-                      <input
-                        checked={autoFix}
-                        className="size-5 cursor-pointer accent-primary"
-                        onChange={() => toggle(key, "auto_fix", autoFix)}
-                        type="checkbox"
-                      />
-                      Auto-fix
-                    </label>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {hasPending && (
-          <div className="flex items-center gap-3 rounded-md border border-yellow-400 bg-yellow-50 px-4 py-3 dark:bg-yellow-950/20">
-            <Info className="size-4 shrink-0 text-yellow-600" />
-            <p className="flex-1 text-sm text-yellow-700 dark:text-yellow-300">
-              {Object.keys(pending).length} project(s) have pending changes.
-            </p>
-            <Button disabled={isPending} onClick={save} size="sm">
-              {isPending ? (
-                <RefreshCw className="size-3.5 animate-spin" />
-              ) : (
-                <CheckCircle2 className="size-3.5" />
-              )}
-              Save all
-            </Button>
-          </div>
-        )}
-      </div>
-    </Section>
-  );
-}
-
-// ── Model picker section ──────────────────────────────────────
-
-function ModelPickerSection() {
-  const [chatModel, setChatModel] = useState("claude-sonnet-4-5");
-  const [codeReviewModel, setCodeReviewModel] = useState("claude-sonnet-4-5");
-  const [original, setOriginal] = useState({
-    chatModel: "claude-sonnet-4-5",
-    codeReviewModel: "claude-sonnet-4-5",
-  });
-  const [isPending, startTransition] = useTransition();
-  const isDirty =
-    chatModel !== original.chatModel ||
-    codeReviewModel !== original.codeReviewModel;
-
-  useEffect(() => {
-    loadModelSettings().then((s) => {
-      setChatModel(s.chatModel);
-      setCodeReviewModel(s.codeReviewModel);
-      setOriginal(s);
-    });
-  }, []);
-
-  const save = () => {
-    startTransition(async () => {
-      await saveModelSettings({ chatModel, codeReviewModel });
-      setOriginal({ chatModel, codeReviewModel });
-      toast.success("Model settings saved");
-    });
-  };
-
-  return (
-    <Section
-      description="Global defaults for chat and code-review models. Stored in app_settings table."
-      title="Model picker"
-    >
-      <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="font-medium text-sm">Chat model</label>
-          <select
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            onChange={(e) => setChatModel(e.target.value)}
-            value={chatModel}
-          >
-            {CHAT_MODELS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="font-medium text-sm">Code-review model</label>
-          <select
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            onChange={(e) => setCodeReviewModel(e.target.value)}
-            value={codeReviewModel}
-          >
-            {CODE_REVIEW_MODELS.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <Button disabled={!isDirty || isPending} onClick={save} size="sm">
-          {isPending ? (
-            <RefreshCw className="size-3.5 animate-spin" />
-          ) : (
-            <Save className="size-3.5" />
-          )}
-          {isDirty ? "Save changes" : "Saved"}
-        </Button>
-      </div>
-    </Section>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────
-
-export default function SettingsPage() {
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 md:space-y-8 md:py-8">
-        <div>
-          <h1 className="font-bold text-2xl">Settings</h1>
-          <p className="mt-1 text-muted-foreground text-sm">
-            Project policies, kill switches, and model configuration.
-          </p>
-        </div>
-
-        <YamlEditorSection />
-        <KillSwitchesSection />
-        <ModelPickerSection />
-        <NotificationsSettingsSection />
-      </div>
+      </SectionShell>
     </div>
   );
 }

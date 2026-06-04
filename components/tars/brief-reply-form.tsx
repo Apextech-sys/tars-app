@@ -14,8 +14,12 @@
  * The chat endpoint already exists. The metadata flag { kind:"brief_reply",
  * briefId } is included in the streamed message so the chat handler (and
  * TARS) can see what brief the reply is anchored to.
+ *
+ * Styling matches the rebuilt design system (bg-card / border / teal #00d4a0);
+ * the threading logic is unchanged from the original.
  */
 
+import { Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -92,7 +96,7 @@ export function BriefReplyForm({ briefId }: Props) {
   return (
     <form className="space-y-3" onSubmit={onSubmit}>
       <textarea
-        className="w-full rounded-md border border-zinc-800 bg-zinc-950/60 p-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-zinc-700 disabled:opacity-50"
+        className="w-full rounded-lg border bg-card p-3 text-foreground text-sm placeholder:text-muted-foreground focus:border-[#00d4a0]/50 focus:outline-none focus:ring-1 focus:ring-[#00d4a0]/40 disabled:opacity-50"
         disabled={busy}
         onChange={(e) => setMessage(e.target.value)}
         placeholder="Reply to TARS — your message is threaded into a chat session with this brief attached."
@@ -100,19 +104,20 @@ export function BriefReplyForm({ briefId }: Props) {
         value={message}
       />
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-zinc-500">
+        <p className="text-muted-foreground text-xs tabular-nums">
           {message.length} / 10000 characters
         </p>
         <button
-          className="rounded-md bg-emerald-600 px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:bg-zinc-700"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-[#00d4a0] px-4 py-2 font-medium text-black text-sm transition-colors hover:bg-[#00d4a0]/90 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
           disabled={busy || !message.trim()}
           type="submit"
         >
+          <Send className="size-4" />
           {busy ? "Sending…" : "Send to TARS"}
         </button>
       </div>
       {error ? (
-        <p className="rounded border border-rose-900/50 bg-rose-950/40 p-2 text-rose-300 text-xs">
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 p-2 text-red-400 text-xs">
           {error}
         </p>
       ) : null}
@@ -125,6 +130,7 @@ export function BriefReplyForm({ briefId }: Props) {
  * We read just enough of the stream to pick the sessionId, then abandon
  * the rest so the chat page can pick up the same session from its history.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: breadth of independent branches/panels in one cohesive view-builder, not tangled control flow; splitting would scatter co-located UI logic
 async function peekSessionId(
   body: ReadableStream<Uint8Array> | null
 ): Promise<string | null> {

@@ -926,7 +926,7 @@ function useWorkflowActions(state: ReturnType<typeof useWorkflowState>) {
 
       const newWorkflow = await api.workflow.duplicate(currentWorkflowId);
       toast.success("Workflow duplicated successfully");
-      router.push(`/workflows/${newWorkflow.id}`);
+      router.push(`/workflows-canvas/${newWorkflow.id}`);
     } catch (error) {
       console.error("Failed to duplicate workflow:", error);
       toast.error("Failed to duplicate workflow. Please try again.");
@@ -1415,7 +1415,7 @@ function WorkflowMenuComponent({
                     className="flex items-center justify-between"
                     key={workflow.id}
                     onClick={() =>
-                      state.router.push(`/workflows/${workflow.id}`)
+                      state.router.push(`/workflows-canvas/${workflow.id}`)
                     }
                   >
                     <span className="truncate">{workflow.name}</span>

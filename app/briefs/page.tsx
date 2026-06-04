@@ -1,14 +1,33 @@
 /**
- * /briefs — list of recent TARS briefs.
+ * /briefs — TARS twice-daily state-of-the-world briefings.
  *
- * This is a server component that talks to Postgres directly. Composition
- * matches the rest of the dashboard (Tailwind utility classes, lucide
- * icons, links to detail pages). Status badges call out anything that
- * hasn't reached "ready" so a stuck compose is visible at a glance.
+ * Server component talking to Postgres directly (the established pattern).
+ * Composition matches the rebuilt /infra and /knowledge pages: status banner,
+ * hero stat tiles derived from the LATEST brief's structured BriefOutput, and
+ * a day-grouped timeline of past briefs with per-row metric chips.
+ *
+ * The table is currently empty (0 rows) — the empty state is a designed,
+ * teal-accented card, and every metric maps to a real column so it stays
+ * honest the moment the first brief lands at 06:00 UTC.
  */
 
-import Link from "next/link";
+import { AlertTriangle, CheckCircle2, Clock, Newspaper } from "lucide-react";
 import postgres from "postgres";
+import type { ReactNode } from "react";
+import {
+  type BriefHeroStats,
+  BriefHeroTiles,
+} from "@/components/tars/brief-stat-tiles";
+import {
+  BriefTimeline,
+  type TimelineRow,
+} from "@/components/tars/brief-timeline";
+import {
+  type BriefOutputShape,
+  composeLatency,
+  kindLabel,
+  parseBriefOutput,
+} from "@/components/tars/brief-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,120 +45,229 @@ function getSql() {
   return sqlClient;
 }
 
-interface BriefRow {
+interface BriefListRow {
   id: string;
   date: string;
   kind: "morning" | "evening" | "adhoc";
   status: "pending" | "composing" | "ready" | "failed";
   summary: string | null;
-  run_id: string;
+  error_text: string | null;
+  created_at: string;
+  completed_at: string | null;
+  act_insights: number;
+  action_count: number;
+  question_count: number;
+  open_pr_count: number;
+  reply_count: number;
+}
+
+interface LatestBriefRow {
+  id: string;
+  date: string;
+  kind: "morning" | "evening" | "adhoc";
+  status: "pending" | "composing" | "ready" | "failed";
+  insights: unknown;
+  source_context: unknown;
   error_text: string | null;
   created_at: string;
   completed_at: string | null;
 }
 
-async function loadBriefs(): Promise<BriefRow[]> {
+async function loadBriefs(): Promise<BriefListRow[]> {
   try {
     const sql = getSql();
     const rows = await sql /* sql */`
-      select id::text as id, to_char(date, 'YYYY-MM-DD') as date,
-             kind, status, summary, run_id, error_text,
-             to_char(created_at, 'YYYY-MM-DD HH24:MI UTC') as created_at,
-             to_char(completed_at, 'YYYY-MM-DD HH24:MI UTC') as completed_at
-      from briefs
-      order by created_at desc
-      limit 30
+      select
+        b.id::text as id,
+        to_char(b.date, 'YYYY-MM-DD') as date,
+        b.kind,
+        b.status,
+        b.summary,
+        b.error_text,
+        to_char(b.created_at, 'YYYY-MM-DD HH24:MI UTC') as created_at,
+        to_char(b.completed_at, 'YYYY-MM-DD HH24:MI UTC') as completed_at,
+        coalesce((
+          select count(*) from jsonb_array_elements(b.insights->'insights') e
+          where e->>'severity' = 'act'
+        ), 0)::int as act_insights,
+        coalesce(jsonb_array_length(b.insights->'next_actions'), 0)::int as action_count,
+        coalesce(jsonb_array_length(b.insights->'questions'), 0)::int as question_count,
+        coalesce(jsonb_array_length(b.source_context->'open_prs'), 0)::int as open_pr_count,
+        coalesce((
+          select count(*) from brief_replies r where r.brief_id = b.id
+        ), 0)::int as reply_count
+      from briefs b
+      order by b.created_at desc
+      limit 60
     `;
-    return rows as unknown as BriefRow[];
+    return rows as unknown as BriefListRow[];
   } catch (err) {
     console.error("/briefs list load failed", err);
     return [];
   }
 }
 
-function statusBadge(status: BriefRow["status"]) {
-  const map: Record<BriefRow["status"], string> = {
-    pending: "bg-amber-500/10 text-amber-300 border border-amber-500/30",
-    composing: "bg-blue-500/10 text-blue-300 border border-blue-500/30",
-    ready: "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30",
-    failed: "bg-rose-500/10 text-rose-300 border border-rose-500/30",
+async function loadLatestBrief(): Promise<LatestBriefRow | null> {
+  try {
+    const sql = getSql();
+    const rows = await sql /* sql */`
+      select
+        id::text as id,
+        to_char(date, 'YYYY-MM-DD') as date,
+        kind, status, insights, source_context, error_text,
+        to_char(created_at, 'YYYY-MM-DD HH24:MI UTC') as created_at,
+        to_char(completed_at, 'YYYY-MM-DD HH24:MI UTC') as completed_at
+      from briefs
+      order by created_at desc
+      limit 1
+    `;
+    if (rows.length === 0) {
+      return null;
+    }
+    return rows[0] as unknown as LatestBriefRow;
+  } catch (err) {
+    console.error("/briefs latest load failed", err);
+    return null;
+  }
+}
+
+function toTimelineRow(b: BriefListRow): TimelineRow {
+  return {
+    id: b.id,
+    date: b.date,
+    kind: b.kind,
+    status: b.status,
+    summary: b.summary,
+    errorText: b.error_text,
+    stamp: b.completed_at ?? b.created_at,
+    actInsights: b.act_insights,
+    actionCount: b.action_count,
+    questionCount: b.question_count,
+    replyCount: b.reply_count,
   };
+}
+
+function buildHeroStats(
+  latest: LatestBriefRow | null,
+  out: BriefOutputShape | null,
+  openPrCount: number
+): BriefHeroStats {
+  if (!(latest && out)) {
+    return {
+      latestLabel: "—",
+      latestSub: "no briefs yet",
+      shaunActions: 0,
+      actInsights: 0,
+      questions: 0,
+      openPrs: 0,
+      composeLatency: null,
+    };
+  }
+  return {
+    latestLabel: kindLabel(latest.kind),
+    latestSub: latest.date,
+    shaunActions: out.next_actions.filter((a) => a.owner === "shaun").length,
+    actInsights: out.insights.filter((i) => i.severity === "act").length,
+    questions: out.questions.length,
+    openPrs: openPrCount,
+    composeLatency:
+      latest.status === "ready"
+        ? composeLatency(latest.created_at, latest.completed_at)
+        : null,
+  };
+}
+
+function EmptyState() {
   return (
-    <span
-      className={`rounded-full px-2 py-0.5 text-xs uppercase tracking-wide ${map[status]}`}
-    >
-      {status}
-    </span>
+    <div className="rounded-xl border border-[#00d4a0]/30 bg-[#00d4a0]/5 p-8 text-center">
+      <Newspaper className="mx-auto size-8 text-[#00d4a0]" />
+      <h2 className="mt-3 font-semibold text-lg">No briefs yet</h2>
+      <p className="mx-auto mt-1 max-w-md text-muted-foreground text-sm">
+        TARS composes a state-of-the-world briefing twice daily from the
+        knowledge graph, projects.yaml, the audit log, and recent repo activity.
+        The first one lands at{" "}
+        <span className="font-medium text-foreground">06:00 UTC</span>.
+      </p>
+      <p className="mx-auto mt-4 max-w-md text-muted-foreground text-xs">
+        When it arrives, you'll see extracted insights, the actions that need
+        you, open questions, and the source context that drove it — all in here.
+      </p>
+    </div>
   );
 }
 
-function kindEmoji(kind: BriefRow["kind"]): string {
-  if (kind === "morning") {
-    return "Morning";
+function StatusBanner({ latest }: { latest: LatestBriefRow | null }) {
+  let bannerClass = "border-amber-500/30 bg-amber-500/10 text-amber-400";
+  let icon: ReactNode = <AlertTriangle className="size-4" />;
+  let line = "No brief composed yet";
+
+  if (latest) {
+    if (latest.status === "ready") {
+      bannerClass = "border-[#00d4a0]/30 bg-[#00d4a0]/10 text-[#00d4a0]";
+      icon = <CheckCircle2 className="size-4" />;
+      line = `Latest ${kindLabel(latest.kind).toLowerCase()} brief ready · ${latest.date}`;
+    } else if (latest.status === "failed") {
+      bannerClass = "border-red-500/30 bg-red-500/10 text-red-400";
+      icon = <AlertTriangle className="size-4" />;
+      line = `Latest brief failed to compose · ${latest.date}`;
+    } else {
+      bannerClass = "border-sky-500/30 bg-sky-500/10 text-sky-400";
+      icon = <Clock className="size-4" />;
+      line = `Brief ${latest.status}… · ${latest.date}`;
+    }
   }
-  if (kind === "evening") {
-    return "Evening";
-  }
-  return "Adhoc";
+
+  return (
+    <div
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border px-4 py-3 text-sm ${bannerClass}`}
+    >
+      <span className="flex items-center gap-2 font-medium">
+        {icon} {line}
+      </span>
+      <span className="text-muted-foreground">
+        · cadence: morning 06:00 / evening 18:00 UTC
+      </span>
+      {latest?.status === "failed" && latest.error_text ? (
+        <span className="text-muted-foreground">
+          · {latest.error_text.slice(0, 120)}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export default async function BriefsPage() {
-  const briefs = await loadBriefs();
-  return (
-    <div className="pointer-events-auto min-h-screen w-full px-4 py-6 text-zinc-100 md:px-6 md:py-10">
-      <div className="mx-auto max-w-3xl">
-        <header className="mb-8">
-          <h1 className="font-semibold text-2xl tracking-tight md:text-3xl">
-            TARS Briefs
-          </h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            Twice-daily situation reports composed from the TARS graph,
-            projects.yaml, audit log, and recent repo activity.
-          </p>
-        </header>
+  const [briefs, latest] = await Promise.all([loadBriefs(), loadLatestBrief()]);
+  const latestOut = latest ? parseBriefOutput(latest.insights) : null;
+  const latestOpenPrCount = briefs.find(
+    (b) => b.id === latest?.id
+  )?.open_pr_count;
+  const heroStats = buildHeroStats(latest, latestOut, latestOpenPrCount ?? 0);
+  const timelineRows = briefs.map(toTimelineRow);
 
-        {briefs.length === 0 ? (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-6 text-sm text-zinc-400">
-            No briefs yet. The first one lands at 06:00 UTC tomorrow, or you can
-            trigger one manually:
-            <pre className="mt-3 overflow-x-auto rounded bg-black/40 p-3 text-xs text-zinc-300">
-              {`curl -X POST http://localhost:3001/api/tars/briefs \\\n  -H 'content-type: application/json' \\\n  -d '{"kind":"morning","authToken":"$TARS_INTERNAL_SECRET"}'`}
-            </pre>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            {briefs.map((b) => (
-              <li
-                className="rounded-lg border border-zinc-800 bg-zinc-950/40 transition-colors hover:bg-zinc-900/50"
-                key={b.id}
-              >
-                <Link
-                  className="block rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-zinc-700"
-                  href={`/briefs/${b.id}`}
-                >
-                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium text-sm text-zinc-200">
-                        {kindEmoji(b.kind)} — {b.date}
-                      </span>
-                      {statusBadge(b.status)}
-                    </div>
-                    <span className="shrink-0 text-xs text-zinc-500">
-                      {b.completed_at ?? b.created_at}
-                    </span>
-                  </div>
-                  <p className="line-clamp-2 text-sm text-zinc-300">
-                    {b.summary ??
-                      (b.status === "failed"
-                        ? `(failed: ${b.error_text?.slice(0, 200) ?? "no detail"})`
-                        : "Composing…")}
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+  return (
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+      <header>
+        <h1 className="flex items-center gap-2 font-semibold text-xl">
+          <Newspaper className="size-5 text-[#00d4a0]" /> Briefs
+        </h1>
+        <p className="max-w-3xl text-muted-foreground text-sm">
+          Twice-daily situation reports composed from the TARS graph,
+          projects.yaml, the audit log, and recent repo activity — read the
+          structured report, jump to the actions that need you, and reply to
+          thread it back into chat.
+        </p>
+      </header>
+
+      {briefs.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <>
+          <StatusBanner latest={latest} />
+          <BriefHeroTiles stats={heroStats} />
+          <BriefTimeline rows={timelineRows} />
+        </>
+      )}
     </div>
   );
 }

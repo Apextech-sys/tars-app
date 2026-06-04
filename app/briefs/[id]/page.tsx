@@ -1,17 +1,33 @@
 /**
- * /briefs/[id] — single brief detail view + reply form.
+ * /briefs/[id] — single brief as a structured hero REPORT.
  *
- * The detail server-renders the brief and embeds the BriefReplyForm
- * client component. The reply form (a) POSTs to
- * /api/tars/briefs/[id]/reply to persist the reply, then (b) takes the
- * returned chatSeed and POSTs it to /api/chat — which threads the brief
- * context into a chat session and streams TARS's response back.
+ * Server component (direct Postgres, force-dynamic). Parses the
+ * `briefs.insights` jsonb (the ENTIRE BriefOutput) and `briefs.source_context`
+ * jsonb, then composes: header + per-brief hero tiles, the StructuredBriefReport
+ * (insights / next actions / questions), the "What drove this brief" source
+ * context panel, prior replies + the reply form, and a collapsed
+ * "View raw report" fallback rendered with the existing Markdown component.
+ *
+ * Replaces the old zinc/emerald palette with the rebuilt design tokens.
  */
 
+import { ArrowLeft, Clock, FileText, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import postgres from "postgres";
 import { BriefReplyForm } from "@/components/tars/brief-reply-form";
+import { StructuredBriefReport } from "@/components/tars/brief-report";
+import { BriefSourceContext } from "@/components/tars/brief-source-context";
+import {
+  type BriefHeroStats,
+  BriefHeroTiles,
+} from "@/components/tars/brief-stat-tiles";
+import {
+  composeLatency,
+  kindLabel,
+  parseBriefOutput,
+  parseSourceContext,
+} from "@/components/tars/brief-types";
 import { Markdown } from "@/components/tars/markdown";
 
 export const runtime = "nodejs";
@@ -47,7 +63,16 @@ interface BriefRow {
   completed_at: string | null;
 }
 
-async function loadBrief(id: string): Promise<BriefRow | null> {
+interface ReplyRow {
+  id: string;
+  body: string;
+  chat_session_id: string | null;
+  created_at: string;
+}
+
+async function loadBrief(
+  id: string
+): Promise<{ brief: BriefRow; replies: ReplyRow[] } | null> {
   if (!UUID_RE.test(id)) {
     return null;
   }
@@ -66,11 +91,58 @@ async function loadBrief(id: string): Promise<BriefRow | null> {
     if (rows.length === 0) {
       return null;
     }
-    return rows[0] as unknown as BriefRow;
+    const replyRows = await sql /* sql */`
+      select id::text as id, body, chat_session_id::text as chat_session_id,
+             to_char(created_at, 'YYYY-MM-DD HH24:MI UTC') as created_at
+      from brief_replies
+      where brief_id = ${id}::uuid
+      order by created_at asc
+    `;
+    return {
+      brief: rows[0] as unknown as BriefRow,
+      replies: replyRows as unknown as ReplyRow[],
+    };
   } catch (err) {
     console.error("/briefs/[id] load failed", err);
     return null;
   }
+}
+
+function PriorReplies({ replies }: { replies: ReplyRow[] }) {
+  if (replies.length === 0) {
+    return null;
+  }
+  return (
+    <details
+      className="rounded-xl border bg-card/40 p-4"
+      open={replies.length === 1}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-sm">
+        <MessageSquare className="size-4 text-[#00d4a0]" />
+        {replies.length} previous repl{replies.length === 1 ? "y" : "ies"}
+      </summary>
+      <ul className="mt-3 space-y-2">
+        {replies.map((r) => (
+          <li className="rounded-lg border bg-card p-3" key={r.id}>
+            <p className="whitespace-pre-wrap text-foreground/90 text-sm">
+              {r.body}
+            </p>
+            <div className="mt-2 flex items-center justify-between text-muted-foreground text-xs">
+              <span>{r.created_at}</span>
+              {r.chat_session_id ? (
+                <Link
+                  className="transition-colors hover:text-[#00d4a0]"
+                  href={`/chat?session=${encodeURIComponent(r.chat_session_id)}`}
+                >
+                  Open thread →
+                </Link>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 export default async function BriefDetailPage({
@@ -79,72 +151,122 @@ export default async function BriefDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const brief = await loadBrief(id);
-  if (!brief) {
+  const loaded = await loadBrief(id);
+  if (!loaded) {
     return notFound();
   }
+  const { brief, replies } = loaded;
+  const out = parseBriefOutput(brief.insights);
+  const ctx = parseSourceContext(brief.source_context);
+  const isReady = brief.status === "ready";
 
-  const kindLabel =
-    brief.kind === "morning"
-      ? "Morning Brief"
-      : brief.kind === "evening"
-        ? "Evening Brief"
-        : "Adhoc Brief";
+  const heroStats: BriefHeroStats = {
+    latestLabel: kindLabel(brief.kind),
+    latestSub: brief.date,
+    shaunActions: out.next_actions.filter((a) => a.owner === "shaun").length,
+    actInsights: out.insights.filter((i) => i.severity === "act").length,
+    questions: out.questions.length,
+    openPrs: ctx.open_prs?.length ?? 0,
+    composeLatency: isReady
+      ? composeLatency(brief.created_at, brief.completed_at)
+      : null,
+  };
+
+  const rawReport = brief.body_markdown ?? out.body_markdown;
+  const hasStructured =
+    out.insights.length > 0 ||
+    out.next_actions.length > 0 ||
+    out.questions.length > 0;
 
   return (
-    <div className="pointer-events-auto min-h-screen w-full px-6 py-10 text-zinc-100">
-      <div className="mx-auto max-w-3xl">
-        <nav className="mb-6 text-sm text-zinc-500">
-          <Link className="hover:text-zinc-300" href="/briefs">
-            ← All briefs
-          </Link>
-        </nav>
+    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-6">
+      <nav className="text-muted-foreground text-sm">
+        <Link
+          className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+          href="/briefs"
+        >
+          <ArrowLeft className="size-4" /> All briefs
+        </Link>
+      </nav>
 
-        <header className="mb-6">
-          <h1 className="font-semibold text-3xl tracking-tight">
-            {kindLabel} — {brief.date}
-          </h1>
-          <p className="mt-2 text-xs text-zinc-500">
-            run_id <code className="text-zinc-400">{brief.run_id}</code>
-            {brief.completed_at ? ` · completed ${brief.completed_at}` : ""}
-            {!brief.completed_at && brief.status !== "ready"
-              ? ` · status ${brief.status}`
-              : ""}
-          </p>
-        </header>
+      <header>
+        <h1 className="flex items-center gap-2 font-semibold text-xl">
+          <FileText className="size-5 text-[#00d4a0]" />
+          {kindLabel(brief.kind)} brief — {brief.date}
+        </h1>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
+          <span className="font-mono">run {brief.run_id}</span>
+          {brief.completed_at ? (
+            <span className="inline-flex items-center gap-1">
+              <Clock className="size-3" /> completed {brief.completed_at}
+            </span>
+          ) : (
+            <span>status {brief.status}</span>
+          )}
+        </p>
+      </header>
 
-        {brief.status === "ready" ? (
-          <article className="prose-tars">
-            <Markdown text={brief.body_markdown ?? "(empty)"} />
-          </article>
-        ) : (
-          <div className="rounded-lg border border-zinc-800 bg-zinc-950/40 p-6 text-sm">
-            <p className="mb-2 text-zinc-300">
-              Status:{" "}
-              <span className="font-semibold uppercase">{brief.status}</span>
-            </p>
-            {brief.error_text ? (
-              <pre className="mt-2 overflow-x-auto rounded bg-black/40 p-3 text-rose-300 text-xs">
-                {brief.error_text}
-              </pre>
+      {isReady ? (
+        <>
+          <BriefHeroTiles stats={heroStats} />
+
+          <section className="scroll-mt-20" id="latest-brief">
+            {hasStructured ? (
+              <StructuredBriefReport
+                insights={out.insights}
+                nextActions={out.next_actions}
+                questions={out.questions}
+                summary={out.summary}
+              />
             ) : (
-              <p className="text-zinc-400">
-                The compose job is still in flight. Refresh in a few seconds.
-              </p>
+              <article className="brief-md rounded-xl border bg-card p-5">
+                <Markdown text={rawReport || "(empty report)"} />
+              </article>
             )}
-          </div>
-        )}
+          </section>
 
-        <section className="mt-10">
-          <h2 className="mb-3 font-semibold text-xl text-zinc-100">
-            Reply to TARS
-          </h2>
-          <p className="mb-4 text-sm text-zinc-400">
-            Threads this brief into a new chat session with context attached.
+          <BriefSourceContext ctx={ctx} />
+
+          {hasStructured && rawReport ? (
+            <details className="rounded-xl border bg-card/40 p-4">
+              <summary className="flex cursor-pointer list-none items-center gap-2 font-medium text-sm">
+                <FileText className="size-4 text-muted-foreground" /> View raw
+                report
+              </summary>
+              <article className="brief-md mt-4 border-foreground/10 border-t pt-4">
+                <Markdown text={rawReport} />
+              </article>
+            </details>
+          ) : null}
+        </>
+      ) : (
+        <div className="rounded-xl border bg-card p-6 text-sm">
+          <p className="mb-2 text-foreground/90">
+            Status:{" "}
+            <span className="font-semibold uppercase">{brief.status}</span>
           </p>
-          <BriefReplyForm briefId={brief.id} />
-        </section>
-      </div>
+          {brief.error_text ? (
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-black/40 p-3 text-red-400 text-xs">
+              {brief.error_text}
+            </pre>
+          ) : (
+            <p className="text-muted-foreground">
+              The compose job is still in flight. Refresh in a few seconds.
+            </p>
+          )}
+        </div>
+      )}
+
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 font-semibold text-base">
+          <MessageSquare className="size-4 text-[#00d4a0]" /> Reply to TARS
+        </h2>
+        <p className="text-muted-foreground text-sm">
+          Threads this brief into a chat session with its context attached.
+        </p>
+        <PriorReplies replies={replies} />
+        <BriefReplyForm briefId={brief.id} />
+      </section>
     </div>
   );
 }
