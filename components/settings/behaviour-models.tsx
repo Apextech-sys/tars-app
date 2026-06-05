@@ -20,6 +20,11 @@ const CODE_REVIEW_MODELS = [
   { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
 ];
 
+const CODEX_MODELS = [
+  { value: "gpt-5.5", label: "ChatGPT 5.5 (latest)" },
+  { value: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
+];
+
 function labelFor(
   options: { value: string; label: string }[],
   value: string
@@ -71,34 +76,38 @@ function ModelTile({
 export function BehaviourModelsSection() {
   const [chatModel, setChatModel] = useState("claude-opus-4-8");
   const [codeReviewModel, setCodeReviewModel] = useState("claude-opus-4-8");
+  const [codexModel, setCodexModel] = useState("gpt-5.5");
   const [original, setOriginal] = useState({
     chatModel: "claude-opus-4-8",
     codeReviewModel: "claude-opus-4-8",
+    codexModel: "gpt-5.5",
   });
   const [isPending, startTransition] = useTransition();
   const isDirty =
     chatModel !== original.chatModel ||
-    codeReviewModel !== original.codeReviewModel;
+    codeReviewModel !== original.codeReviewModel ||
+    codexModel !== original.codexModel;
 
   useEffect(() => {
     loadModelSettings().then((s) => {
       setChatModel(s.chatModel);
       setCodeReviewModel(s.codeReviewModel);
+      setCodexModel(s.codexModel);
       setOriginal(s);
     });
   }, []);
 
   const save = () => {
     startTransition(async () => {
-      await saveModelSettings({ chatModel, codeReviewModel });
-      setOriginal({ chatModel, codeReviewModel });
+      await saveModelSettings({ chatModel, codeReviewModel, codexModel });
+      setOriginal({ chatModel, codeReviewModel, codexModel });
       toast.success("Model settings saved");
     });
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <ModelTile
           description="Powers the conversational TARS assistant."
           icon={MessageSquare}
@@ -108,12 +117,20 @@ export function BehaviourModelsSection() {
           value={chatModel}
         />
         <ModelTile
-          description="Runs the dual-AI PR review engine."
+          description="The Claude half of the dual-AI PR review."
           icon={Bot}
           onChange={setCodeReviewModel}
           options={CODE_REVIEW_MODELS}
-          title="Code-review model"
+          title="Code-review · Claude"
           value={codeReviewModel}
+        />
+        <ModelTile
+          description="The Codex (OpenAI) half of the dual-AI PR review."
+          icon={Bot}
+          onChange={setCodexModel}
+          options={CODEX_MODELS}
+          title="Code-review · Codex"
+          value={codexModel}
         />
       </div>
       <Button

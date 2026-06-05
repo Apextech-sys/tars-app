@@ -118,6 +118,7 @@ export async function saveKillSwitches(
 export async function loadModelSettings(): Promise<{
   chatModel: string;
   codeReviewModel: string;
+  codexModel: string;
 }> {
   const rows = await db
     .select()
@@ -127,23 +128,30 @@ export async function loadModelSettings(): Promise<{
     .select()
     .from(appSettings)
     .where(eq(appSettings.key, "code_review_model"));
+  const cdxRows = await db
+    .select()
+    .from(appSettings)
+    .where(eq(appSettings.key, "codex_model"));
 
   const chatModel = (rows[0]?.value as string | undefined) ?? "claude-opus-4-8";
   const codeReviewModel =
     (crRows[0]?.value as string | undefined) ?? "claude-opus-4-8";
+  const codexModel = (cdxRows[0]?.value as string | undefined) ?? "gpt-5.5";
 
-  return { chatModel, codeReviewModel };
+  return { chatModel, codeReviewModel, codexModel };
 }
 
 export async function saveModelSettings(settings: {
   chatModel: string;
   codeReviewModel: string;
+  codexModel: string;
 }): Promise<void> {
   await db
     .insert(appSettings)
     .values([
       { key: "chat_model", value: settings.chatModel },
       { key: "code_review_model", value: settings.codeReviewModel },
+      { key: "codex_model", value: settings.codexModel },
     ])
     .onConflictDoUpdate({
       target: appSettings.key,

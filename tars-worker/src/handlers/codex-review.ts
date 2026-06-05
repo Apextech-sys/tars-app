@@ -1,11 +1,24 @@
 import { Codex } from "@openai/codex-sdk";
 import { z } from "zod";
+import { getPool } from "../db.js";
 import { makeOpenAIStrict } from "../openaiStrictSchema.js";
 import type { JobHandler } from "../types.js";
 // Zod v4 has built-in toJSONSchema
 import { DebateContextSchema, debateInstruction } from "./debate-shared.js";
 
 const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]+?)```/;
+
+async function resolveCodexModel(): Promise<string> {
+  try {
+    const r = await getPool().query(
+      "SELECT value FROM app_settings WHERE key = 'codex_model' LIMIT 1"
+    );
+    const v = r.rows[0]?.value;
+    return typeof v === "string" && v.length > 0 ? v : "gpt-5.5";
+  } catch {
+    return "gpt-5.5";
+  }
+}
 
 const ReviewInputSchema = z.object({
   diff: z.string().min(1),
@@ -63,9 +76,10 @@ export const codexReviewHandler: JobHandler = async (ctx) => {
     process.env.PATH ??
     "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
+  const codexModel = await resolveCodexModel();
   const codex = new Codex({ env: filteredEnv });
   const thread = codex.startThread({
-    model: "gpt-5.5",
+    model: codexModel,
     sandboxMode: "read-only",
     approvalPolicy: "never",
     skipGitRepoCheck: true,
