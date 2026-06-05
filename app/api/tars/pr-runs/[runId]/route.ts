@@ -1,8 +1,9 @@
 import { asc, eq, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { auditLog, prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
+import { auditLog, prReviewRuns } from "@/lib/db/tars-schema";
 import { tarsJobs } from "@/lib/db/worker-schema";
+import { resolveWebhookEventForRun } from "@/lib/tars/resolve-pr-run";
 
 export async function GET(
   _req: NextRequest,
@@ -11,7 +12,7 @@ export async function GET(
   try {
     const { runId } = await params;
 
-    const [runRows, auditRows, webhookRows, jobRows] = await Promise.all([
+    const [runRows, auditRows, jobRows] = await Promise.all([
       db
         .select({
           runId: prReviewRuns.runId,
@@ -61,11 +62,6 @@ export async function GET(
         .orderBy(asc(auditLog.createdAt)),
       db
         .select()
-        .from(webhookEvents)
-        .where(eq(webhookEvents.triggeredRun, runId))
-        .limit(1),
-      db
-        .select()
         .from(tarsJobs)
         .where(sql`${tarsJobs.payload}->>'runId' = ${runId}`)
         .orderBy(asc(tarsJobs.createdAt)),
@@ -76,7 +72,7 @@ export async function GET(
     }
 
     const run = runRows[0];
-    const webhook = webhookRows[0] ?? null;
+    const webhook = await resolveWebhookEventForRun(run);
 
     return NextResponse.json({
       run: {

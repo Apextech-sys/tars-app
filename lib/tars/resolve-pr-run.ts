@@ -28,9 +28,9 @@
  * a dead per-run link.
  */
 
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { prReviewRuns } from "@/lib/db/tars-schema";
+import { prReviewRuns, webhookEvents } from "@/lib/db/tars-schema";
 
 /**
  * Maximum distance (ms) between an event's `created_at` and a candidate run's
@@ -210,4 +210,46 @@ export async function resolvePrRunId(
 ): Promise<string | null> {
   const map = await resolvePrRunIds([event]);
   return map.get(event.id) ?? null;
+}
+
+/**
+ * Reverse of {@link resolvePrRunId}: given a `prrev_` run, find the
+ * webhook_events row that triggered it. The pr-runs detail route cannot join on
+ * `triggered_run` (it holds the unrelated `wrun_` execution id), so we
+ * correlate on (owner/repo via repo_key, prNumber) + the event `created_at`
+ * nearest the run_id's embedded `Date.now()`, within the same tight window.
+ * Returns the full event row, or null when no confident match exists (the UI
+ * then renders no "Triggering webhook" card rather than a wrong one).
+ */
+export async function resolveWebhookEventForRun(run: {
+  runId: string;
+  owner: string;
+  repo: string;
+  prNumber: number | null;
+}): Promise<typeof webhookEvents.$inferSelect | null> {
+  const ts = embeddedTs(run.runId);
+  if (ts === null || run.prNumber === null) {
+    return null;
+  }
+  const repoKey = `${run.owner}/${run.repo}`;
+  const rows = await db
+    .select()
+    .from(webhookEvents)
+    .where(
+      and(
+        eq(webhookEvents.repoKey, repoKey),
+        eq(webhookEvents.prNumber, run.prNumber),
+        isNotNull(webhookEvents.triggeredRun)
+      )
+    );
+  let best: (typeof rows)[number] | null = null;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const e of rows) {
+    const delta = Math.abs(e.createdAt.getTime() - ts);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      best = e;
+    }
+  }
+  return bestDelta <= MATCH_WINDOW_MS ? best : null;
 }
