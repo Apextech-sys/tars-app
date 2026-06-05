@@ -16,7 +16,7 @@ fi
 
 OWNER=$(echo "$REPO_KEY" | cut -d/ -f1)
 REPO=$(echo "$REPO_KEY" | cut -d/ -f2)
-WEBHOOK_URL="https://tars.apextech.group/api/webhooks/github"
+WEBHOOK_URL="${TARS_PUBLIC_URL:-https://tars.reflexconnect.co.za}/api/webhooks/github"
 
 GH_TOKEN=${GH_TOKEN:-$(grep '^GH_TOKEN=' /home/shaun/tars-app/.env.local | cut -d= -f2-)}
 WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET:-$(grep '^GITHUB_WEBHOOK_SECRET=' /home/shaun/tars-app/.env.local | cut -d= -f2-)}
