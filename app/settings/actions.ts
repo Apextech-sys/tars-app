@@ -128,10 +128,9 @@ export async function loadModelSettings(): Promise<{
     .from(appSettings)
     .where(eq(appSettings.key, "code_review_model"));
 
-  const chatModel =
-    (rows[0]?.value as string | undefined) ?? "claude-sonnet-4-5";
+  const chatModel = (rows[0]?.value as string | undefined) ?? "claude-opus-4-8";
   const codeReviewModel =
-    (crRows[0]?.value as string | undefined) ?? "claude-sonnet-4-5";
+    (crRows[0]?.value as string | undefined) ?? "claude-opus-4-8";
 
   return { chatModel, codeReviewModel };
 }

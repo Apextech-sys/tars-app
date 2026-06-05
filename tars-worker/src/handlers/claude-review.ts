@@ -1,9 +1,22 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
+import { getPool } from "../db.js";
 import type { JobHandler } from "../types.js";
 import { DebateContextSchema, debateInstruction } from "./debate-shared.js";
 
 const FENCED_JSON_RE = /```(?:json)?\s*([\s\S]+?)```/;
+
+async function resolveReviewModel(): Promise<string> {
+  try {
+    const r = await getPool().query(
+      "SELECT value FROM app_settings WHERE key = 'code_review_model' LIMIT 1"
+    );
+    const v = r.rows[0]?.value;
+    return typeof v === "string" && v.length > 0 ? v : "claude-opus-4-8";
+  } catch {
+    return "claude-opus-4-8";
+  }
+}
 
 const ReviewInputSchema = z.object({
   diff: z.string().min(1, "diff is required"),
@@ -90,10 +103,11 @@ export const claudeReviewHandler: JobHandler = async (ctx) => {
     debateRound: debate?.round ?? 1,
   });
 
+  const reviewModel = await resolveReviewModel();
   const q = query({
     prompt: userPrompt,
     options: {
-      model: "claude-sonnet-4-6",
+      model: reviewModel,
       systemPrompt: SYSTEM_PROMPT,
       allowedTools: ["Read", "Grep", "Glob"],
       permissionMode: "default",

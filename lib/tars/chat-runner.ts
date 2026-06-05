@@ -12,6 +12,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { and, eq } from "drizzle-orm";
 import { db, migrationClient } from "@/lib/db";
 import { chatMessages, chatSessions } from "@/lib/db/chat-schema";
+import { getChatModel } from "@/lib/tars/model-config";
 
 let cachedSoulPrompt: string | undefined;
 
@@ -151,8 +152,9 @@ export async function runChatTurn(
   const prompt = contextPrefix ? `${contextPrefix}\n\n${message}` : message;
   const soulPrompt = getSoulPrompt();
 
+  const chatModel = await getChatModel();
   const opts: Record<string, unknown> = {
-    model: "claude-sonnet-4-6",
+    model: chatModel,
     systemPrompt: soulPrompt,
     allowedTools: [
       "Read",

@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, migrationClient } from "@/lib/db";
 import { chatMessages, chatSessions } from "@/lib/db/chat-schema";
+import { getChatModel } from "@/lib/tars/model-config";
 
 // Cache SOUL.md at module load time
 let soulPrompt: string;
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const chatModel = await getChatModel();
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: SSE producer fans out over many distinct SDK message types (system/stream_event/assistant/user/result); the branch breadth is intrinsic and splitting it risks the streaming contract.
@@ -160,7 +162,7 @@ export async function POST(req: NextRequest) {
 
       try {
         const opts: Record<string, unknown> = {
-          model: "claude-sonnet-4-6",
+          model: chatModel,
           systemPrompt: soulPrompt,
           allowedTools: [
             "Read",

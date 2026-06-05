@@ -7,17 +7,17 @@ import { loadModelSettings, saveModelSettings } from "@/app/settings/actions";
 import { Button } from "@/components/ui/button";
 
 const CHAT_MODELS = [
-  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+  { value: "claude-opus-4-8", label: "Claude Opus 4.8 (latest)" },
+  { value: "claude-opus-4-7", label: "Claude Opus 4.7" },
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-opus-4", label: "Claude Opus 4" },
-  { value: "gpt-4o", label: "GPT-4o" },
+  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
 ];
 
 const CODE_REVIEW_MODELS = [
-  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+  { value: "claude-opus-4-8", label: "Claude Opus 4.8 (latest)" },
+  { value: "claude-opus-4-7", label: "Claude Opus 4.7" },
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-opus-4", label: "Claude Opus 4" },
-  { value: "gpt-5.5", label: "GPT-5.5" },
+  { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
 ];
 
 function labelFor(
@@ -69,11 +69,11 @@ function ModelTile({
 }
 
 export function BehaviourModelsSection() {
-  const [chatModel, setChatModel] = useState("claude-sonnet-4-5");
-  const [codeReviewModel, setCodeReviewModel] = useState("claude-sonnet-4-5");
+  const [chatModel, setChatModel] = useState("claude-opus-4-8");
+  const [codeReviewModel, setCodeReviewModel] = useState("claude-opus-4-8");
   const [original, setOriginal] = useState({
-    chatModel: "claude-sonnet-4-5",
-    codeReviewModel: "claude-sonnet-4-5",
+    chatModel: "claude-opus-4-8",
+    codeReviewModel: "claude-opus-4-8",
   });
   const [isPending, startTransition] = useTransition();
   const isDirty =

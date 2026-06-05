@@ -746,7 +746,7 @@ export default function ChatPage() {
             </span>
           </div>
           <div className="ml-auto shrink-0 font-mono text-white/30 text-xs">
-            claude-sonnet-4-6 via SDK
+            Claude (via Agent SDK)
           </div>
         </div>
 
