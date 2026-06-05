@@ -156,10 +156,13 @@ export async function resolvePolicy(
   const matchedProject = match?.project ?? null;
 
   if (!matchedProject) {
+    // Opt-in model: a repo not listed in projects.yaml is NOT auto-reviewed.
+    // (Personal/unmanaged repos must never be reviewed just because a webhook
+    // reaches us.) Explicitly add a repo to projects.yaml to enable review.
     return {
       projectKey: null,
       matched: false,
-      autoReview: true,
+      autoReview: false,
       autoFix: false,
       severityThreshold: "minor",
       issueTracker: "none",

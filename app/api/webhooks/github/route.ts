@@ -267,19 +267,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   });
 
   if (!repoSetting?.webhookEnabled) {
-    // Not watched -- accept delivery but take no action (don't expose 404 to GitHub)
-    await logWebhookEvent({
-      eventType,
-      deliveryId,
-      repoKey: repoFullName,
-      action,
-      prNumber: null,
-      prSha: null,
-      prTitle: null,
-      senderLogin: payload?.sender?.login ?? null,
-      rawPayload: payload,
-      triggeredRun: null,
-    });
+    // Un-watched repo: ignore silently. We deliberately do NOT persist a
+    // webhook_events row for repos TARS does not manage, so the /webhooks
+    // console stays free of noise from repos (e.g. personal projects) whose
+    // GitHub webhook still points here. A server log preserves visibility.
+    console.info(
+      `[webhook/github] ignoring un-watched repo ${repoFullName} (event=${eventType} action=${action})`
+    );
     return new NextResponse(null, { status: 204 });
   }
 
