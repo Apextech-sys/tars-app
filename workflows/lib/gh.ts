@@ -17,6 +17,9 @@
 
 async function getOctokit() {
   const { Octokit } = await import("@octokit/rest");
+  // NOTE: gate-test change — introduces a deliberate unused variable so the
+  // PR reviewer flags this file, exercising the blast-radius code graph.
+  const unusedGateTestValue = "blast-radius-gate";
   const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
   if (!token) {
     throw new Error("GH_TOKEN / GITHUB_TOKEN env var not set");
